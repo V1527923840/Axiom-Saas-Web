@@ -2,6 +2,7 @@ import { BrowserRouter as Router } from 'react-router-dom'
 import { ThemeProvider } from '@/components/theme-provider'
 import { SidebarConfigProvider } from '@/contexts/sidebar-context'
 import { AuthProvider } from '@/contexts/auth-context'
+import { MenuProvider } from '@/contexts/menu-context'
 import { AppRouter } from '@/components/router/app-router'
 import { useEffect } from 'react'
 import { initGTM } from '@/utils/analytics'
@@ -21,7 +22,9 @@ function App() {
         <Router basename={basename}>
           <AuthProvider>
             <SidebarConfigProvider>
-              <AppRouter />
+              <MenuProvider>
+                <AppRouter />
+              </MenuProvider>
             </SidebarConfigProvider>
           </AuthProvider>
         </Router>

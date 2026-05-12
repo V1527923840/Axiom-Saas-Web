@@ -10,7 +10,6 @@ const Mail = lazy(() => import('@/app/mail/page'))
 const Tasks = lazy(() => import('@/app/tasks/page'))
 const Chat = lazy(() => import('@/app/chat/page'))
 const Calendar = lazy(() => import('@/app/calendar/page'))
-const Users = lazy(() => import('@/app/users/page'))
 const FAQs = lazy(() => import('@/app/faqs/page'))
 const Pricing = lazy(() => import('@/app/pricing/page'))
 
@@ -25,6 +24,28 @@ const Forbidden = lazy(() => import('@/app/errors/forbidden/page'))
 const NotFound = lazy(() => import('@/app/errors/not-found/page'))
 const InternalServerError = lazy(() => import('@/app/errors/internal-server-error/page'))
 const UnderMaintenance = lazy(() => import('@/app/errors/under-maintenance/page'))
+
+// Content pages
+const DailyNews = lazy(() => import('@/features/content/daily-news/page'))
+const AudioInterpretation = lazy(() => import('@/features/content/audio-interpretation/page'))
+const InstitutionReports = lazy(() => import('@/features/content/institution-reports/page'))
+
+// Users pages
+const UsersManagement = lazy(() => import('@/features/users/users/page'))
+
+// Plans pages
+const PlansManagement = lazy(() => import('@/features/plans/plans/page'))
+
+// Subscriptions pages
+const SubscriptionsManagement = lazy(() => import('@/features/subscriptions/subscriptions/page'))
+
+// Bills pages
+const PaymentFlows = lazy(() => import('@/features/bills/flows/page'))
+const Consumptions = lazy(() => import('@/features/bills/consumptions/page'))
+
+// Menus pages
+const Menus = lazy(() => import('@/features/menus/menus/page'))
+const MenuAssign = lazy(() => import('@/features/menus/assign/page'))
 
 // Settings pages
 const UserSettings = lazy(() => import('@/app/settings/user/page'))
@@ -42,7 +63,6 @@ export interface RouteConfig {
 
 export const routes: RouteConfig[] = [
   // Default route - redirect to dashboard
-  // Use relative path "dashboard" instead of "/dashboard" for basename compatibility
   {
     path: "/",
     element: <Navigate to="dashboard" replace />
@@ -79,9 +99,57 @@ export const routes: RouteConfig[] = [
     path: "/calendar",
     element: <ProtectedRoute><Calendar /></ProtectedRoute>
   },
+
+  // Content Management Routes
+  {
+    path: "/content/daily-news",
+    element: <ProtectedRoute><DailyNews /></ProtectedRoute>
+  },
+  {
+    path: "/content/audio-interpretation",
+    element: <ProtectedRoute><AudioInterpretation /></ProtectedRoute>
+  },
+  {
+    path: "/content/institution-reports",
+    element: <ProtectedRoute><InstitutionReports /></ProtectedRoute>
+  },
+
+  // User Management Routes
   {
     path: "/users",
-    element: <ProtectedRoute><Users /></ProtectedRoute>
+    element: <ProtectedRoute><UsersManagement /></ProtectedRoute>
+  },
+
+  // Plan Management Routes
+  {
+    path: "/plans",
+    element: <ProtectedRoute><PlansManagement /></ProtectedRoute>
+  },
+
+  // Subscription Management Routes
+  {
+    path: "/subscriptions",
+    element: <ProtectedRoute><SubscriptionsManagement /></ProtectedRoute>
+  },
+
+  // Bills Management Routes
+  {
+    path: "/bills/flows",
+    element: <ProtectedRoute roles={['Admin']}><PaymentFlows /></ProtectedRoute>
+  },
+  {
+    path: "/bills/consumptions",
+    element: <ProtectedRoute roles={['Admin']}><Consumptions /></ProtectedRoute>
+  },
+
+  // Menus Management Routes
+  {
+    path: "/menus",
+    element: <ProtectedRoute roles={['Admin']}><Menus /></ProtectedRoute>
+  },
+  {
+    path: "/menus/assign",
+    element: <ProtectedRoute roles={['Admin']}><MenuAssign /></ProtectedRoute>
   },
 
   // Public Pages
