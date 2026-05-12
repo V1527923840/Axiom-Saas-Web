@@ -7,6 +7,14 @@ export interface User {
   lastName: string
   role: { id: number; name: string }
   status: { id: number; name: string }
+  tier?: string
+  currentPlanId?: string | null
+  pointsBalance?: number
+  chatQuotaUsed?: number
+  chatQuotaTotal?: number
+  subscriptionExpiredAt?: string | null
+  registeredAt?: string | null
+  lastLoginAt?: string | null
 }
 
 export interface LoginResponse {

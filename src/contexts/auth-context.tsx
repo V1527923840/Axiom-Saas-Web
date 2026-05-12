@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
-import { authApi, type User } from "@/services/auth"
+import { authApi, type User, type LoginResponse } from "@/services/auth"
 import { UnauthorizedError } from "@/lib/api"
 
 interface AuthContextType {
@@ -36,14 +36,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadUser(token: string) {
     try {
-      const userData = await authApi.getMe(token)
-      setUser(userData)
+      const response = await authApi.getMe(token)
+      setUser(response.data as User)
     } catch (err) {
       if (err instanceof UnauthorizedError) {
         localStorage.removeItem(TOKEN_KEY)
         localStorage.removeItem(REFRESH_TOKEN_KEY)
         setToken(null)
         setUser(null)
+        navigate("/auth/sign-in")
       }
     } finally {
       setIsLoading(false)
@@ -52,10 +53,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(email: string, password: string) {
     const response = await authApi.login(email, password)
-    localStorage.setItem(TOKEN_KEY, response.token)
-    localStorage.setItem(REFRESH_TOKEN_KEY, response.refreshToken)
-    setToken(response.token)
-    setUser(response.user)
+    const loginData = response.data as LoginResponse
+    localStorage.setItem(TOKEN_KEY, loginData.token)
+    localStorage.setItem(REFRESH_TOKEN_KEY, loginData.refreshToken)
+    setToken(loginData.token)
+    setUser(loginData.user)
     navigate("/dashboard")
   }
 
