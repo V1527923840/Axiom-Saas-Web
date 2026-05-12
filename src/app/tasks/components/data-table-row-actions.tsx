@@ -13,16 +13,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 
-import { taskSchema } from "../data/schema"
-
 interface DataTableRowActionsProps<TData> {
   row: Row<TData>
 }
 
-export function DataTableRowActions<TData>({
-  row,
-}: DataTableRowActionsProps<TData>) {
-  const task = taskSchema.parse(row.original)
+export function DataTableRowActions<TData>({ row }: DataTableRowActionsProps<TData>) {
+  // Use row.original to access the original data object if needed
+  void row.original
 
   return (
     <DropdownMenu>

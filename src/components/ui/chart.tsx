@@ -102,6 +102,7 @@ ${colorConfig
 
 const ChartTooltip = RechartsPrimitive.Tooltip
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function ChartTooltipContent({
   active,
   payload,
@@ -116,23 +117,38 @@ function ChartTooltipContent({
   color,
   nameKey,
   labelKey,
-}: React.ComponentProps<typeof RechartsPrimitive.Tooltip> &
-  React.ComponentProps<"div"> & {
-    hideLabel?: boolean
-    hideIndicator?: boolean
-    indicator?: "line" | "dot" | "dashed"
-    nameKey?: string
-    labelKey?: string
-  }) {
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  active?: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload?: any[]
+  className?: string
+  indicator?: "line" | "dot" | "dashed"
+  hideLabel?: boolean
+  hideIndicator?: boolean
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  label?: any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  labelFormatter?: (value: any, payload: any) => React.ReactNode
+  labelClassName?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  formatter?: (value: any, name: any, item: any, index: number, payload: any) => React.ReactNode
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  color?: any
+  nameKey?: string
+  labelKey?: string
+}) {
   const { config } = useChart()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const safePayload = payload as any[] || []
 
   const tooltipLabel = React.useMemo(() => {
-    if (hideLabel || !payload?.length) {
+    if (hideLabel || !safePayload.length) {
       return null
     }
 
-    const [item] = payload
-    const key = `${labelKey || item?.dataKey || item?.name || "value"}`
+    const [item] = safePayload as ({ payload?: { fill?: string } } | undefined)[]
+    const key = `${labelKey || (item as { dataKey?: string; name?: string })?.dataKey || (item as { name?: string })?.name || "value"}`
     const itemConfig = getPayloadConfigFromPayload(config, item, key)
     const value =
       !labelKey && typeof label === "string"
@@ -162,11 +178,11 @@ function ChartTooltipContent({
     labelKey,
   ])
 
-  if (!active || !payload?.length) {
+  if (!active || !safePayload.length) {
     return null
   }
 
-  const nestLabel = payload.length === 1 && indicator !== "dot"
+  const nestLabel = safePayload.length === 1 && indicator !== "dot"
 
   return (
     <div
@@ -177,7 +193,7 @@ function ChartTooltipContent({
     >
       {!nestLabel ? tooltipLabel : null}
       <div className="grid gap-1.5">
-        {payload.map((item, index) => {
+        {safePayload.map((item: any, index: number) => {
           const key = `${nameKey || item.name || item.dataKey || "value"}`
           const itemConfig = getPayloadConfigFromPayload(config, item, key)
           const indicatorColor = color || item.payload.fill || item.color
@@ -254,14 +270,18 @@ function ChartLegendContent({
   payload,
   verticalAlign = "bottom",
   nameKey,
-}: React.ComponentProps<"div"> &
-  Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
+}: React.ComponentProps<"div"> & {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    payload?: any[]
+    verticalAlign?: "top" | "middle" | "bottom"
     hideIcon?: boolean
     nameKey?: string
   }) {
   const { config } = useChart()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const safePayload = payload as any[] || []
 
-  if (!payload?.length) {
+  if (!safePayload.length) {
     return null
   }
 
@@ -273,7 +293,7 @@ function ChartLegendContent({
         className
       )}
     >
-      {payload.map((item) => {
+      {safePayload.map((item: any) => {
         const key = `${nameKey || item.dataKey || "value"}`
         const itemConfig = getPayloadConfigFromPayload(config, item, key)
 

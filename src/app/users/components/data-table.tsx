@@ -293,10 +293,6 @@ export function DataTable({ users, onDeleteUser, onEditUser, onAddUser }: DataTa
     },
   })
 
-  const roleFilter = table.getColumn("role")?.getFilterValue() as string
-  const planFilter = table.getColumn("plan")?.getFilterValue() as string
-  const statusFilter = table.getColumn("status")?.getFilterValue() as string
-
   return (
     <div className="w-full space-y-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -326,13 +322,12 @@ export function DataTable({ users, onDeleteUser, onEditUser, onAddUser }: DataTa
             Role
           </Label>
           <Select
-            value={roleFilter || ""}
             onValueChange={(value) =>
-              table.getColumn("role")?.setFilterValue(value === "all" ? "" : value)
+              table.getColumn("role")?.setFilterValue(value === "all" ? undefined : value)
             }
           >
             <SelectTrigger className="cursor-pointer w-full" id="role-filter">
-              <SelectValue placeholder="Select Role" />
+              <SelectValue placeholder="Filter by Role" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Roles</SelectItem>
@@ -349,13 +344,12 @@ export function DataTable({ users, onDeleteUser, onEditUser, onAddUser }: DataTa
             Plan
           </Label>
           <Select
-            value={planFilter || ""}
             onValueChange={(value) =>
-              table.getColumn("plan")?.setFilterValue(value === "all" ? "" : value)
+              table.getColumn("plan")?.setFilterValue(value === "all" ? undefined : value)
             }
           >
             <SelectTrigger className="cursor-pointer w-full" id="plan-filter">
-              <SelectValue placeholder="Select Plan" />
+              <SelectValue placeholder="Filter by Plan" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Plans</SelectItem>
@@ -370,13 +364,12 @@ export function DataTable({ users, onDeleteUser, onEditUser, onAddUser }: DataTa
             Status
           </Label>
           <Select
-            value={statusFilter || ""}
             onValueChange={(value) =>
-              table.getColumn("status")?.setFilterValue(value === "all" ? "" : value)
+              table.getColumn("status")?.setFilterValue(value === "all" ? undefined : value)
             }
           >
             <SelectTrigger className="cursor-pointer w-full" id="status-filter">
-              <SelectValue placeholder="Select Status" />
+              <SelectValue placeholder="Filter by Status" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
