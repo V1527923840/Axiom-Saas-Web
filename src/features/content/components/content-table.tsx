@@ -1,0 +1,192 @@
+"use client"
+
+import * as React from "react"
+import {
+  type ColumnDef,
+  type SortingState,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  useReactTable,
+} from "@tanstack/react-table"
+
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
+interface ContentTableProps<TData, TValue> {
+  columns: ColumnDef<TData, TValue>[]
+  data: TData[]
+  loading?: boolean
+  pagination?: {
+    page: number
+    pageSize: number
+    total: number
+    onPageChange: (page: number) => void
+    onPageSizeChange: (pageSize: number) => void
+  }
+}
+
+export function ContentTable<TData, TValue>({
+  columns,
+  data,
+  loading = false,
+  pagination,
+}: ContentTableProps<TData, TValue>) {
+  const [sorting, setSorting] = React.useState<SortingState>([])
+
+  const table = useReactTable({
+    data,
+    columns,
+    state: {
+      sorting,
+    },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  })
+
+  const totalPages = pagination ? Math.ceil(pagination.total / pagination.pageSize) : 1
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  return (
+                    <TableHead key={header.id} colSpan={header.colSpan}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  )
+                })}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell colSpan={columns.length} className="h-24 text-center">
+                  No results.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {pagination && (
+        <div className="flex items-center justify-between px-2">
+          <div className="text-sm text-muted-foreground hidden lg:block">
+            Total {pagination.total} items
+          </div>
+          <div className="flex items-center space-x-6 lg:space-x-8">
+            <div className="flex items-center space-x-2">
+              <p className="text-sm font-medium">Rows per page</p>
+              <Select
+                value={`${pagination.pageSize}`}
+                onValueChange={(value) => pagination.onPageSizeChange(Number(value))}
+              >
+                <SelectTrigger className="h-8 w-[70px] cursor-pointer">
+                  <SelectValue placeholder={pagination.pageSize} />
+                </SelectTrigger>
+                <SelectContent side="top">
+                  {[10, 20, 30, 40, 50].map((size) => (
+                    <SelectItem key={size} value={`${size}`} className="cursor-pointer">
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                className="hidden h-8 w-8 p-0 lg:flex cursor-pointer disabled:cursor-not-allowed"
+                onClick={() => pagination.onPageChange(0)}
+                disabled={pagination.page === 0}
+              >
+                <span className="sr-only">Go to first page</span>
+                <ChevronsLeft />
+              </Button>
+              <Button
+                variant="outline"
+                className="h-8 w-8 p-0 cursor-pointer disabled:cursor-not-allowed"
+                onClick={() => pagination.onPageChange(pagination.page - 1)}
+                disabled={pagination.page === 0}
+              >
+                <span className="sr-only">Go to previous page</span>
+                <ChevronLeft />
+              </Button>
+              <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+                Page {pagination.page + 1} of {totalPages}
+              </div>
+              <Button
+                variant="outline"
+                className="h-8 w-8 p-0 cursor-pointer disabled:cursor-not-allowed"
+                onClick={() => pagination.onPageChange(pagination.page + 1)}
+                disabled={pagination.page >= totalPages - 1}
+              >
+                <span className="sr-only">Go to next page</span>
+                <ChevronRight />
+              </Button>
+              <Button
+                variant="outline"
+                className="hidden h-8 w-8 p-0 lg:flex cursor-pointer disabled:cursor-not-allowed"
+                onClick={() => pagination.onPageChange(totalPages - 1)}
+                disabled={pagination.page >= totalPages - 1}
+              >
+                <span className="sr-only">Go to last page</span>
+                <ChevronsRight />
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
