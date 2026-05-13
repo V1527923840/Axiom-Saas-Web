@@ -1,10 +1,8 @@
+import { Suspense, useEffect } from 'react'
 import { BrowserRouter as Router } from 'react-router-dom'
-import { ThemeProvider } from '@/components/theme-provider'
-import { SidebarConfigProvider } from '@/contexts/sidebar-context'
-import { AuthProvider } from '@/contexts/auth-context'
-import { MenuProvider } from '@/contexts/menu-context'
+import { Providers } from '@/components/providers'
 import { AppRouter } from '@/components/router/app-router'
-import { useEffect } from 'react'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { initGTM } from '@/utils/analytics'
 
 // Get basename from environment (for deployment) or use empty string for development
@@ -18,17 +16,13 @@ function App() {
 
   return (
     <div className="font-sans antialiased" style={{ fontFamily: 'var(--font-inter)' }}>
-      <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
-        <Router basename={basename}>
-          <AuthProvider>
-            <SidebarConfigProvider>
-              <MenuProvider>
-                <AppRouter />
-              </MenuProvider>
-            </SidebarConfigProvider>
-          </AuthProvider>
-        </Router>
-      </ThemeProvider>
+      <Router basename={basename}>
+        <Providers>
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><LoadingSpinner /></div>}>
+            <AppRouter />
+          </Suspense>
+        </Providers>
+      </Router>
     </div>
   )
 }

@@ -29,6 +29,13 @@ const UnderMaintenance = lazy(() => import('@/app/errors/under-maintenance/page'
 const DailyNews = lazy(() => import('@/features/content/daily-news/page'))
 const AudioInterpretation = lazy(() => import('@/features/content/audio-interpretation/page'))
 const InstitutionReports = lazy(() => import('@/features/content/institution-reports/page'))
+const SentimentPosts = lazy(() => import('@/features/content/sentiment-posts/page'))
+
+// ETL pages
+const EtlManagement = lazy(() => import('@/features/etl/page'))
+
+// Categories pages
+const CategoriesManagement = lazy(() => import('@/features/categories/page'))
 
 // Users pages
 const UsersManagement = lazy(() => import('@/features/users/users/page'))
@@ -112,6 +119,22 @@ export const routes: RouteConfig[] = [
   {
     path: "/content/institution-reports",
     element: <ProtectedRoute><InstitutionReports /></ProtectedRoute>
+  },
+  {
+    path: "/content/sentiment-posts",
+    element: <ProtectedRoute><SentimentPosts /></ProtectedRoute>
+  },
+
+  // ETL Management Routes (Admin only)
+  {
+    path: "/etl",
+    element: <ProtectedRoute roles={['Admin']}><EtlManagement /></ProtectedRoute>
+  },
+
+  // Categories Management Routes (Admin only)
+  {
+    path: "/categories",
+    element: <ProtectedRoute roles={['Admin']}><CategoriesManagement /></ProtectedRoute>
   },
 
   // User Management Routes

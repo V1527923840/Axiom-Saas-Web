@@ -189,11 +189,7 @@ const defaultUser = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useAuth()
-  const { menus, fetchMenuTree, loading } = useMenusContext()
-
-  React.useEffect(() => {
-    fetchMenuTree()
-  }, [fetchMenuTree])
+  const { menus, loading } = useMenusContext()
 
   const navGroups = React.useMemo(() => {
     if (menus.length === 0) {
