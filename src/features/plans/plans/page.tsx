@@ -48,6 +48,7 @@ export default function PlansPage() {
   const [planToDelete, setPlanToDelete] = useState<Plan | null>(null)
   const [menuTree, setMenuTree] = useState<MenuTreeNode[]>([])
   const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([])
+  const [isLoadingMenus, setIsLoadingMenus] = useState(false)
 
   useEffect(() => {
     if (token) {
@@ -62,18 +63,31 @@ export default function PlansPage() {
 
   useEffect(() => {
     // Fetch menu tree when form dialog opens
-    if (formDialogOpen) {
+    if (formDialogOpen && menuTree.length === 0) {
       fetchMenuTree().then((tree) => {
         setMenuTree(tree)
       })
     }
-  }, [formDialogOpen, fetchMenuTree])
+  }, [formDialogOpen, fetchMenuTree, menuTree.length])
 
   useEffect(() => {
     // When editing a plan, fetch its menus
     if (selectedPlan && formDialogOpen) {
+      setIsLoadingMenus(true)
       fetchPlanMenus(selectedPlan.id).then((menus) => {
-        setSelectedMenuIds(menus.map((m) => m.id))
+        // Flatten tree to get ALL menu IDs (including nested children)
+        const allIds: string[] = []
+        const collectIds = (nodes: typeof menus) => {
+          nodes.forEach((m) => {
+            allIds.push(m.id)
+            if (m.children && m.children.length > 0) {
+              collectIds(m.children)
+            }
+          })
+        }
+        collectIds(menus)
+        setSelectedMenuIds(allIds)
+        setIsLoadingMenus(false)
       })
     } else if (!selectedPlan) {
       setSelectedMenuIds([])
@@ -242,17 +256,24 @@ export default function PlansPage() {
             <h2 className="text-xl font-semibold mb-4">
               {selectedPlan ? "编辑套餐" : "创建套餐"}
             </h2>
-            <PlanForm
-              initialData={selectedPlan ? { ...selectedPlan, menuIds: selectedMenuIds } : undefined}
-              onSubmit={handleFormSubmit}
-              onCancel={() => {
-                setFormDialogOpen(false)
-                setSelectedPlan(null)
-                setSelectedMenuIds([])
-              }}
-              loading={loading}
-              menuTree={menuTree}
-            />
+            {isLoadingMenus ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-muted-foreground">加载菜单中...</div>
+              </div>
+            ) : (
+              <PlanForm
+                key={selectedPlan ? `${selectedPlan.id}-${isLoadingMenus}` : 'new'}
+                initialData={selectedPlan ? { ...selectedPlan, menuIds: selectedMenuIds } : undefined}
+                onSubmit={handleFormSubmit}
+                onCancel={() => {
+                  setFormDialogOpen(false)
+                  setSelectedPlan(null)
+                  setSelectedMenuIds([])
+                }}
+                loading={loading}
+                menuTree={menuTree}
+              />
+            )}
           </div>
         </div>
       )}

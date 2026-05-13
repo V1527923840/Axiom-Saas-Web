@@ -6,6 +6,7 @@ import type {
   ListResponse,
   ContentCategory,
 } from "@/features/content/types"
+import type { SentimentPostItem } from "@/features/content/sentiment-posts/types"
 import type { ApiResponse } from "@/lib/api"
 
 export interface ContentCategoryResponse {
@@ -57,4 +58,34 @@ export const contentApi = {
       page: response.data?.page || page,
       pageSize: response.data?.pageSize || pageSize,
     })),
+
+  /**
+   * Get sentiment posts list
+   */
+  getSentimentPosts: (page: number, pageSize: number, params?: {
+    sentiment?: string
+    company?: string
+    keyword?: string
+    dateFrom?: string
+    dateTo?: string
+  }): Promise<ListResponse<SentimentPostItem>> => {
+    const queryParams = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    })
+    if (params?.sentiment) queryParams.set('sentiment', params.sentiment)
+    if (params?.company) queryParams.set('company', params.company)
+    if (params?.keyword) queryParams.set('keyword', params.keyword)
+    if (params?.dateFrom) queryParams.set('dateFrom', params.dateFrom)
+    if (params?.dateTo) queryParams.set('dateTo', params.dateTo)
+
+    return get<{ data: SentimentPostItem[], total: number, page: number, pageSize: number }>(
+      `/v1/content/sentiment-posts?${queryParams.toString()}`
+    ).then(response => ({
+      data: Array.isArray(response.data) ? response.data : (response.data?.data || []),
+      total: response.data?.total || 0,
+      page: response.data?.page || page,
+      pageSize: response.data?.pageSize || pageSize,
+    }))
+  },
 }

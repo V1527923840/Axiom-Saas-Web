@@ -78,6 +78,7 @@ export function useUsers() {
         role: { id: data.role === 'super_admin' ? 0 : data.role === 'admin' ? 1 : 2 },
         status: { id: data.status === 'active' ? 1 : data.status === 'inactive' ? 2 : 3 },
         tier: data.tier,
+        currentPlanId: data.currentPlanId || null,
       }
       const response = await post<User>("/v1/users", apiData, token || undefined)
       // Transform response to frontend format
@@ -89,6 +90,7 @@ export function useUsers() {
         email: rawData.email || '',
         role: (typeof rawData.role === 'string' ? rawData.role : rawData.role?.name?.toLowerCase()) as User['role'] || 'user',
         tier: rawData.tier || 'Lv0',
+        currentPlanId: rawData.currentPlanId,
         status: (typeof rawData.status === 'string' ? rawData.status : rawData.status?.name?.toLowerCase()) as User['status'] || 'active',
         pointsBalance: rawData.pointsBalance || 0,
         chatQuotaUsed: rawData.chatQuotaUsed || 0,
@@ -125,6 +127,9 @@ export function useUsers() {
       if (data.tier) {
         apiData.tier = data.tier
       }
+      if (data.currentPlanId !== undefined) {
+        apiData.currentPlanId = data.currentPlanId || null
+      }
       const response = await patch<User>(`/v1/users/${id}`, apiData, token || undefined)
       // Transform response to frontend format
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -135,6 +140,7 @@ export function useUsers() {
         email: rawData.email || '',
         role: (typeof rawData.role === 'string' ? rawData.role : rawData.role?.name?.toLowerCase()) as User['role'] || 'user',
         tier: rawData.tier || 'Lv0',
+        currentPlanId: rawData.currentPlanId,
         status: (typeof rawData.status === 'string' ? rawData.status : rawData.status?.name?.toLowerCase()) as User['status'] || 'active',
         pointsBalance: rawData.pointsBalance || 0,
         chatQuotaUsed: rawData.chatQuotaUsed || 0,

@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -22,6 +23,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { User, UserFormValues } from "../types"
+import { useAuth } from "@/contexts/auth-context"
+import { usePlans } from "@/features/plans/hooks/use-plans"
 
 const userFormSchema = z.object({
   name: z.string().min(2, "名字至少需要2个字符"),
@@ -29,6 +32,7 @@ const userFormSchema = z.object({
   role: z.enum(["super_admin", "admin", "user"]),
   tier: z.enum(["Lv0", "Lv1", "Lv2", "Lv3"]),
   status: z.enum(["active", "inactive", "suspended", "pending"]),
+  currentPlanId: z.string().optional(),
 })
 
 interface UserFormProps {
@@ -39,6 +43,8 @@ interface UserFormProps {
 }
 
 export function UserForm({ initialData, onSubmit, onCancel, loading }: UserFormProps) {
+  const { token } = useAuth()
+  const { plans, fetchPlans } = usePlans()
   const form = useForm({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
@@ -47,8 +53,17 @@ export function UserForm({ initialData, onSubmit, onCancel, loading }: UserFormP
       role: initialData?.role || "user",
       tier: initialData?.tier || "Lv0",
       status: initialData?.status || "active",
+      currentPlanId: initialData?.currentPlanId || "",
     },
   })
+
+  // Fetch plans on mount (only when token is available)
+  useEffect(() => {
+    if (token) {
+      fetchPlans({ page: 0, pageSize: 50, status: 'active' })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
 
   const handleSubmit = (values: z.infer<typeof userFormSchema>) => {
     onSubmit(values as UserFormValues)
@@ -113,24 +128,25 @@ export function UserForm({ initialData, onSubmit, onCancel, loading }: UserFormP
 
         <FormField
           control={form.control}
-          name="tier"
+          name="currentPlanId"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>套餐等级</FormLabel>
+              <FormLabel>当前套餐</FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
-                    <SelectValue placeholder="选择套餐等级" />
+                    <SelectValue placeholder="选择当前套餐" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="Lv0">免费版</SelectItem>
-                  <SelectItem value="Lv1">基础版</SelectItem>
-                  <SelectItem value="Lv2">进阶版</SelectItem>
-                  <SelectItem value="Lv3">高级版</SelectItem>
+                  {plans.map((plan) => (
+                    <SelectItem key={plan.id} value={plan.id}>
+                      {plan.name} ({plan.tier})
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-              <FormDescription>用户的订阅套餐等级</FormDescription>
+              <FormDescription>用户的订阅套餐</FormDescription>
               <FormMessage />
             </FormItem>
           )}

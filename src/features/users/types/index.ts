@@ -34,6 +34,7 @@ export interface UserFormValues {
   role: UserRole
   tier: UserTier
   status: UserStatus
+  currentPlanId?: string
 }
 
 // Query params for filtering users

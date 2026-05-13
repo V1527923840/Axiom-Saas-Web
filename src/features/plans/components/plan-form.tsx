@@ -1,6 +1,7 @@
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Form,
@@ -67,6 +68,25 @@ export function PlanForm({ initialData, onSubmit, onCancel, loading, menuTree = 
   const handleSubmit = (values: z.infer<typeof planFormSchema>) => {
     onSubmit(values as PlanFormValues)
   }
+
+  // Reset form when initialData changes (when loading completes)
+  useEffect(() => {
+    if (initialData) {
+      form.reset({
+        name: initialData.name || "",
+        description: initialData.description || "",
+        tier: initialData.tier || "Lv0",
+        cycle: initialData.cycle || "monthly",
+        pointsQuota: initialData.pointsQuota ?? 0,
+        chatQuota: initialData.chatQuota ?? 0,
+        price: initialData.price ?? 0,
+        currency: initialData.currency || "CNY",
+        status: initialData.status || "active",
+        features: initialData.features || [],
+        menuIds: initialData.menuIds || [],
+      })
+    }
+  }, [initialData, form])
 
   return (
     <Form {...form}>

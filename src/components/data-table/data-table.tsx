@@ -123,6 +123,7 @@ export function DataTable<TData = any>({
     manualPagination: true,
     manualSorting: true,
     manualFiltering: true,
+    pageCount: Math.ceil(total / pagination.pageSize) || 0,
   })
 
   return (

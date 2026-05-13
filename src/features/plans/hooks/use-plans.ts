@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react"
 import { get, post, patch, del } from "@/lib/api"
 import type { Plan, PlanQueryParams } from "../types"
-import type { Menu } from "@/features/menus/types"
+import type { MenuTreeNode } from "@/features/menus/types"
 import { useAuth } from "@/contexts/auth-context"
 
 export function usePlans() {
@@ -93,14 +93,14 @@ export function usePlans() {
     }
   }, [token])
 
-  const fetchPlanMenus = useCallback(async (planId: string): Promise<Menu[]> => {
+  const fetchPlanMenus = useCallback(async (planId: string): Promise<MenuTreeNode[]> => {
     setLoading(true)
     setError(null)
     try {
-      const response = await get<Menu[]>(`/v1/plans/${planId}/menus`, {
+      const response = await get<MenuTreeNode[]>(`/v1/plans/${planId}/menus`, {
         token: token || undefined,
       })
-      return response.data as Menu[]
+      return response.data as MenuTreeNode[]
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch plan menus")
       return []
