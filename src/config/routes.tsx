@@ -34,6 +34,9 @@ const SentimentPosts = lazy(() => import('@/features/content/sentiment-posts/pag
 // ETL pages
 const EtlManagement = lazy(() => import('@/features/etl/page'))
 
+// OSS pages
+const OssBrowser = lazy(() => import('@/features/oss-browser/page'))
+
 // Categories pages
 const CategoriesManagement = lazy(() => import('@/features/categories/page'))
 
@@ -49,6 +52,9 @@ const SubscriptionsManagement = lazy(() => import('@/features/subscriptions/subs
 // Bills pages
 const PaymentFlows = lazy(() => import('@/features/bills/flows/page'))
 const Consumptions = lazy(() => import('@/features/bills/consumptions/page'))
+
+// Scrape Log pages
+const ScrapeLogs = lazy(() => import('@/features/scrape-log/page'))
 
 // Menus pages
 const Menus = lazy(() => import('@/features/menus/menus/page'))
@@ -131,6 +137,12 @@ export const routes: RouteConfig[] = [
     element: <ProtectedRoute roles={['Admin']}><EtlManagement /></ProtectedRoute>
   },
 
+  // OSS Browser Routes (Admin only)
+  {
+    path: "/oss-browser",
+    element: <ProtectedRoute roles={['Admin']}><OssBrowser /></ProtectedRoute>
+  },
+
   // Categories Management Routes (Admin only)
   {
     path: "/categories",
@@ -163,6 +175,12 @@ export const routes: RouteConfig[] = [
   {
     path: "/bills/consumptions",
     element: <ProtectedRoute roles={['Admin']}><Consumptions /></ProtectedRoute>
+  },
+
+  // Scrape Log Management Routes
+  {
+    path: "/scrape-logs",
+    element: <ProtectedRoute roles={['Admin']}><ScrapeLogs /></ProtectedRoute>
   },
 
   // Menus Management Routes
