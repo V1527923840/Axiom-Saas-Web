@@ -272,3 +272,5 @@ npm run preview
 | content/* | `/content/*` | 内容管理 |
 | etl | `/etl` | ETL 管理 (Admin) |
 | categories | `/categories` | 分类管理 (Admin) |
+| oss-browser | `/oss-browser` | OSS文件浏览器 (Admin) |
+| scrape-log | `/scrape-logs` | 爬虫日志管理 (Admin) |
