@@ -5,8 +5,7 @@ export const scrapeLogApi = {
   getScrapeLogs: async (
     page: number = 1,
     limit: number = 10,
-    params?: ScrapeLogQueryParams,
-    token?: string | null
+    params?: ScrapeLogQueryParams
   ) => {
     const queryParams = new URLSearchParams()
     queryParams.append('page', String(page))
@@ -15,12 +14,11 @@ export const scrapeLogApi = {
     if (params?.source) queryParams.append('source', params.source)
 
     return get<{ data: ScrapeLogItem[]; total: number; page: number; pageSize: number }>(
-      `/v1/scrape-log?${queryParams.toString()}`,
-      token ? { token } : {}
+      `/v1/scrape-log?${queryParams.toString()}`
     )
   },
 
-  getScrapeLog: async (id: string, token?: string | null) => {
-    return get<ScrapeLogItem>(`/v1/scrape-log/${id}`, token ? { token } : {})
+  getScrapeLog: async (id: string) => {
+    return get<ScrapeLogItem>(`/v1/scrape-log/${id}`)
   },
 }

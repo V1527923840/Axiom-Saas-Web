@@ -171,12 +171,88 @@ interface RequestOptions {
 }
 ```
 
-**错误处理**:
-- 401 响应自动清除 token 并跳转登录页
-- API 错误抛出 `ApiRequestError`，包含 `statusCode` 和 `code`
-- 网络错误抛出 `ApiRequestError`，code 为 `NETWORK_ERROR`
+### token 自动注入
 
-**分页转换**: UI 使用 0-based 分页，API 使用 1-based，调用时需转换。
+HTTP 方法(`get`, `post`, `put`, `patch`, `del`) 已自动从 `localStorage.auth_token` 获取 token 并注入到 Authorization header。
+
+**调用 API 时不需要显式传递 token:**
+
+```typescript
+// ✅ 正确 - token 自动注入
+const response = await get('/v1/parse/tasks')
+
+// ✅ 正确 - 如需显式传 token（少数情况如测试）
+const response = await get('/v1/parse/tasks', { token: 'explicit-token' })
+
+// ❌ 不推荐 - 已在 api.ts 中自动处理
+const token = localStorage.getItem("auth_token")
+const response = await get('/v1/parse/tasks', { token })
+```
+
+### 响应自动解包 (Auto-Unwrap)
+
+后端有些接口返回 `{ success: true, data: {...} }` 的嵌套格式，`api.ts` 会自动解包：
+
+```typescript
+// 后端返回: { success: true, data: { versions: [...] } }
+// 解包后: response.data = { versions: [...] }
+const response = await get('/v1/versions')
+// response.data.versions 直接可用，无需 response.data.data.versions
+```
+
+**哪些接口会自动解包：**
+- 后端返回 `{ success: true, data: {...} }` 格式的接口
+- 仅当 `success === true` 时才会解包
+
+**服务层标准写法：**
+
+```typescript
+// ✅ 标准写法（解包后直接访问 data.xxx）
+const response = await get<{ versions: VersionItem[] }>('/v1/versions')
+return { versions: Array.isArray(response.data?.versions) ? response.data.versions : [] }
+
+// ❌ 错误写法（多了一层 data）
+const response = await get<VersionsResponse>('/v1/versions')
+// 不能用 response.data.data.versions，要用 response.data.versions
+```
+
+### 错误处理
+
+| 状态码 | 行为 |
+|--------|------|
+| 401 | 清除 `auth_token` 和 `auth_refresh_token`，跳转到 `/auth/sign-in` |
+| 4xx | 抛出 `ApiRequestError`，包含 `statusCode` 和 `code` |
+| 5xx | 抛出 `ApiRequestError`，包含 `statusCode` 和 `code` |
+| 网络错误 | 抛出 `ApiRequestError`，code 为 `NETWORK_ERROR` |
+
+### 响应格式
+
+所有 API 响应被包装为 `ApiResponse<T>`:
+
+```typescript
+interface ApiResponse<T> {
+  data: T
+  total?: number
+  page?: number
+  pageSize?: number
+  message?: string
+}
+```
+
+### CRUD Factory
+
+如需标准的 CRUD 操作，可使用 `createCrudApi`:
+
+```typescript
+import { createCrudApi } from "@/lib/api"
+
+const userApi = createCrudApi<User>('/v1/users')
+await userApi.getAll()
+await userApi.getOne('user-id')
+await userApi.create({ name: 'John' })
+await userApi.update('user-id', { name: 'Jane' })
+await userApi.delete('user-id')
+```
 
 ## Context 模式
 
@@ -260,17 +336,25 @@ npm run preview
 
 ### 功能模块一览
 
-| 模块 | 路径 | 说明 |
-|------|------|------|
-| bills/flows | `/bills/flows` | 支付流水 (Admin) |
-| bills/consumptions | `/bills/consumptions` | 消费记录 (Admin) |
-| menus | `/menus` | 菜单管理 (Admin) |
-| menus/assign | `/menus/assign` | 菜单分配 (Admin) |
-| users | `/users` | 用户管理 |
-| plans | `/plans` | 订阅计划 |
-| subscriptions | `/subscriptions` | 用户订阅 |
-| content/* | `/content/*` | 内容管理 |
-| etl | `/etl` | ETL 管理 (Admin) |
-| categories | `/categories` | 分类管理 (Admin) |
-| oss-browser | `/oss-browser` | OSS文件浏览器 (Admin) |
-| scrape-log | `/scrape-logs` | 爬虫日志管理 (Admin) |
+| 模块 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| auth | `/auth/sign-in`, `/auth/sign-up`, `/auth/forgot-password` | 认证功能 | 公开 |
+| dashboard | `/dashboard`, `/dashboard-2` | 主仪表盘 | 已登录 |
+| bills/flows | `/bills/flows` | 支付流水 | Admin |
+| bills/consumptions | `/bills/consumptions` | 消费记录 | Admin |
+| menus | `/menus` | 菜单管理 | Admin |
+| menus/assign | `/menus/assign` | 菜单分配 | Admin |
+| users | `/users` | 用户管理 | 已登录 |
+| plans | `/plans` | 订阅计划 | 已登录 |
+| subscriptions | `/subscriptions` | 用户订阅 | 已登录 |
+| content/daily-news | `/content/daily-news` | 每日新闻 | 已登录 |
+| content/audio-interpretation | `/content/audio-interpretation` | 音频解读 | 已登录 |
+| content/institution-reports | `/content/institution-reports` | 机构研报 | 已登录 |
+| content/sentiment-posts | `/content/sentiment-posts` | 情感帖子 | 已登录 |
+| etl | `/etl` | ETL 管理 | Admin |
+| categories | `/categories` | 分类管理 | Admin |
+| oss-browser | `/oss-browser` | OSS文件浏览器 | Admin |
+| scrape-log | `/scrape-logs` | 爬虫日志管理 | Admin |
+| parse-tasks | `/parse/tasks`, `/parse/tasks/:taskId` | 解析任务管理 | 已登录 |
+| versions | `/versions` | 版本管理 | 已登录 |
+| settings | `/settings/*` | 用户设置 | 已登录 |

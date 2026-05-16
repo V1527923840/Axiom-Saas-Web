@@ -45,9 +45,8 @@ export const useScrapeLogStore = create<ScrapeLogState>((set, get) => ({
       const { pagination } = get()
       const page = Number.isInteger(pagination.page) && pagination.page >= 0 ? pagination.page + 1 : 1
       const pageSize = Number.isInteger(pagination.pageSize) && pagination.pageSize > 0 ? pagination.pageSize : 10
-      const token = localStorage.getItem("auth_token")
 
-      const response = await scrapeLogApi.getScrapeLogs(page, pageSize, currentFilterParams, token)
+      const response = await scrapeLogApi.getScrapeLogs(page, pageSize, currentFilterParams)
 
       // response.data is the array directly, response.total/page/pageSize are siblings
       const logsArray = Array.isArray(response.data) ? response.data : []
@@ -75,8 +74,7 @@ export const useScrapeLogStore = create<ScrapeLogState>((set, get) => ({
   getLog: async (id: string) => {
     set({ loading: true, error: null })
     try {
-      const token = localStorage.getItem("auth_token")
-      const response = await scrapeLogApi.getScrapeLog(id, token)
+      const response = await scrapeLogApi.getScrapeLog(id)
       return response.data
     } catch (err) {
       set({

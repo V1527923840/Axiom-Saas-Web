@@ -56,6 +56,13 @@ const Consumptions = lazy(() => import('@/features/bills/consumptions/page'))
 // Scrape Log pages
 const ScrapeLogs = lazy(() => import('@/features/scrape-log/page'))
 
+// Parse Tasks pages
+const ParseTasks = lazy(() => import('@/features/parse-tasks/page'))
+const ParseTaskDetail = lazy(() => import('@/features/parse-tasks/task-detail/page'))
+
+// Versions pages
+const Versions = lazy(() => import('@/features/versions/page'))
+
 // Menus pages
 const Menus = lazy(() => import('@/features/menus/menus/page'))
 const MenuAssign = lazy(() => import('@/features/menus/assign/page'))
@@ -181,6 +188,22 @@ export const routes: RouteConfig[] = [
   {
     path: "/scrape-logs",
     element: <ProtectedRoute roles={['Admin']}><ScrapeLogs /></ProtectedRoute>
+  },
+
+  // Parse Tasks Management Routes
+  {
+    path: "/parse/tasks",
+    element: <ProtectedRoute><ParseTasks /></ProtectedRoute>
+  },
+  {
+    path: "/parse/tasks/:taskId",
+    element: <ProtectedRoute><ParseTaskDetail /></ProtectedRoute>
+  },
+
+  // Versions Management Routes
+  {
+    path: "/versions",
+    element: <ProtectedRoute><Versions /></ProtectedRoute>
   },
 
   // Menus Management Routes

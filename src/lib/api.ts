@@ -44,12 +44,30 @@ const apiResponseSchema = z.object({
   message: z.string().optional(),
 })
 
+// Backend response envelope pattern
+// Some endpoints return { success: true, data: {...} } wrapper
+// This needs to be unwrapped for consistent access
+interface WrappedResponse {
+  success?: boolean
+  data?: unknown
+  [key: string]: unknown
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api"
 
 // Request options interface
 interface RequestOptions {
   token?: string
   params?: Record<string, string | number | boolean | undefined>
+}
+
+// Auto-inject auth token from localStorage if available and no explicit token provided
+function getAuthToken(explicitToken?: string): string | undefined {
+  if (explicitToken) return explicitToken
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("auth_token") || undefined
+  }
+  return undefined
 }
 
 // Build query string from params
@@ -65,6 +83,28 @@ function buildQueryString(params?: Record<string, string | number | boolean | un
   return query ? `?${query}` : ""
 }
 
+// Auto-unwrap backend response if it has { success: true, data: {...} } pattern
+function unwrapResponse<T>(json: unknown): ApiResponse<T> {
+  const wrapped = json as WrappedResponse
+
+  // If response has { success: true, data: {...} } pattern, unwrap it
+  // This handles inconsistent response formats across modules
+  if (wrapped.success === true && wrapped.data !== undefined) {
+    // The 'data' field contains the actual response
+    const actualData = wrapped.data as Record<string, unknown>
+    return {
+      data: actualData as T,
+      total: wrapped.total as number,
+      page: wrapped.page as number,
+      pageSize: wrapped.pageSize as number,
+      message: wrapped.message as string,
+    }
+  }
+
+  // Standard case - no unwrap needed
+  return json as ApiResponse<T>
+}
+
 // Generic fetch with error handling
 async function request<T>(
   endpoint: string,
@@ -72,11 +112,14 @@ async function request<T>(
 ): Promise<ApiResponse<T>> {
   const { token, params, ...fetchOptions } = options
 
+  // Auto-inject auth token if not explicitly provided
+  const authToken = token || getAuthToken()
+
   const headers: HeadersInit = {
     "Content-Type": "application/json",
   }
-  if (token) {
-    headers.Authorization = `Bearer ${token}`
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`
   }
 
   const queryString = buildQueryString(params)
@@ -131,7 +174,8 @@ async function request<T>(
 
     // Validate response structure with Zod
     const validated = apiResponseSchema.parse(json)
-    return validated as ApiResponse<T>
+    // Auto-unwrap if response has { success, data } pattern
+    return unwrapResponse<T>(validated)
   } catch (zodError) {
     if (zodError instanceof z.ZodError) {
       throw new ApiRequestError("Invalid response format", 500, "VALIDATION_ERROR")
