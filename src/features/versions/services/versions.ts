@@ -15,11 +15,13 @@ export const versionsApi = {
     const queryParams = new URLSearchParams()
     if (params?.source) queryParams.append('source', params.source)
 
-    const response = await get<{ data: VersionItem[]; total: number; page: number; pageSize: number }>(
-      `/v1/versions${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
-    )
+    const endpoint = `/v1/versions${queryParams.toString() ? `?${queryParams.toString()}` : ''}`
+    console.log('[versions] API call:', endpoint)
+    const response = await get<VersionItem[]>(endpoint)
+    console.log('[versions] raw response:', response)
+    // API returns { data: [...], total, page, pageSize } so response.data is the array
     return {
-      versions: Array.isArray(response.data?.data) ? response.data.data : [],
+      versions: Array.isArray(response.data) ? response.data : [],
     }
   },
 
