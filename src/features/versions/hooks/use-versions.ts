@@ -32,12 +32,9 @@ export const useVersionsStore = create<VersionsState>((set) => ({
   fetchVersions: async (params = {}) => {
     set({ loading: true, error: null })
     try {
-      console.log('[versions] fetchVersions called, params:', params)
       const response = await versionsApi.getVersions(params)
-      console.log('[versions] response:', response)
       set({ versions: response.versions, loading: false })
     } catch (err) {
-      console.error('[versions] error:', err)
       set({
         error: err instanceof Error ? err.message : "Failed to fetch versions",
         loading: false,
