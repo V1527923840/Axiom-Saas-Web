@@ -13,7 +13,7 @@ export default function CategoriesManagementPage() {
   const { categories, loading, fetchCategories } = useCategories()
   const { createCategory, loading: createLoading, error: createError } = useCategoryCreate()
   const { updateCategory, loading: updateLoading, error: updateError } = useCategoryUpdate()
-  const { deleteCategory, loading: deleteLoading, error: deleteError } = useCategoryDelete()
+  const { deleteCategory, error: deleteError } = useCategoryDelete()
 
   const [formOpen, setFormOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<ContentCategory | null>(null)

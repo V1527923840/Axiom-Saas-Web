@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react"
 import { get, post } from "@/lib/api"
-import type { EtlFileItem, EtlJob, EtlImportOptions, EtlImportResponse, ListResponse, EtlJobsQueryParams } from "../types"
+import type { EtlFileItem, EtlJob, EtlImportOptions, EtlImportResponse, EtlJobsQueryParams } from "../types"
 import { useAuth } from "@/contexts/auth-context"
 
 export function useEtlFiles() {
@@ -120,7 +120,7 @@ export function useEtlJobs() {
 export function useJobStatus() {
   const { token } = useAuth()
   const [job, setJob] = useState<EtlJob | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const pollJobStatus = useCallback(async (jobId: string): Promise<EtlJob | null> => {

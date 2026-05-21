@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { FileText, RefreshCw } from "lucide-react"
@@ -72,7 +71,10 @@ export function FileList({ files, loading, selectedFiles, onSelectionChange, onR
                 <th className="py-3 px-4 text-left w-10">
                   <Checkbox
                     checked={isAllSelected}
-                    ref={(el) => { if (el) el.indeterminate = isIndeterminate }}
+                    ref={(el) => {
+                      const input = el?.querySelector('input');
+                      if (input) input.indeterminate = isIndeterminate;
+                    }}
                     onCheckedChange={handleSelectAll}
                   />
                 </th>

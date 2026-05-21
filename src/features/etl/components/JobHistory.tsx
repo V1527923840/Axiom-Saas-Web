@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Badge } from "@/components/ui/badge"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { JobStatus } from "./JobStatus"
 import type { EtlJob } from "../types"

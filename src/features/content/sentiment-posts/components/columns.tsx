@@ -11,7 +11,6 @@ import type { SentimentPostItem } from "../types"
 import {
   DetailDialog,
   ScrollableText,
-  RefinedSummary,
 } from "@/features/content/components/detail-dialog"
 
 export const columns: ColumnDef<SentimentPostItem>[] = [
@@ -53,7 +52,7 @@ export const columns: ColumnDef<SentimentPostItem>[] = [
       </Button>
     ),
     cell: ({ row }) => {
-      const timestamp = row.getValue("contentTimestamp")
+      const timestamp = row.getValue("contentTimestamp") as string | number | undefined
       if (!timestamp) return <span className="text-muted-foreground">-</span>
       const date = new Date(timestamp)
       return (
