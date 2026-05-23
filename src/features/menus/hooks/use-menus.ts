@@ -66,36 +66,50 @@ export function useMenus() {
     setLoading(true)
     setError(null)
     try {
-      const response = await get<Menu[]>("/v1/menus/tree", {
+      const response = await get<MenuTreeNode[]>("/v1/menus/tree", {
         token: token || undefined,
       })
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawData = response.data as any
-      const flatMenus: Menu[] = Array.isArray(rawData)
-        ? rawData
-        : (rawData?.data?.data || rawData?.data || [])
 
-      // Build tree from flat list
-      const menuMap = new Map<string, MenuTreeNode>()
-      const rootMenus: MenuTreeNode[] = []
+      // API returns nested tree structure directly with children arrays
+      // Check if data is already nested (has children property)
+      const isNestedTree = Array.isArray(rawData) && rawData.length > 0 && 'children' in rawData[0]
 
-      flatMenus.forEach(menu => {
-        menuMap.set(menu.id, { ...menu, children: [] })
-      })
+      let treeData: MenuTreeNode[]
 
-      flatMenus.forEach(menu => {
-        const node = menuMap.get(menu.id)!
-        if (menu.parentId && menuMap.has(menu.parentId)) {
-          const parent = menuMap.get(menu.parentId)!
-          parent.children!.push(node)
-        } else {
-          rootMenus.push(node)
-        }
-      })
+      if (isNestedTree) {
+        // Data is already a nested tree, use it directly
+        treeData = rawData as MenuTreeNode[]
+      } else {
+        // Data is a flat list, build tree from parentId references
+        const flatMenus: Menu[] = Array.isArray(rawData)
+          ? rawData
+          : (rawData?.data?.data || rawData?.data || [])
 
-      setMenuTree(rootMenus)
-      return rootMenus
+        const menuMap = new Map<string, MenuTreeNode>()
+        const rootMenus: MenuTreeNode[] = []
+
+        flatMenus.forEach(menu => {
+          menuMap.set(menu.id, { ...menu, children: [] })
+        })
+
+        flatMenus.forEach(menu => {
+          const node = menuMap.get(menu.id)!
+          if (menu.parentId && menuMap.has(menu.parentId)) {
+            const parent = menuMap.get(menu.parentId)!
+            parent.children!.push(node)
+          } else {
+            rootMenus.push(node)
+          }
+        })
+
+        treeData = rootMenus
+      }
+
+      setMenuTree(treeData)
+      return treeData
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch menu tree")
       return []

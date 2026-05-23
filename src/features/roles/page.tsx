@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
-import { useRoleMenuAssign } from "../hooks/use-role-menu-assign"
-import { MenuTree } from "../components/menu-tree"
+import { useRoleMenuAssign } from "./hooks/use-role-menu-assign"
+import { MenuTree } from "../menus/components/menu-tree"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -16,9 +16,9 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
 import { useAuth } from "@/contexts/auth-context"
-import type { Role } from "../types"
+import type { Role } from "../menus/types"
 
-export default function MenuAssignPage() {
+export default function RolesPage() {
   useAuth() // Ensure auth context is available
   const {
     roles,

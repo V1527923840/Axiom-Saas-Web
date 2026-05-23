@@ -340,21 +340,27 @@ npm run preview
 |------|------|------|------|
 | auth | `/auth/sign-in`, `/auth/sign-up`, `/auth/forgot-password` | 认证功能 | 公开 |
 | dashboard | `/dashboard`, `/dashboard-2` | 主仪表盘 | 已登录 |
-| bills/flows | `/bills/flows` | 支付流水 | Admin |
-| bills/consumptions | `/bills/consumptions` | 消费记录 | Admin |
-| menus | `/menus` | 菜单管理 | Admin |
-| menus/assign | `/menus/assign` | 菜单分配 | Admin |
-| users | `/users` | 用户管理 | 已登录 |
-| plans | `/plans` | 订阅计划 | 已登录 |
-| subscriptions | `/subscriptions` | 用户订阅 | 已登录 |
+| bills/flows | `/bills/flows` | 支付流水 | 菜单权限 |
+| bills/consumptions | `/bills/consumptions` | 消费记录 | 菜单权限 |
+| menus | `/menus` | 菜单管理 | 菜单权限 |
+| roles | `/roles` | 角色管理 | 菜单权限 |
+| users | `/users` | 用户管理 | 菜单权限 |
+| plans | `/plans` | 订阅计划 | 菜单权限 |
+| subscriptions | `/subscriptions` | 用户订阅 | 菜单权限 |
 | content/daily-news | `/content/daily-news` | 每日新闻 | 已登录 |
 | content/audio-interpretation | `/content/audio-interpretation` | 音频解读 | 已登录 |
 | content/institution-reports | `/content/institution-reports` | 机构研报 | 已登录 |
 | content/sentiment-posts | `/content/sentiment-posts` | 情感帖子 | 已登录 |
-| etl | `/etl` | ETL 管理 | Admin |
-| categories | `/categories` | 分类管理 | Admin |
-| oss-browser | `/oss-browser` | OSS文件浏览器 | Admin |
-| scrape-log | `/scrape-logs` | 爬虫日志管理 | Admin |
-| parse-tasks | `/parse/tasks`, `/parse/tasks/:taskId` | 解析任务管理 | 已登录 |
-| versions | `/versions` | 版本管理 | 已登录 |
+| etl | `/etl` | ETL 管理 | 菜单权限 |
+| categories | `/categories` | 分类管理 | 菜单权限 |
+| oss-browser | `/oss-browser` | OSS文件浏览器 | 菜单权限 |
+| scrape-log | `/scrape-logs` | 爬虫日志管理 | 菜单权限 |
+| parse-tasks | `/parse/tasks`, `/parse/tasks/:taskId` | 解析任务管理 | 菜单权限 |
+| versions | `/versions` | 版本管理 | 菜单权限 |
 | settings | `/settings/*` | 用户设置 | 已登录 |
+
+**权限说明：**
+- `公开` - 无需登录即可访问
+- `已登录` - 仅需登录，无菜单权限检查
+- `菜单权限` - 根据用户分配的菜单路径动态检查
+- `Admin` - 仅 Admin 角色可访问（已废弃，请使用菜单权限）
