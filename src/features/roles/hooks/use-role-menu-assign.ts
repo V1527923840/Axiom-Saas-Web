@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { get, post } from "@/lib/api"
-import type { Role, MenuTreeNode } from "../types"
+import type { Role, MenuTreeNode } from "../../menus/types"
 import { useAuth } from "@/contexts/auth-context"
 
 export function useRoleMenuAssign() {

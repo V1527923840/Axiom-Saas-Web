@@ -174,6 +174,34 @@ export function useUsers() {
     }
   }, [token])
 
+  const fetchUserMenus = useCallback(async (userId: string): Promise<string[]> => {
+    try {
+      const response = await get<{ id: string }[]>(`/v1/users/${userId}/extra-menus`, {
+        token: token || undefined,
+      })
+      const menusData = Array.isArray(response.data) ? response.data : []
+      return menusData.map((m: { id: string }) => m.id)
+    } catch (err) {
+      console.error("Failed to fetch user menus:", err)
+      return []
+    }
+  }, [token])
+
+  const assignMenusToUser = useCallback(async (userId: string, menuIds: string[]): Promise<void> => {
+    setLoading(true)
+    setError(null)
+    try {
+      await post(`/v1/users/${userId}/extra-menus`, { menuIds }, {
+        token: token || undefined,
+      })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign menus")
+      throw err
+    } finally {
+      setLoading(false)
+    }
+  }, [token])
+
   return {
     users,
     loading,
@@ -183,5 +211,7 @@ export function useUsers() {
     createUser,
     updateUser,
     deleteUser,
+    fetchUserMenus,
+    assignMenusToUser,
   }
 }

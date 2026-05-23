@@ -63,9 +63,11 @@ const ParseTaskDetail = lazy(() => import('@/features/parse-tasks/task-detail/pa
 // Versions pages
 const Versions = lazy(() => import('@/features/versions/page'))
 
+// Roles pages
+const Roles = lazy(() => import('@/features/roles/page'))
+
 // Menus pages
 const Menus = lazy(() => import('@/features/menus/menus/page'))
-const MenuAssign = lazy(() => import('@/features/menus/assign/page'))
 
 // Settings pages
 const UserSettings = lazy(() => import('@/app/settings/user/page'))
@@ -138,22 +140,22 @@ export const routes: RouteConfig[] = [
     element: <ProtectedRoute><SentimentPosts /></ProtectedRoute>
   },
 
-  // ETL Management Routes (Admin only)
+  // ETL Management Routes - menu-based permission
   {
     path: "/etl",
-    element: <ProtectedRoute roles={['Admin']}><EtlManagement /></ProtectedRoute>
+    element: <ProtectedRoute menuPaths={['/etl']}><EtlManagement /></ProtectedRoute>
   },
 
-  // OSS Browser Routes (Admin only)
+  // OSS Browser Routes - menu-based permission
   {
     path: "/oss-browser",
-    element: <ProtectedRoute roles={['Admin']}><OssBrowser /></ProtectedRoute>
+    element: <ProtectedRoute menuPaths={['/oss-browser']}><OssBrowser /></ProtectedRoute>
   },
 
-  // Categories Management Routes (Admin only)
+  // Categories Management Routes - menu-based permission
   {
     path: "/categories",
-    element: <ProtectedRoute roles={['Admin']}><CategoriesManagement /></ProtectedRoute>
+    element: <ProtectedRoute menuPaths={['/categories']}><CategoriesManagement /></ProtectedRoute>
   },
 
   // User Management Routes
@@ -174,20 +176,20 @@ export const routes: RouteConfig[] = [
     element: <ProtectedRoute><SubscriptionsManagement /></ProtectedRoute>
   },
 
-  // Bills Management Routes
+  // Bills Management Routes - menu-based permission
   {
     path: "/bills/flows",
-    element: <ProtectedRoute roles={['Admin']}><PaymentFlows /></ProtectedRoute>
+    element: <ProtectedRoute menuPaths={['/bills/flows']}><PaymentFlows /></ProtectedRoute>
   },
   {
     path: "/bills/consumptions",
-    element: <ProtectedRoute roles={['Admin']}><Consumptions /></ProtectedRoute>
+    element: <ProtectedRoute menuPaths={['/bills/consumptions']}><Consumptions /></ProtectedRoute>
   },
 
-  // Scrape Log Management Routes
+  // Scrape Log Management Routes - menu-based permission
   {
     path: "/scrape-logs",
-    element: <ProtectedRoute roles={['Admin']}><ScrapeLogs /></ProtectedRoute>
+    element: <ProtectedRoute menuPaths={['/scrape-logs']}><ScrapeLogs /></ProtectedRoute>
   },
 
   // Parse Tasks Management Routes
@@ -206,14 +208,16 @@ export const routes: RouteConfig[] = [
     element: <ProtectedRoute><Versions /></ProtectedRoute>
   },
 
-  // Menus Management Routes
+  // Roles Management Routes
+  {
+    path: "/roles",
+    element: <ProtectedRoute><Roles /></ProtectedRoute>
+  },
+
+  // Menus Management Routes - menu-based permission
   {
     path: "/menus",
-    element: <ProtectedRoute roles={['Admin']}><Menus /></ProtectedRoute>
-  },
-  {
-    path: "/menus/assign",
-    element: <ProtectedRoute roles={['Admin']}><MenuAssign /></ProtectedRoute>
+    element: <ProtectedRoute menuPaths={['/menus']}><Menus /></ProtectedRoute>
   },
 
   // Public Pages

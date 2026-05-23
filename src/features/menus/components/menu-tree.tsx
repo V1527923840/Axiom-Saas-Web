@@ -24,52 +24,39 @@ function MenuTreeItem({ menu, checkedKeys, onCheckChange, level }: MenuTreeItemP
   const isChecked = checkedKeys.includes(menu.id)
 
   const handleCheck = (checked: boolean) => {
-    const newCheckedKeys = checked
-      ? [...checkedKeys, menu.id]
-      : checkedKeys.filter((key) => key !== menu.id)
+    let newCheckedKeys = [...checkedKeys]
 
-    // If checking parent, also check all children
-    if (checked && hasChildren) {
-      const childIds = getAllChildIds(menu.children!)
-      newCheckedKeys.push(...childIds)
-    }
-
-    // If unchecking parent, also uncheck all children
-    if (!checked && hasChildren) {
-      const childIds = getAllChildIds(menu.children!)
-      return onCheckChange(checkedKeys.filter((key) => key !== menu.id && !childIds.includes(key)))
+    if (checked) {
+      // Add this menu
+      if (!newCheckedKeys.includes(menu.id)) {
+        newCheckedKeys.push(menu.id)
+      }
+      // If has children, add all children too
+      if (hasChildren) {
+        const childIds = getAllChildIds(menu.children!)
+        childIds.forEach((id) => {
+          if (!newCheckedKeys.includes(id)) {
+            newCheckedKeys.push(id)
+          }
+        })
+      }
+    } else {
+      // Remove this menu
+      newCheckedKeys = newCheckedKeys.filter((key) => key !== menu.id)
+      // If has children, remove all children too
+      if (hasChildren) {
+        const childIds = getAllChildIds(menu.children!)
+        newCheckedKeys = newCheckedKeys.filter((key) => !childIds.includes(key))
+      }
     }
 
     onCheckChange(newCheckedKeys)
   }
 
-  const handleChildCheckChange = (childCheckedKeys: string[]) => {
-    // When child changes, update parent's checked state
-    const allChildIds = menu.children ? getAllChildIds(menu.children) : []
-    const allChildrenChecked = allChildIds.every((id) => childCheckedKeys.includes(id))
-    const someChildrenChecked = allChildIds.some((id) => childCheckedKeys.includes(id))
-
-    let newCheckedKeys = [...checkedKeys]
-
-    if (allChildrenChecked) {
-      if (!newCheckedKeys.includes(menu.id)) {
-        newCheckedKeys.push(menu.id)
-      }
-    } else if (someChildrenChecked) {
-      // Parent should be indeterminate - we just keep it unchecked but include checked children
-      newCheckedKeys = newCheckedKeys.filter((key) => key !== menu.id)
-    } else {
-      newCheckedKeys = newCheckedKeys.filter((key) => key !== menu.id)
-    }
-
-    // Merge with child checked keys
-    childCheckedKeys.forEach((key) => {
-      if (!newCheckedKeys.includes(key)) {
-        newCheckedKeys.push(key)
-      }
-    })
-
-    onCheckChange(newCheckedKeys)
+  const handleChildCheckChange = (newKeysFromChild: string[]) => {
+    // Simply propagate the child's new state up without re-evaluating parent
+    // The parent's checked state is managed by handleCheck
+    onCheckChange(newKeysFromChild)
   }
 
   return (
