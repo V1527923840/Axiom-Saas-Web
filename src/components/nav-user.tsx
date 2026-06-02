@@ -6,10 +6,9 @@ import {
   LogOut,
   BellDot,
   CircleUser,
+  Atom,
 } from "lucide-react"
 import { Link } from "react-router-dom"
-
-import { Logo } from "@/components/logo"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,8 +45,8 @@ export function NavUser({
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg">
-                < Logo size={28} />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-background text-foreground">
+                <Atom className="size-5" />
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
@@ -66,8 +65,8 @@ export function NavUser({
           >
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                <div className="h-8 w-8 rounded-lg">
-                  < Logo size={28} />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-background text-foreground">
+                  <Atom className="size-5" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{user.name}</span>

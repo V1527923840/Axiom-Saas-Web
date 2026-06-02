@@ -12,9 +12,9 @@ import {
   Wallet,
   Menu,
   ChevronRight,
+  Atom,
   type LucideIcon,
 } from "lucide-react"
-import { Logo } from "@/components/logo"
 import { SidebarNotification } from "@/components/sidebar-notification"
 
 import { NavUser } from "@/components/nav-user"
@@ -56,6 +56,7 @@ const iconMap: Record<string, LucideIcon> = {
   FileText,
   Wallet,
   Menu,
+  Atom,
 }
 
 function getIcon(iconName: string): LucideIcon {
@@ -216,11 +217,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuButton size="lg" asChild>
               <Link to="/dashboard">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Logo size={24} className="text-current" />
+                  <Atom className="size-5" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">Admin</span>
-                  <span className="truncate text-xs">管理后台</span>
+                  <span className="truncate font-medium text-base">AXIOM</span>
                 </div>
               </Link>
             </SidebarMenuButton>
