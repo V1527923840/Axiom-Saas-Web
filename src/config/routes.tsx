@@ -26,10 +26,9 @@ const InternalServerError = lazy(() => import('@/app/errors/internal-server-erro
 const UnderMaintenance = lazy(() => import('@/app/errors/under-maintenance/page'))
 
 // Content pages
-const DailyNews = lazy(() => import('@/features/content/daily-news/page'))
 const AudioInterpretation = lazy(() => import('@/features/content/audio-interpretation/page'))
 const InstitutionReports = lazy(() => import('@/features/content/institution-reports/page'))
-const SentimentPosts = lazy(() => import('@/features/content/sentiment-posts/page'))
+const Intelligence = lazy(() => import('@/features/content/intelligence/page'))
 
 // ETL pages
 const EtlManagement = lazy(() => import('@/features/etl/page'))
@@ -124,10 +123,6 @@ export const routes: RouteConfig[] = [
 
   // Content Management Routes
   {
-    path: "/content/daily-news",
-    element: <ProtectedRoute><DailyNews /></ProtectedRoute>
-  },
-  {
     path: "/content/audio-interpretation",
     element: <ProtectedRoute><AudioInterpretation /></ProtectedRoute>
   },
@@ -136,8 +131,8 @@ export const routes: RouteConfig[] = [
     element: <ProtectedRoute><InstitutionReports /></ProtectedRoute>
   },
   {
-    path: "/content/sentiment-posts",
-    element: <ProtectedRoute><SentimentPosts /></ProtectedRoute>
+    path: "/content/intelligence",
+    element: <ProtectedRoute><Intelligence /></ProtectedRoute>
   },
 
   // ETL Management Routes - menu-based permission
