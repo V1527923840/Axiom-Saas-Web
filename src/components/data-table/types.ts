@@ -33,6 +33,7 @@ export type FetchData<TData = unknown> = (
 export interface ColumnDefExtra<TData> {
   enableSorting?: boolean
   format?: (value: unknown, row: TData) => React.ReactNode
+  tooltip?: boolean
 }
 
 export type CreateColumnDef<TData, TValue> = ColumnDef<TData, TValue> &
@@ -69,6 +70,7 @@ export interface DataTableProps<TData = any>
   searchPlaceholder?: string
   searchColumn?: string
   showToolbar?: boolean
+  showSearch?: boolean
   onRowClick?: (row: TData) => void
   // Pagination callbacks when using data prop directly
   pagination?: {
@@ -78,4 +80,8 @@ export interface DataTableProps<TData = any>
     onPageChange?: (page: number) => void
     onPageSizeChange?: (pageSize: number) => void
   }
+  // Sorting callback for manual (server-side) sorting
+  onSortingChange?: (sorting: SortingState[]) => void
+  // Initial sorting state
+  initialSorting?: SortingState[]
 }

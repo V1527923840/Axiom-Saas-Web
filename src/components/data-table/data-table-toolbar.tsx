@@ -19,6 +19,7 @@ interface DataTableToolbarProps {
   showCreateButton?: boolean
   onCreate?: () => void
   createLabel?: string
+  showSearch?: boolean
 }
 
 export function DataTableToolbar({
@@ -30,18 +31,21 @@ export function DataTableToolbar({
   showCreateButton = false,
   onCreate,
   createLabel = "新建",
+  showSearch = true,
 }: DataTableToolbarProps) {
   return (
     <div className="flex flex-wrap items-center gap-4">
-      <div className="relative flex-1 min-w-[200px] max-w-[320px]">
-        <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-        <Input
-          type="search"
-          placeholder={searchPlaceholder}
-          className="pl-9"
-          onChange={(e) => onSearch?.(e.target.value)}
-        />
-      </div>
+      {showSearch && (
+        <div className="relative flex-1 min-w-[200px] max-w-[320px]">
+          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder={searchPlaceholder}
+            className="pl-9"
+            onChange={(e) => onSearch?.(e.target.value)}
+          />
+        </div>
+      )}
 
       {filters.length > 0 && onFilterChange && (
         <Select

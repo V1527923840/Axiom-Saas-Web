@@ -29,6 +29,11 @@ import {
 } from "@/components/ui/table"
 import { DataTableToolbar } from "./data-table-toolbar"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import type { DataTableProps } from "./types"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -47,18 +52,21 @@ export function DataTable<TData = any>({
   pagination: externalPagination,
   error: externalError,
   showToolbar = true,
+  showSearch = true,
+  onSortingChange,
+  initialSorting = [],
   ...props
 }: DataTableProps<TData>) {
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: externalPagination?.page ?? 0,
     pageSize: externalPagination?.pageSize ?? 10,
   })
-  const [sorting, setSorting] = useState<SortingState>([])
+  const [sorting, setSorting] = useState<SortingState>(initialSorting)
   const [globalFilter, setGlobalFilter] = useState("")
   const [data, setData] = useState<TData[]>(externalData ?? [])
-  const [total, setTotal] = useState(externalTotal ?? 0)
+  const [total, setTotal] = useState(externalPagination?.total ?? externalTotal ?? 0)
   const [isLoading, setIsLoading] = useState(externalLoading ?? false)
-  const [internalError, setError] = useState<Error | null>(null)
+  const [internalError] = useState<Error | null>(null)
   const error = externalError ?? (internalError?.message ?? null)
 
   const handleCreate = () => {
@@ -72,38 +80,41 @@ export function DataTable<TData = any>({
   useEffect(() => {
     if (isExternalMode) {
       setData(externalData)
-      setTotal(externalTotal ?? 0)
+      setTotal(externalPagination?.total ?? externalTotal ?? 0)
       setIsLoading(externalLoading ?? false)
     }
-  }, [externalData, externalTotal, externalLoading, isExternalMode])
+  }, [externalData, externalTotal, externalLoading, isExternalMode, externalPagination?.total])
 
-  useEffect(() => {
-    if (!isExternalMode && fetchData) {
-      const loadData = async () => {
-        setIsLoading(true)
-        setError(null)
-        try {
-          const result = await fetchData({
-            pagination,
-            sorting,
-            globalFilter,
-          })
-          setData(result.data)
-          setTotal(result.total)
-        } catch (err) {
-          setError(err instanceof Error ? err : new Error("Failed to fetch data"))
-        } finally {
-          setIsLoading(false)
-        }
-      }
-      loadData()
-    }
-  }, [pagination, sorting, globalFilter, isExternalMode, fetchData])
-
+  // Handle page size change
   const handlePageSizeChange = (newPageSize: number) => {
     setPagination({ pageIndex: 0, pageSize: newPageSize })
+    // Notify parent - setPageSize will reset page to 0 and fetch new data
     externalPagination?.onPageSizeChange?.(newPageSize)
   }
+
+  // Handle page change - update internal state only, parent handles API calls
+  const handlePageChange = (newPageIndex: number) => {
+    if (newPageIndex < 0) return
+    if (table.getPageCount() > 0 && newPageIndex >= table.getPageCount()) return
+    if (pagination.pageIndex === newPageIndex) return
+
+    setPagination((prev) => ({ ...prev, pageIndex: newPageIndex }))
+    // Notify parent - parent will update store which will trigger re-render with new data
+    externalPagination?.onPageChange?.(newPageIndex)
+  }
+
+  // Sync pagination from parent when pageSize changes (page reset)
+  useEffect(() => {
+    if (isExternalMode && externalPagination) {
+      if (externalPagination.pageSize !== undefined && externalPagination.page !== undefined) {
+        setPagination((prev) => ({
+          ...prev,
+          pageSize: externalPagination.pageSize,
+          pageIndex: externalPagination.page,
+        }))
+      }
+    }
+  }, [isExternalMode, externalPagination?.pageSize])
 
   const table = useReactTable({
     data,
@@ -114,7 +125,11 @@ export function DataTable<TData = any>({
       globalFilter,
     },
     onPaginationChange: setPagination,
-    onSortingChange: setSorting,
+    onSortingChange: (updater) => {
+      const newSorting = typeof updater === "function" ? updater(sorting) : updater
+      setSorting(newSorting)
+      onSortingChange?.(newSorting)
+    },
     onGlobalFilterChange: setGlobalFilter,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -134,6 +149,7 @@ export function DataTable<TData = any>({
           showCreateButton={!!CreateDialog}
           onCreate={handleCreate}
           onSearch={setGlobalFilter}
+          showSearch={showSearch}
         />
       )}
 
@@ -187,7 +203,20 @@ export function DataTable<TData = any>({
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {(cell.column.columnDef.meta as any)?.tooltip ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="truncate cursor-help">
+                              {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-[400px] break-words">
+                            {String(cell.getValue() ?? "")}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        flexRender(cell.column.columnDef.cell, cell.getContext())
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -225,7 +254,7 @@ export function DataTable<TData = any>({
               variant="outline"
               size="icon"
               className="size-8"
-              onClick={() => table.firstPage()}
+              onClick={() => handlePageChange(0)}
               disabled={!table.getCanPreviousPage()}
             >
               <ChevronsLeftIcon className="size-4" />
@@ -234,7 +263,7 @@ export function DataTable<TData = any>({
               variant="outline"
               size="icon"
               className="size-8"
-              onClick={() => table.previousPage()}
+              onClick={() => handlePageChange(pagination.pageIndex - 1)}
               disabled={!table.getCanPreviousPage()}
             >
               <ChevronLeftIcon className="size-4" />
@@ -248,7 +277,7 @@ export function DataTable<TData = any>({
               variant="outline"
               size="icon"
               className="size-8"
-              onClick={() => table.nextPage()}
+              onClick={() => handlePageChange(pagination.pageIndex + 1)}
               disabled={!table.getCanNextPage()}
             >
               <ChevronRightIcon className="size-4" />
@@ -257,7 +286,7 @@ export function DataTable<TData = any>({
               variant="outline"
               size="icon"
               className="size-8"
-              onClick={() => table.lastPage()}
+              onClick={() => handlePageChange(table.getPageCount() - 1)}
               disabled={!table.getCanNextPage()}
             >
               <ChevronsRightIcon className="size-4" />
