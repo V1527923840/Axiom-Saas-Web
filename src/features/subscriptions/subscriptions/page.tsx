@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { useAuth } from "@/contexts/auth-context"
 import { useSubscription } from "../hooks/use-subscription"
@@ -28,11 +28,15 @@ export default function SubscriptionsPage() {
 
   const [subscriptionDialogOpen, setSubscriptionDialogOpen] = useState(false)
 
+  const initialized = useRef(false)
   useEffect(() => {
-    if (token) {
-      fetchCurrentSubscription()
-      fetchSubscriptions({ page: 0, pageSize: 10 })
-      fetchPlans({ page: 0, pageSize: 100 })
+    if (!initialized.current) {
+      initialized.current = true
+      if (token) {
+        fetchCurrentSubscription()
+        fetchSubscriptions({ page: 0, pageSize: 10 })
+        fetchPlans({ page: 0, pageSize: 100 })
+      }
     }
   }, [token])
 

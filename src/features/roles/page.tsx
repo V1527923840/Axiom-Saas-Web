@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useRoleMenuAssign } from "./hooks/use-role-menu-assign"
 import { MenuTree } from "../menus/components/menu-tree"
 import { BaseLayout } from "@/components/layouts/base-layout"
@@ -33,19 +33,19 @@ export default function RolesPage() {
     setCheckedMenuIds,
   } = useRoleMenuAssign()
 
-  const [initialized, setInitialized] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [currentRole, setCurrentRole] = useState<Role | null>(null)
 
+  // Initial fetch - only on mount with ref guard for React StrictMode
+  const initialized = useRef(false)
   useEffect(() => {
-    const init = async () => {
-      await Promise.all([
+    if (!initialized.current) {
+      initialized.current = true
+      Promise.all([
         fetchRoles(),
         fetchMenuTree(),
       ])
-      setInitialized(true)
     }
-    init()
   }, [fetchRoles, fetchMenuTree])
 
   const handleAssignMenus = useCallback(async (role: Role) => {

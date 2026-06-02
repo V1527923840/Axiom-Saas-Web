@@ -12,7 +12,6 @@ import type { Menu, MenuFormValues } from "../types"
 
 export default function MenusPage() {
   const {
-    menus,
     menuTree,
     loading,
     fetchMenus,
@@ -27,11 +26,20 @@ export default function MenusPage() {
   const [selectedMenu, setSelectedMenu] = useState<Menu | null>(null)
   const [dialogMode, setDialogMode] = useState<"add" | "edit" | "view">("add")
   const [menuToDelete, setMenuToDelete] = useState<Menu | null>(null)
+  const [topLevelMenus, setTopLevelMenus] = useState<Menu[]>([])
 
   useEffect(() => {
     fetchMenuTree()
     fetchMenus({ pageSize: 100 }) // Fetch all menus for parent selection
   }, [fetchMenuTree, fetchMenus])
+
+  // Extract top-level menus from tree for parent selection dropdown
+  useEffect(() => {
+    if (menuTree.length > 0) {
+      // menuTree already contains only top-level menus (parentId: null) with nested children
+      setTopLevelMenus(menuTree)
+    }
+  }, [menuTree])
 
   const handleView = useCallback((menu: Menu) => {
     setSelectedMenu(menu)
@@ -113,7 +121,7 @@ export default function MenusPage() {
         onOpenChange={setDialogOpen}
         mode={dialogMode}
         menu={selectedMenu}
-        parentMenus={menus}
+        parentMenus={topLevelMenus}
         onSubmit={handleSubmit}
         loading={loading}
       />

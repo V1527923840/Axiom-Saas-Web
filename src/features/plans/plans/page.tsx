@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useAuth } from "@/contexts/auth-context"
@@ -50,14 +50,18 @@ export default function PlansPage() {
   const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([])
   const [isLoadingMenus, setIsLoadingMenus] = useState(false)
 
+  const initialized = useRef(false)
   useEffect(() => {
-    if (token) {
-      fetchPlans({
-        page: 0,
-        pageSize: pagination.pageSize,
-        search: searchQuery || undefined,
-        status: statusFilter === "all" ? undefined : statusFilter,
-      })
+    if (!initialized.current) {
+      initialized.current = true
+      if (token) {
+        fetchPlans({
+          page: 0,
+          pageSize: pagination.pageSize,
+          search: searchQuery || undefined,
+          status: statusFilter === "all" ? undefined : statusFilter,
+        })
+      }
     }
   }, [token, fetchPlans])
 

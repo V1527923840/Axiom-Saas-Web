@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useAuth } from "@/contexts/auth-context"
@@ -43,16 +43,19 @@ export default function UsersPage() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
 
+  const initialized = useRef(false)
   useEffect(() => {
-    // Only fetch when token is available (user is logged in)
-    if (token) {
-      fetchUsers({
-        page: 0,
-        pageSize: pagination.pageSize,
-        search: searchQuery || undefined,
-        role: roleFilter === "all" ? undefined : roleFilter,
-        status: statusFilter === "all" ? undefined : statusFilter,
-      })
+    if (!initialized.current) {
+      initialized.current = true
+      if (token) {
+        fetchUsers({
+          page: 0,
+          pageSize: pagination.pageSize,
+          search: searchQuery || undefined,
+          role: roleFilter === "all" ? undefined : roleFilter,
+          status: statusFilter === "all" ? undefined : statusFilter,
+        })
+      }
     }
   }, [token, fetchUsers])
 

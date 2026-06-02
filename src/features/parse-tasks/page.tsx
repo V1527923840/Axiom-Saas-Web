@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { DataTable } from "@/components/data-table"
 import { columns } from "./components/columns"
@@ -35,9 +35,12 @@ export default function ParseTasksPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [availableSources, setAvailableSources] = useState<string[]>([])
 
+  const initialized = useRef(false)
   useEffect(() => {
-    fetchTasks()
-    fetchSources()
+    if (!initialized.current) {
+      initialized.current = true
+      Promise.all([fetchTasks(), fetchSources()])
+    }
   }, [fetchTasks])
 
   const fetchSources = async () => {

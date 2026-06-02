@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { DataTable } from "@/components/data-table"
 import { columns } from "./components/columns"
@@ -35,8 +35,12 @@ export default function VersionsPage() {
 
   const [sourceFilter, setSourceFilter] = useState<string>("all")
 
+  const initialized = useRef(false)
   useEffect(() => {
-    fetchVersions()
+    if (!initialized.current) {
+      initialized.current = true
+      fetchVersions()
+    }
   }, [fetchVersions])
 
   // Get unique sources from versions
