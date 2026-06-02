@@ -27,8 +27,8 @@ const UnderMaintenance = lazy(() => import('@/app/errors/under-maintenance/page'
 
 // Content pages
 const AudioInterpretation = lazy(() => import('@/features/content/audio-interpretation/page'))
-const InstitutionReports = lazy(() => import('@/features/content/institution-reports/page'))
 const Intelligence = lazy(() => import('@/features/content/intelligence/page'))
+const ResearchAnalysis = lazy(() => import('@/features/content/research-analysis/page'))
 
 // ETL pages
 const EtlManagement = lazy(() => import('@/features/etl/page'))
@@ -127,12 +127,12 @@ export const routes: RouteConfig[] = [
     element: <ProtectedRoute><AudioInterpretation /></ProtectedRoute>
   },
   {
-    path: "/content/institution-reports",
-    element: <ProtectedRoute><InstitutionReports /></ProtectedRoute>
-  },
-  {
     path: "/content/intelligence",
     element: <ProtectedRoute><Intelligence /></ProtectedRoute>
+  },
+  {
+    path: "/content/research-analysis",
+    element: <ProtectedRoute><ResearchAnalysis /></ProtectedRoute>
   },
 
   // ETL Management Routes - menu-based permission

@@ -14,13 +14,6 @@ export interface AudioInterpretationItem extends BaseContentItem {
   refinedSummary: string
 }
 
-// Institution Reports specific
-export interface InstitutionReportsItem extends BaseContentItem {
-  transcript: string
-  refinedSummary: string
-  pdfUrl: string
-}
-
 // List response interface
 export interface ListResponse<T> {
   data: T[]
@@ -30,4 +23,4 @@ export interface ListResponse<T> {
 }
 
 // Content category type
-export type ContentCategory = 'audio-interpretation' | 'institution-reports'
+export type ContentCategory = 'audio-interpretation' | 'intelligence'

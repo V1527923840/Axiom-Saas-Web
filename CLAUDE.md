@@ -347,10 +347,9 @@ npm run preview
 | users | `/users` | 用户管理 | 菜单权限 |
 | plans | `/plans` | 订阅计划 | 菜单权限 |
 | subscriptions | `/subscriptions` | 用户订阅 | 菜单权限 |
-| content/daily-news | `/content/daily-news` | 每日新闻 | 已登录 |
 | content/audio-interpretation | `/content/audio-interpretation` | 音频解读 | 已登录 |
-| content/institution-reports | `/content/institution-reports` | 机构研报 | 已登录 |
-| content/sentiment-posts | `/content/sentiment-posts` | 情感帖子 | 已登录 |
+| content/intelligence | `/content/intelligence` | 智能分析 | 已登录 |
+| content/research-analysis | `/content/research-analysis` | 研究分析 | 已登录 |
 | etl | `/etl` | ETL 管理 | 菜单权限 |
 | categories | `/categories` | 分类管理 | 菜单权限 |
 | oss-browser | `/oss-browser` | OSS文件浏览器 | 菜单权限 |

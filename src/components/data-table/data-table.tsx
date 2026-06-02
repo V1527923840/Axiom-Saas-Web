@@ -80,10 +80,9 @@ export function DataTable<TData = any>({
   useEffect(() => {
     if (isExternalMode) {
       setData(externalData)
-      setTotal(externalPagination?.total ?? externalTotal ?? 0)
       setIsLoading(externalLoading ?? false)
     }
-  }, [externalData, externalTotal, externalLoading, isExternalMode, externalPagination?.total])
+  }, [externalData, externalLoading, isExternalMode])
 
   // Handle page size change
   const handlePageSizeChange = (newPageSize: number) => {
@@ -103,18 +102,21 @@ export function DataTable<TData = any>({
     externalPagination?.onPageChange?.(newPageIndex)
   }
 
-  // Sync pagination from parent when pageSize changes (page reset)
+  // Sync pagination from parent when page changes
   useEffect(() => {
     if (isExternalMode && externalPagination) {
-      if (externalPagination.pageSize !== undefined && externalPagination.page !== undefined) {
-        setPagination((prev) => ({
-          ...prev,
-          pageSize: externalPagination.pageSize,
-          pageIndex: externalPagination.page,
-        }))
+      if (externalPagination.page !== undefined) {
+        setPagination((prev) => ({ ...prev, pageIndex: externalPagination.page }))
       }
     }
-  }, [isExternalMode, externalPagination?.pageSize])
+  }, [isExternalMode, externalPagination?.page])
+
+  // Sync total from parent when it changes
+  useEffect(() => {
+    if (isExternalMode && externalPagination) {
+      setTotal(externalPagination.total ?? 0)
+    }
+  }, [isExternalMode, externalPagination?.total])
 
   const table = useReactTable({
     data,
