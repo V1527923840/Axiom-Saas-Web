@@ -7,13 +7,6 @@ export interface BaseContentItem {
   createdAt: string
 }
 
-// Daily News specific
-export interface DailyNewsItem extends BaseContentItem {
-  originalContent: string
-  images: string[]
-  refinedSummary: string
-}
-
 // Audio Interpretation specific
 export interface AudioInterpretationItem extends BaseContentItem {
   audioUrl: string
@@ -37,4 +30,4 @@ export interface ListResponse<T> {
 }
 
 // Content category type
-export type ContentCategory = 'daily-news' | 'audio-interpretation' | 'institution-reports'
+export type ContentCategory = 'audio-interpretation' | 'institution-reports'

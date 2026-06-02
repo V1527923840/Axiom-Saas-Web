@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { DataTable } from "@/components/data-table"
 import { columns, AudioInterpretationDetailDialog } from "./components/columns"
@@ -20,8 +20,12 @@ export default function AudioInterpretationPage() {
     closeDetail,
   } = useAudioInterpretationStore()
 
+  const initialized = useRef(false)
   useEffect(() => {
-    fetchItems()
+    if (!initialized.current) {
+      initialized.current = true
+      fetchItems()
+    }
   }, [fetchItems])
 
   // Listen for custom event to open detail
