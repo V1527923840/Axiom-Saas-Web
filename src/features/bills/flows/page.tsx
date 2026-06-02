@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { usePaymentFlows } from "../hooks/use-payment-flows"
 import { flowsColumns } from "../components/flows/flows-columns"
 import { FlowFilters } from "../components/flows/flow-filters"
@@ -8,6 +8,7 @@ import { FlowDialog } from "../components/flows/flow-dialog"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { DataTable } from "@/components/data-table"
 import type { PaymentFlow, FlowFilters as FlowFiltersType } from "../types"
+import { formatLocalDate } from "@/lib/utils"
 
 export default function FlowsPage() {
   const {
@@ -33,7 +34,7 @@ export default function FlowsPage() {
     setFilters(newFilters)
   }, [])
 
-  const handleApplyFilters = useCallback(() => {
+  const handleApplyFilters = useCallback((filters: FlowFiltersType) => {
     fetchFlows({
       page: 0,
       pageSize: pagination.pageSize,
@@ -41,12 +42,13 @@ export default function FlowsPage() {
       type: filters.type === "all" ? undefined : filters.type,
       paymentMethod: filters.paymentMethod === "all" ? undefined : filters.paymentMethod,
       status: filters.status === "all" ? undefined : filters.status,
-      dateFrom: filters.dateRange?.from?.toISOString().split("T")[0],
-      dateTo: filters.dateRange?.to?.toISOString().split("T")[0],
+      dateFrom: filters.dateRange?.from ? formatLocalDate(filters.dateRange.from) : undefined,
+      dateTo: filters.dateRange?.to ? formatLocalDate(filters.dateRange.to) : undefined,
     })
-  }, [filters, pagination.pageSize, fetchFlows])
+  }, [pagination.pageSize, fetchFlows])
 
   const handlePageChange = useCallback((page: number) => {
+    console.log("[Flows] handlePageChange:", { page })
     fetchFlows({
       page,
       pageSize: pagination.pageSize,
@@ -54,8 +56,8 @@ export default function FlowsPage() {
       type: filters.type === "all" ? undefined : filters.type,
       paymentMethod: filters.paymentMethod === "all" ? undefined : filters.paymentMethod,
       status: filters.status === "all" ? undefined : filters.status,
-      dateFrom: filters.dateRange?.from?.toISOString().split("T")[0],
-      dateTo: filters.dateRange?.to?.toISOString().split("T")[0],
+      dateFrom: filters.dateRange?.from ? formatLocalDate(filters.dateRange.from) : undefined,
+      dateTo: filters.dateRange?.to ? formatLocalDate(filters.dateRange.to) : undefined,
     })
   }, [filters, pagination.pageSize, fetchFlows])
 
@@ -67,8 +69,8 @@ export default function FlowsPage() {
       type: filters.type === "all" ? undefined : filters.type,
       paymentMethod: filters.paymentMethod === "all" ? undefined : filters.paymentMethod,
       status: filters.status === "all" ? undefined : filters.status,
-      dateFrom: filters.dateRange?.from?.toISOString().split("T")[0],
-      dateTo: filters.dateRange?.to?.toISOString().split("T")[0],
+      dateFrom: filters.dateRange?.from ? formatLocalDate(filters.dateRange.from) : undefined,
+      dateTo: filters.dateRange?.to ? formatLocalDate(filters.dateRange.to) : undefined,
     })
   }, [filters, fetchFlows])
 
@@ -79,8 +81,13 @@ export default function FlowsPage() {
 
   const columns = flowsColumns({ onView: handleView })
 
+  // Initial fetch - only on mount with ref guard for React StrictMode
+  const initialized = useRef(false)
   useEffect(() => {
-    handleApplyFilters()
+    if (!initialized.current) {
+      initialized.current = true
+      handleApplyFilters(filters)
+    }
   }, [])
 
   return (
@@ -88,7 +95,7 @@ export default function FlowsPage() {
       <div className="flex flex-col gap-4">
         {/* Filters */}
         <div className="px-4 lg:px-6">
-          <FlowFilters onFilterChange={handleFilterChange} initialFilters={filters} />
+          <FlowFilters onFilterChange={handleFilterChange} onSearch={handleApplyFilters} onReset={handleApplyFilters} initialFilters={filters} />
         </div>
 
         {/* Table */}

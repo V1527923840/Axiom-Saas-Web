@@ -17,6 +17,7 @@ export function usePaymentFlows() {
   })
 
   const fetchFlows = useCallback(async (params: PaymentFlowQueryParams = {}) => {
+    console.log("[Flows Store] fetchFlows called:", { params, currentPagination: pagination })
     setLoading(true)
     setError(null)
     try {

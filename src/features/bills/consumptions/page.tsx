@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useConsumptions } from "../hooks/use-consumptions"
 import { consumptionsColumns } from "../components/consumptions/consumptions-columns"
 import { ConsumptionFilters } from "../components/consumptions/consumption-filters"
@@ -8,6 +8,7 @@ import { ConsumptionDialog } from "../components/consumptions/consumption-dialog
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { DataTable } from "@/components/data-table"
 import type { Consumption, ConsumptionFilters as ConsumptionFiltersType } from "../types"
+import { formatLocalDate } from "@/lib/utils"
 
 export default function ConsumptionsPage() {
   const {
@@ -31,16 +32,16 @@ export default function ConsumptionsPage() {
     setFilters(newFilters)
   }, [])
 
-  const handleApplyFilters = useCallback(() => {
+  const handleApplyFilters = useCallback((filters: ConsumptionFiltersType) => {
     fetchConsumptions({
       page: 0,
       pageSize: pagination.pageSize,
       userSearch: filters.userSearch || undefined,
       consumeType: filters.consumptionType === "all" ? undefined : filters.consumptionType,
-      dateFrom: filters.dateRange?.from?.toISOString().split("T")[0],
-      dateTo: filters.dateRange?.to?.toISOString().split("T")[0],
+      dateFrom: filters.dateRange?.from ? formatLocalDate(filters.dateRange.from) : undefined,
+      dateTo: filters.dateRange?.to ? formatLocalDate(filters.dateRange.to) : undefined,
     })
-  }, [filters, pagination.pageSize, fetchConsumptions])
+  }, [pagination.pageSize, fetchConsumptions])
 
   const handlePageChange = useCallback((page: number) => {
     fetchConsumptions({
@@ -48,8 +49,8 @@ export default function ConsumptionsPage() {
       pageSize: pagination.pageSize,
       userSearch: filters.userSearch || undefined,
       consumeType: filters.consumptionType === "all" ? undefined : filters.consumptionType,
-      dateFrom: filters.dateRange?.from?.toISOString().split("T")[0],
-      dateTo: filters.dateRange?.to?.toISOString().split("T")[0],
+      dateFrom: filters.dateRange?.from ? formatLocalDate(filters.dateRange.from) : undefined,
+      dateTo: filters.dateRange?.to ? formatLocalDate(filters.dateRange.to) : undefined,
     })
   }, [filters, pagination.pageSize, fetchConsumptions])
 
@@ -59,8 +60,8 @@ export default function ConsumptionsPage() {
       pageSize,
       userSearch: filters.userSearch || undefined,
       consumeType: filters.consumptionType === "all" ? undefined : filters.consumptionType,
-      dateFrom: filters.dateRange?.from?.toISOString().split("T")[0],
-      dateTo: filters.dateRange?.to?.toISOString().split("T")[0],
+      dateFrom: filters.dateRange?.from ? formatLocalDate(filters.dateRange.from) : undefined,
+      dateTo: filters.dateRange?.to ? formatLocalDate(filters.dateRange.to) : undefined,
     })
   }, [filters, fetchConsumptions])
 
@@ -71,8 +72,13 @@ export default function ConsumptionsPage() {
 
   const columns = consumptionsColumns({ onView: handleView })
 
+  // Initial fetch - only on mount with ref guard for React StrictMode
+  const initialized = useRef(false)
   useEffect(() => {
-    handleApplyFilters()
+    if (!initialized.current) {
+      initialized.current = true
+      handleApplyFilters(filters)
+    }
   }, [])
 
   return (
@@ -80,7 +86,7 @@ export default function ConsumptionsPage() {
       <div className="flex flex-col gap-4">
         {/* Filters */}
         <div className="px-4 lg:px-6">
-          <ConsumptionFilters onFilterChange={handleFilterChange} initialFilters={filters} />
+          <ConsumptionFilters onFilterChange={handleFilterChange} onSearch={handleApplyFilters} onReset={handleApplyFilters} initialFilters={filters} />
         </div>
 
         {/* Table */}

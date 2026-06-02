@@ -23,10 +23,12 @@ import type { ConsumptionType } from "../../types"
 
 interface ConsumptionFiltersProps {
   onFilterChange: (filters: ConsumptionFilters) => void
+  onSearch: (filters: ConsumptionFilters) => void
+  onReset: (filters: ConsumptionFilters) => void
   initialFilters?: ConsumptionFilters
 }
 
-export function ConsumptionFilters({ onFilterChange, initialFilters }: ConsumptionFiltersProps) {
+export function ConsumptionFilters({ onFilterChange, onSearch, onReset, initialFilters }: ConsumptionFiltersProps) {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>(
     initialFilters?.dateRange
   )
@@ -36,22 +38,26 @@ export function ConsumptionFilters({ onFilterChange, initialFilters }: Consumpti
   )
 
   const handleApply = () => {
-    onFilterChange({
+    const newFilters = {
       dateRange,
       userSearch,
       consumptionType,
-    })
+    }
+    onFilterChange(newFilters)
+    onSearch(newFilters)
   }
 
   const handleReset = () => {
+    const newFilters = {
+      dateRange: undefined,
+      userSearch: "",
+      consumptionType: "all" as const,
+    }
     setDateRange(undefined)
     setUserSearch("")
     setConsumptionType("all")
-    onFilterChange({
-      dateRange: undefined,
-      userSearch: "",
-      consumptionType: "all",
-    })
+    onFilterChange(newFilters)
+    onReset(newFilters)
   }
 
   return (

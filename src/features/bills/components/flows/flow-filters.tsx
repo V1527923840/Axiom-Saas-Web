@@ -23,10 +23,12 @@ import type { PaymentType, PaymentMethod, PaymentStatus } from "../../types"
 
 interface FlowFiltersProps {
   onFilterChange: (filters: FlowFilters) => void
+  onSearch: (filters: FlowFilters) => void
+  onReset: (filters: FlowFilters) => void
   initialFilters?: FlowFilters
 }
 
-export function FlowFilters({ onFilterChange, initialFilters }: FlowFiltersProps) {
+export function FlowFilters({ onFilterChange, onSearch, onReset, initialFilters }: FlowFiltersProps) {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>(
     initialFilters?.dateRange
   )
@@ -38,28 +40,32 @@ export function FlowFilters({ onFilterChange, initialFilters }: FlowFiltersProps
   const [status, setStatus] = useState<"all" | PaymentStatus>(initialFilters?.status || "all")
 
   const handleApply = () => {
-    onFilterChange({
+    const newFilters = {
       dateRange,
       userSearch,
       type,
       paymentMethod,
       status,
-    })
+    }
+    onFilterChange(newFilters)
+    onSearch(newFilters)
   }
 
   const handleReset = () => {
+    const newFilters = {
+      dateRange: undefined,
+      userSearch: "",
+      type: "all" as const,
+      paymentMethod: "all" as const,
+      status: "all" as const,
+    }
     setDateRange(undefined)
     setUserSearch("")
     setType("all")
     setPaymentMethod("all")
     setStatus("all")
-    onFilterChange({
-      dateRange: undefined,
-      userSearch: "",
-      type: "all",
-      paymentMethod: "all",
-      status: "all",
-    })
+    onFilterChange(newFilters)
+    onReset(newFilters)
   }
 
   return (
