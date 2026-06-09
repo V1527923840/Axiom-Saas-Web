@@ -10,21 +10,9 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { processMarkdownImages } from "@/lib/oss-url"
 import type { IntelligenceDetail } from "../types"
 import { IntelligenceScoreRadar } from "./IntelligenceScoreRadar"
-
-const OSS_BASE_URL = (import.meta.env.VITE_OSS_BASE_URL || "").replace(/%2F/g, "/")
-
-function processMarkdownImages(content: string, version?: string | null): string {
-  if (!content) return ""
-  // Replace local image paths like ![alt](pictures/xxx.jpg) with ![alt](${OSS_BASE_URL}/${version}/pictures/xxx.jpg)
-  if (OSS_BASE_URL && version) {
-    return content.replace(/!\[([^\]]*)\]\((pictures\/[^)]+)\)/gu, (_, alt, path) => {
-      return `![${alt}](${OSS_BASE_URL}/${version}/${path})`
-    })
-  }
-  return content
-}
 
 interface IntelligenceDetailDialogProps {
   item: IntelligenceDetail | null
@@ -173,24 +161,26 @@ export function IntelligenceDetailDialog({
             </div>
 
             {/* Right Column - Original Content */}
-            {(item.originalText || item.originalTextRaw) && (
-              <div className="space-y-2 h-full flex flex-col">
-                <h3 className="text-sm font-semibold text-muted-foreground shrink-0">原文内容</h3>
-                <ScrollArea className="flex-1 w-full rounded-md border p-4">
-                  {item.originalTextRaw ? (
-                    <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {processMarkdownImages(item.originalTextRaw, item.version)}
-                      </ReactMarkdown>
-                    </div>
-                  ) : (
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                      {item.originalText}
-                    </p>
-                  )}
-                </ScrollArea>
-              </div>
-            )}
+            <div className="space-y-3 h-full flex flex-col">
+              {(item.originalText || item.originalTextRaw) && (
+                <div className="space-y-2 flex-1 min-h-0 flex flex-col">
+                  <h3 className="text-sm font-semibold text-muted-foreground shrink-0">原文内容</h3>
+                  <ScrollArea className="flex-1 w-full rounded-md border p-4">
+                    {item.originalTextRaw ? (
+                      <div className="text-sm leading-relaxed prose prose-sm max-w-none dark:prose-invert">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {processMarkdownImages(item.originalTextRaw)}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                        {item.originalText}
+                      </p>
+                    )}
+                  </ScrollArea>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </DialogContent>

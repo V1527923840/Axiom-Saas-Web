@@ -25,6 +25,8 @@ export interface ResearchAnalysisDetail extends ResearchAnalysisItem {
   version: string;
   docType: string;
   sourceFileKey: string;
+  ossUrl?: string | null;
+  localPath?: string | null;
   scrapeLogId: string;
   summaryPoints: string[];
   sourceCredibility: number;

@@ -115,10 +115,9 @@ export function ResearchAnalysisDetailDialog({
   const mentionedStocks = item.mentionedStocks?.map((s: Record<string, any>) => s.name).filter(Boolean) || []
   const swIndustryTags = item.swIndustryTag?.map((t: Record<string, any>) => t.name || t.industry || String(t)).filter(Boolean) || []
 
-  // Build PDF URL from sourceFileKey
-  const pdfUrl = item.sourceFileKey
-    ? `${OSS_BASE_URL}/${item.sourceFileKey}`
-    : null
+  // Build PDF URL from ossUrl (preferred) or fallback to sourceFileKey
+  const pdfKey = item.ossUrl || item.sourceFileKey
+  const pdfUrl = pdfKey ? `${OSS_BASE_URL}/${pdfKey}` : null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

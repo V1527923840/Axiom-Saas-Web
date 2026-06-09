@@ -32,6 +32,7 @@ export interface IntelligenceDetail extends IntelligenceItem {
   version: string
   originalText: string
   originalTextRaw?: string
+  imageUrls?: string[] | null
   likeCount: number
   commentCount: number
   sourceCredibility: number
