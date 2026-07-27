@@ -123,19 +123,28 @@ git commit -m "feat(common): add PaginationQueryDto base class"
 
 ---
 
-## Task 2: Add `ResponseEnvelopeInterceptor`
+## Task 2: Migrate `TransformResponseInterceptor` to nest pagination under `meta`
+
+**Why this task:** The server already has a global `TransformResponseInterceptor` (at `src/utils/interceptors/transform-response.interceptor.ts`) that produces the existing `{ data, total, page, pageSize }` envelope. The new spec nests pagination under `meta` instead. We MIGRATE the existing interceptor — do not create a parallel `ResponseEnvelopeInterceptor`.
 
 **Files:**
-- Create: `src/common/interceptors/response-envelope.interceptor.ts`
+- Modify: `src/utils/interceptors/transform-response.interceptor.ts`
+- Modify: `src/main.ts` (rename the registration only if it still says `TransformResponseInterceptor` — should stay)
 
 **Interfaces:**
-- Consumes: controller return values of any shape (paginated `{ data, total, page, limit }`, plain value, or already-enveloped `{ data, message }`)
-- Produces: a normalized `{ data, meta?, message? }` object
+- Consumes: controller return values (paginated `{ data, total, page, limit }`, plain value, or already-enveloped `{ data, message }`)
+- Produces: a normalized `{ data, meta?: { total, page, pageSize }, message? }` object
 
-- [ ] **Step 1: Create the interceptor**
+- [ ] **Step 1: Read the current interceptor**
+
+Run: `cat /Users/liangfeifan/work/Axiom/Axiom-Saas-Server/src/utils/interceptors/transform-response.interceptor.ts`
+
+- [ ] **Step 2: Replace its contents**
+
+Replace the entire file with:
 
 ```typescript
-// src/common/interceptors/response-envelope.interceptor.ts
+// src/utils/interceptors/transform-response.interceptor.ts
 import {
   CallHandler,
   ExecutionContext,
@@ -145,6 +154,12 @@ import {
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
+export interface EnvelopeResponse<T> {
+  data: T;
+  meta?: { total: number; page: number; pageSize: number };
+  message?: string;
+}
+
 interface PaginatedPayload<T> {
   data: T[];
   total: number;
@@ -152,7 +167,7 @@ interface PaginatedPayload<T> {
   limit: number;
 }
 
-interface EnvelopedPayload {
+interface AlreadyEnvelopedPayload {
   data: unknown;
   message?: string;
   [key: string]: unknown;
@@ -169,20 +184,27 @@ function isPaginated(value: unknown): value is PaginatedPayload<unknown> {
   );
 }
 
-function isAlreadyEnveloped(value: unknown): value is EnvelopedPayload {
+function isAlreadyEnveloped(value: unknown): value is AlreadyEnvelopedPayload {
   if (typeof value !== 'object' || value === null) return false;
   return 'data' in (value as Record<string, unknown>);
 }
 
 @Injectable()
-export class ResponseEnvelopeInterceptor implements NestInterceptor {
-  intercept(_: ExecutionContext, next: CallHandler): Observable<unknown> {
+export class TransformResponseInterceptor<T>
+  implements NestInterceptor<T, EnvelopeResponse<T>>
+{
+  intercept(
+    _: ExecutionContext,
+    next: CallHandler,
+  ): Observable<EnvelopeResponse<T>> {
     return next.handle().pipe(
       map((payload: unknown) => {
-        if (payload === null || payload === undefined) return payload;
+        if (payload === null || payload === undefined) {
+          return { data: payload as T };
+        }
         if (isPaginated(payload)) {
           return {
-            data: payload.data,
+            data: payload.data as T,
             meta: {
               total: payload.total,
               page: payload.page,
@@ -191,73 +213,73 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
           };
         }
         if (isAlreadyEnveloped(payload)) {
-          // Pass through { data, message } shapes (and any other envelope fields).
-          return payload;
+          // Pass through { data, message } shapes (controllers that explicitly return message).
+          return {
+            data: payload.data as T,
+            message: payload.message,
+          };
         }
-        return { data: payload };
+        return { data: payload as T };
       }),
     );
   }
 }
 ```
 
-- [ ] **Step 2: Verify TypeScript compiles**
+- [ ] **Step 3: Verify TypeScript compiles**
 
 Run: `cd /Users/liangfeifan/work/Axiom/Axiom-Saas-Server && npx tsc --noEmit -p tsconfig.json`
 Expected: exit code 0, no errors.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 cd /Users/liangfeifan/work/Axiom/Axiom-Saas-Server
-git add src/common/interceptors/response-envelope.interceptor.ts
-git commit -m "feat(common): add ResponseEnvelopeInterceptor"
+git add src/utils/interceptors/transform-response.interceptor.ts
+git commit -m "refactor(envelope): nest pagination under meta
+
+Migrates the existing TransformResponseInterceptor from top-level
+{ data, total, page, pageSize } to the spec's { data, meta?: {...} }
+envelope. This is a breaking change for the web client — web's
+lib/api.ts is being updated in lockstep under feature/v1.0.0."
 ```
 
 ---
 
-## Task 3: Wire interceptor + Swagger JSON export
+## Task 3: Add Swagger JSON export
+
+**Why this task:** The global `TransformResponseInterceptor` is already registered in `main.ts` (Task 2 migrated it). The Swagger document is already created via `SwaggerModule.createDocument(app, options)`. The only addition is writing that document to `docs/swagger.json` so the web repo can read it for codegen.
 
 **Files:**
 - Modify: `src/main.ts`
 
 **Interfaces:**
-- Consumes: `ResponseEnvelopeInterceptor` from Task 2
-- Produces: app responds with one envelope; `GET /api/docs-json` and `GET /api/docs/swagger.json` both return the spec
+- Consumes: the existing `document` from `SwaggerModule.createDocument(app, options)`
+- Produces: `docs/swagger.json` exists on disk after server boot; the spec is committed in git
 
 - [ ] **Step 1: Read current `main.ts`**
 
 Run: `cat /Users/liangfeifan/work/Axiom/Axiom-Saas-Server/src/main.ts`
 
-Identify the line(s) where `app.useGlobalInterceptors(...)` is called and where Swagger is set up. Note existing imports — we'll add to the same imports.
+Confirm `TransformResponseInterceptor` is registered globally and `SwaggerModule.createDocument` runs.
 
-- [ ] **Step 2: Add the import**
+- [ ] **Step 2: Add ESM imports for `fs` and `path`**
 
-Add this line alongside the other NestJS imports near the top:
-
-```typescript
-import { ResponseEnvelopeInterceptor } from './common/interceptors/response-envelope.interceptor';
-```
-
-- [ ] **Step 3: Register the interceptor**
-
-Find the line `await app.listen(port);` (or equivalent). Immediately before it, add:
+At the top of `main.ts`, alongside the existing imports, add:
 
 ```typescript
-  app.useGlobalInterceptors(new ResponseEnvelopeInterceptor());
+import * as fs from 'fs';
+import * as path from 'path';
 ```
 
-The exact placement depends on your `main.ts` structure — the rule is: register after `app = await NestFactory.create(...)` and before `app.listen(...)`.
+(Use ESM imports — `main.ts` is TypeScript with `module: commonjs` in `tsconfig.json`, but the runtime is Node.js and `import * as fs from 'fs'` is the idiomatic style. Do NOT use `require('fs')` inline.)
 
-- [ ] **Step 4: Add Swagger JSON export**
+- [ ] **Step 3: Capture the document into a variable and write to disk**
 
-After the existing `SwaggerModule.setup(...)` call (which builds the UI), add:
+Find the line `const document = SwaggerModule.createDocument(app, options);`. After the existing `SwaggerModule.setup('docs', app, document);` call, add:
 
 ```typescript
   // Export the raw OpenAPI spec to disk on bootstrap for client-side codegen.
-  const document = SwaggerModule.createDocument(app, config);
-  const fs = require('fs');
-  const path = require('path');
   const outDir = path.resolve(process.cwd(), 'docs');
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(
@@ -266,35 +288,55 @@ After the existing `SwaggerModule.setup(...)` call (which builds the UI), add:
   );
 ```
 
-Add `import * as fs from 'fs';` and `import * as path from 'path';` at the top if not already imported.
+- [ ] **Step 4: Verify the app still boots and the envelope shape is correct**
 
-- [ ] **Step 5: Verify the app still boots**
+Run:
+```bash
+cd /Users/liangfeifan/work/Axiom/Axiom-Saas-Server
+timeout 20 npm run start:dev &
+SERVER_PID=$!
+sleep 10
+echo "=== /api/v1/users ==="
+curl -s http://localhost:3000/api/v1/users | head -c 600
+echo
+echo "=== /api/docs-json status ==="
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/docs-json
+echo
+kill $SERVER_PID 2>/dev/null || true
+wait 2>/dev/null || true
+```
 
-Run: `cd /Users/liangfeifan/work/Axiom/Axiom-Saas-Server && timeout 15 npm run start:dev &` then `sleep 8 && curl -s http://localhost:3000/api/v1/users | head -c 400 && kill %1`
-Expected: response body contains a top-level `data` key (not a raw array and not `{ success: true, data: ... }`).
+Expected:
+- `/api/v1/users` returns `{ "data": [...], "meta": { "total": ..., "page": 1, "pageSize": ... } }` — note `meta` (not top-level `total/page/pageSize`)
+- `/api/docs-json` returns `200`
 
-- [ ] **Step 6: Verify `swagger.json` was written**
+- [ ] **Step 5: Verify `swagger.json` was written**
 
 Run: `ls -la /Users/liangfeifan/work/Axiom/Axiom-Saas-Server/docs/swagger.json`
 Expected: file exists, size > 10 KB.
 
-- [ ] **Step 7: Add `.gitignore` entry (only the local cache, keep the artifact tracked)**
+- [ ] **Step 6: Add `.gitignore` entry (only ignore local caches; keep `swagger.json` tracked)**
 
-Open `docs/.gitignore` if it exists, or create with:
+Open `docs/.gitignore` if it exists, or create it with:
 
 ```
-# keep swagger.json tracked; ignore local caches
+# keep swagger.json tracked; ignore local caches only
 *.cache
 ```
 
-(We deliberately do **not** add `docs/swagger.json` to `.gitignore`. The web repo's CI needs to read it.)
+(We deliberately do **not** add `docs/swagger.json` to `.gitignore`. The web repo's CI reads this file.)
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 cd /Users/liangfeifan/work/Axiom/Axiom-Saas-Server
 git add src/main.ts docs/swagger.json docs/.gitignore
-git commit -m "feat(main): register ResponseEnvelopeInterceptor and export Swagger spec"
+git commit -m "feat(main): export OpenAPI spec to docs/swagger.json
+
+Document is already created via SwaggerModule.createDocument. Now
+writes it to docs/swagger.json on bootstrap so the web repo's
+codegen pipeline can read it. swagger.json is committed (not
+gitignored) so web's CI can run api:check without a live server."
 ```
 
 ---
