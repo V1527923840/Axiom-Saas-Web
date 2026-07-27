@@ -17,18 +17,37 @@ import {
 } from "lucide-react"
 
 /**
- * PyramidView — visualizes the 6-layer pyramid protocol as a true
- * pyramid hierarchy (top = core, base = facts).
+ * PyramidView — vertical reading flow: each layer rendered as full-width
+ * cards stacked top-to-bottom so users can compare items line-by-line.
  *
- *   ▲ 核心观点 (c)            ← top
- *  ▲▲ 中层观点 (m)
- * ▲▲▲ 基础观点 (b)
- * facts (f)                   ← base
+ * Reading order: CORE → supporting MIDs → supporting BASES → grounding FACTS.
+ * Cross-references between layers are shown as inline chips (↑ supported
+ * by, ↓ grounded in) so the reader never has to context-switch.
  *
- * Each layer is rendered with progressive width (40% → 60% → 85% → 100%)
- * to convey pyramid shape. Cross-layer IDs are bound with arrow chips:
- * `↑ m-0` means "this layer is supported by mid-0 above it",
- * `↓ f-0-3` means "this layer is grounded in fact f-0-3 below".
+ *   ┌─ 核心观点 (60% wide, amber) ──────────────────┐
+ *   │ content + premises + conclusion                │
+ *   │ ↑ supported by: [m-0, m-1, m-2]               │
+ *   └────────────────────────────────────────────────┘
+ *                          ↓
+ *   ┌─ 中层观点 (75% wide, indigo) ──────────────────┐
+ *   │ m-0  维度: 时间                                │
+ *   │ content...                                     │
+ *   │ ↑ supported by: [b-0, b-1, b-2, b-3, ...]    │
+ *   │ ────────────────────────────────────────────   │
+ *   │ m-1  维度: 空间                                │
+ *   │ ...                                            │
+ *   └────────────────────────────────────────────────┘
+ *                          ↓
+ *   ┌─ 基础观点 (90% wide, blue) ───────────────────┐
+ *   │ b-0                                            │
+ *   │ content...                                     │
+ *   │ ↓ grounded in: [f-0-0, f-0-1, ...]            │
+ *   └────────────────────────────────────────────────┘
+ *                          ↓
+ *   ┌─ 原始事实 (100% wide, slate) ──────────────────┐
+ *   │ f-0-0  text...                                 │
+ *   │ f-0-1  text...                                 │
+ *   └────────────────────────────────────────────────┘
  */
 
 type Fact = { id: string; text: string }
@@ -206,12 +225,14 @@ function LayerBadge({
 function RefChip({
   id,
   direction,
+  tone = "neutral",
 }: {
   id: string
   direction: "up" | "down"
+  tone?: "neutral" | "warm"
 }) {
   const cls =
-    direction === "up"
+    tone === "warm"
       ? "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900"
       : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700"
   return (
@@ -224,83 +245,162 @@ function RefChip({
   )
 }
 
+function LayerHeader({
+  letter,
+  color,
+  icon,
+  title,
+  count,
+  readingHint,
+}: {
+  letter: string
+  color: "amber" | "indigo" | "blue" | "slate"
+  icon: React.ReactNode
+  title: string
+  count?: number
+  readingHint?: string
+}) {
+  const accent = {
+    amber: "border-amber-300 dark:border-amber-700",
+    indigo: "border-indigo-200 dark:border-indigo-800",
+    blue: "border-blue-200 dark:border-blue-800",
+    slate: "border-slate-200 dark:border-slate-800",
+  }[color]
+  return (
+    <div
+      className={`flex items-center gap-2 px-4 py-2.5 border-b ${accent} bg-background/40 sticky top-0 z-10 backdrop-blur-sm`}
+    >
+      <LayerBadge letter={letter} color={color} />
+      {icon}
+      <span className="text-sm font-semibold">{title}</span>
+      {typeof count === "number" && (
+        <Badge variant="outline" className="text-[10px]">
+          {count}
+        </Badge>
+      )}
+      {readingHint && (
+        <span className="text-[11px] text-muted-foreground ml-auto">
+          {readingHint}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function Connector() {
   return (
-    <div className="flex justify-center -my-1 text-muted-foreground/50">
+    <div className="flex justify-center text-muted-foreground/50 -my-1">
       <ArrowDown className="size-4" />
     </div>
   )
 }
 
 /* -------------------------------------------------------------------- */
-/* Pyramid layers (rendered top→bottom)                                  */
+/* Layer: Core (single full-width card)                                 */
 /* -------------------------------------------------------------------- */
 
 function CoreCard({ core }: { core: CoreView }) {
   return (
-    <div
-      className="relative bg-gradient-to-b from-amber-50 to-amber-100/40 dark:from-amber-950/40 dark:to-amber-900/20 border-2 border-amber-300 dark:border-amber-700 rounded-xl px-5 py-4 shadow-md"
-      style={{ width: "40%", minWidth: "320px" }}
-    >
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <LayerBadge letter="c" color="amber" />
-        <Lightbulb className="size-4 text-amber-600" />
-        <span className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-          核心观点
+    <div className="relative bg-gradient-to-b from-amber-50 to-amber-100/40 dark:from-amber-950/40 dark:to-amber-900/20 border-2 border-amber-300 dark:border-amber-700 rounded-xl shadow-md">
+      <LayerHeader
+        letter="c"
+        color="amber"
+        icon={<Lightbulb className="size-4 text-amber-600" />}
+        title="核心观点"
+        readingHint="thesis"
+      />
+      <div className="px-5 py-4 space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-mono text-amber-700 dark:text-amber-300 font-semibold">
+            {core.id}
+          </span>
+          {core.deduction_formula && (
+            <Badge variant="default" className="text-[10px] font-mono">
+              推理范式 {core.deduction_formula}
+            </Badge>
+          )}
+        </div>
+
+        <p className="text-[15px] leading-relaxed font-medium text-amber-950 dark:text-amber-100">
+          {core.content}
+        </p>
+
+        {core.premises && core.premises.length > 0 && (
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300 mb-1.5">
+              推理前提
+            </div>
+            <ol className="space-y-1.5">
+              {core.premises.map((p, idx) => (
+                <li key={idx} className="flex gap-2.5 text-sm">
+                  <span className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 text-[11px] font-semibold mt-0.5">
+                    {idx + 1}
+                  </span>
+                  <span className="leading-relaxed text-amber-950/90 dark:text-amber-100/90">
+                    {p}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {core.conclusion && (
+          <div className="bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500 rounded-r px-3 py-2">
+            <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mb-0.5">
+              结论
+            </div>
+            <p className="text-sm leading-relaxed text-emerald-950 dark:text-emerald-100 font-medium">
+              {core.conclusion}
+            </p>
+          </div>
+        )}
+
+        {core.supporting_mid_ids && core.supporting_mid_ids.length > 0 && (
+          <div className="pt-3 border-t border-amber-200 dark:border-amber-800">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
+              ↑ 基于下方中层观点
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {core.supporting_mid_ids.map((midId) => (
+                <RefChip key={midId} id={midId} direction="up" tone="warm" />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------- */
+/* Layer: Mid views (full-width rows, one per mid)                      */
+/* -------------------------------------------------------------------- */
+
+function MidCard({ mid }: { mid: MidView }) {
+  return (
+    <div className="bg-white/80 dark:bg-black/30 rounded-lg p-4 space-y-2 border border-indigo-100 dark:border-indigo-900 shadow-sm">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-mono text-indigo-700 dark:text-indigo-300 font-semibold">
+          {mid.id}
         </span>
-        <span className="text-xs font-mono text-muted-foreground">
-          {core.id}
-        </span>
-        {core.deduction_formula && (
-          <Badge variant="default" className="text-[10px] font-mono ml-auto">
-            推理范式 {core.deduction_formula}
+        {mid.reasoning_dimension && (
+          <Badge variant="outline" className="text-[10px]">
+            {mid.reasoning_dimension}
           </Badge>
         )}
       </div>
-
-      <p className="text-[15px] leading-relaxed font-medium text-amber-950 dark:text-amber-100">
-        {core.content}
+      <p className="text-sm leading-relaxed text-foreground/90">
+        {mid.content}
       </p>
-
-      {core.premises && core.premises.length > 0 && (
-        <div className="mt-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300 mb-1.5">
-            推理前提
-          </div>
-          <ol className="space-y-1.5">
-            {core.premises.map((p, idx) => (
-              <li key={idx} className="flex gap-2.5 text-sm">
-                <span className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-amber-100 text-[11px] font-semibold mt-0.5">
-                  {idx + 1}
-                </span>
-                <span className="leading-relaxed text-amber-950/90 dark:text-amber-100/90">
-                  {p}
-                </span>
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-
-      {core.conclusion && (
-        <div className="mt-3 bg-emerald-50 dark:bg-emerald-950/40 border-l-4 border-emerald-500 rounded-r px-3 py-2">
-          <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300 mb-0.5">
-            结论
-          </div>
-          <p className="text-sm leading-relaxed text-emerald-950 dark:text-emerald-100 font-medium">
-            {core.conclusion}
-          </p>
-        </div>
-      )}
-
-      {core.supporting_mid_ids && core.supporting_mid_ids.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-amber-200 dark:border-amber-800">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
-            上游支撑
+      {mid.supporting_base_ids && mid.supporting_base_ids.length > 0 && (
+        <div className="pt-2 mt-2 border-t border-indigo-100 dark:border-indigo-900">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+            ↑ 基于下方基础观点
           </div>
           <div className="flex flex-wrap gap-1">
-            {core.supporting_mid_ids.map((midId) => (
-              <RefChip key={midId} id={midId} direction="up" />
+            {mid.supporting_base_ids.map((bid) => (
+              <RefChip key={bid} id={bid} direction="up" />
             ))}
           </div>
         </div>
@@ -309,134 +409,24 @@ function CoreCard({ core }: { core: CoreView }) {
   )
 }
 
-function MidBand({ mids }: { mids: MidView[] }) {
+function MidLayer({ mids }: { mids: MidView[] }) {
   return (
-    <div
-      className="bg-indigo-50/60 dark:bg-indigo-950/30 border-2 border-indigo-200 dark:border-indigo-800 rounded-xl px-5 py-4 shadow-sm"
-      style={{ width: "60%", minWidth: "320px" }}
-    >
-      <div className="flex items-center gap-2 mb-3">
-        <LayerBadge letter="m" color="indigo" />
-        <Layers className="size-4 text-indigo-600" />
-        <span className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">
-          中层观点
-        </span>
-        <Badge variant="outline" className="text-[10px] ml-auto">
-          {mids.length} 个
-        </Badge>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {mids.map((m) => (
-          <div
-            key={m.id}
-            className="bg-white/80 dark:bg-black/30 rounded-lg p-3 space-y-1.5 border border-indigo-100 dark:border-indigo-900 shadow-sm"
-          >
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs font-mono text-indigo-700 dark:text-indigo-300 font-semibold">
-                {m.id}
-              </span>
-              {m.reasoning_dimension && (
-                <Badge variant="outline" className="text-[10px]">
-                  {m.reasoning_dimension}
-                </Badge>
-              )}
-            </div>
-            <p className="text-sm leading-relaxed text-foreground/90">
-              {m.content}
-            </p>
-            {m.supporting_base_ids && m.supporting_base_ids.length > 0 && (
-              <div className="pt-2 mt-2 border-t border-indigo-100 dark:border-indigo-900">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                  上游支撑
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {m.supporting_base_ids.map((bid) => (
-                    <RefChip key={bid} id={bid} direction="up" />
-                  ))}
-                </div>
-              </div>
+    <div className="bg-indigo-50/60 dark:bg-indigo-950/30 border-2 border-indigo-200 dark:border-indigo-800 rounded-xl shadow-sm">
+      <LayerHeader
+        letter="m"
+        color="indigo"
+        icon={<Layers className="size-4 text-indigo-600" />}
+        title="中层观点"
+        count={mids.length}
+        readingHint={`${mids.length} 项`}
+      />
+      <div className="p-4 space-y-3">
+        {mids.map((m, idx) => (
+          <div key={m.id}>
+            <MidCard mid={m} />
+            {idx < mids.length - 1 && (
+              <Separator className="my-3 bg-indigo-100 dark:bg-indigo-900" />
             )}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function BaseBand({ bases }: { bases: BaseView[] }) {
-  return (
-    <div
-      className="bg-blue-50/60 dark:bg-blue-950/30 border-2 border-blue-200 dark:border-blue-800 rounded-xl px-5 py-4 shadow-sm"
-      style={{ width: "85%", minWidth: "320px" }}
-    >
-      <div className="flex items-center gap-2 mb-3">
-        <LayerBadge letter="b" color="blue" />
-        <Quote className="size-4 text-blue-600" />
-        <span className="text-sm font-semibold text-blue-800 dark:text-blue-200">
-          基础观点
-        </span>
-        <Badge variant="outline" className="text-[10px] ml-auto">
-          {bases.length} 个
-        </Badge>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {bases.map((b) => (
-          <div
-            key={b.id}
-            className="bg-white/80 dark:bg-black/30 rounded-lg p-3 space-y-1.5 border border-blue-100 dark:border-blue-900 shadow-sm"
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-mono text-blue-700 dark:text-blue-300 font-semibold">
-                {b.id}
-              </span>
-            </div>
-            <p className="text-sm leading-relaxed text-foreground/90">
-              {b.content}
-            </p>
-            {b.source_fact_refs && b.source_fact_refs.length > 0 && (
-              <div className="pt-2 mt-2 border-t border-blue-100 dark:border-blue-900">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-                  下游依据
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {b.source_fact_refs.map((fid) => (
-                    <RefChip key={fid} id={fid} direction="down" />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function FactsBand({ facts }: { facts: Fact[] }) {
-  return (
-    <div className="w-full bg-slate-50 dark:bg-slate-950/40 border-2 border-slate-200 dark:border-slate-800 rounded-xl px-5 py-4 shadow-sm">
-      <div className="flex items-center gap-2 mb-3">
-        <LayerBadge letter="f" color="slate" />
-        <FileText className="size-4 text-slate-600" />
-        <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-          原始事实
-        </span>
-        <Badge variant="outline" className="text-[10px] ml-auto">
-          {facts.length} 个
-        </Badge>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-        {facts.map((f, idx) => (
-          <div
-            key={f.id || `f-${idx}`}
-            className="bg-white/80 dark:bg-black/30 rounded-md p-2.5 border border-slate-100 dark:border-slate-800"
-          >
-            <div className="font-mono text-[11px] text-purple-700 dark:text-purple-300 mb-1 font-semibold">
-              {f.id}
-            </div>
-            <p className="text-sm leading-relaxed text-foreground/90">
-              {f.text}
-            </p>
           </div>
         ))}
       </div>
@@ -445,7 +435,103 @@ function FactsBand({ facts }: { facts: Fact[] }) {
 }
 
 /* -------------------------------------------------------------------- */
-/* Sidebar strips: induction groups + judgement                           */
+/* Layer: Base views (full-width rows, one per base)                    */
+/* -------------------------------------------------------------------- */
+
+function BaseCard({ base }: { base: BaseView }) {
+  return (
+    <div className="bg-white/80 dark:bg-black/30 rounded-lg p-4 space-y-2 border border-blue-100 dark:border-blue-900 shadow-sm">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-mono text-blue-700 dark:text-blue-300 font-semibold">
+          {base.id}
+        </span>
+      </div>
+      <p className="text-sm leading-relaxed text-foreground/90">
+        {base.content}
+      </p>
+      {base.source_fact_refs && base.source_fact_refs.length > 0 && (
+        <div className="pt-2 mt-2 border-t border-blue-100 dark:border-blue-900">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+            ↓ 基于下方原始事实
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {base.source_fact_refs.map((fid) => (
+              <RefChip key={fid} id={fid} direction="down" />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BaseLayer({ bases }: { bases: BaseView[] }) {
+  return (
+    <div className="bg-blue-50/60 dark:bg-blue-950/30 border-2 border-blue-200 dark:border-blue-800 rounded-xl shadow-sm">
+      <LayerHeader
+        letter="b"
+        color="blue"
+        icon={<Quote className="size-4 text-blue-600" />}
+        title="基础观点"
+        count={bases.length}
+        readingHint={`${bases.length} 项`}
+      />
+      <div className="p-4 space-y-3">
+        {bases.map((b, idx) => (
+          <div key={b.id}>
+            <BaseCard base={b} />
+            {idx < bases.length - 1 && (
+              <Separator className="my-3 bg-blue-100 dark:bg-blue-900" />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------- */
+/* Layer: Facts (one row per fact, full-width text)                      */
+/* -------------------------------------------------------------------- */
+
+function FactRow({ fact, index }: { fact: Fact; index: number }) {
+  return (
+    <div className="flex gap-3 px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-b-0 hover:bg-slate-100/40 dark:hover:bg-slate-900/40 transition-colors">
+      <span className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-mono mt-0.5">
+        {index + 1}
+      </span>
+      <span className="shrink-0 font-mono text-[11px] text-purple-700 dark:text-purple-300 font-semibold mt-1">
+        {fact.id}
+      </span>
+      <p className="flex-1 text-sm leading-relaxed text-foreground/90">
+        {fact.text}
+      </p>
+    </div>
+  )
+}
+
+function FactsLayer({ facts }: { facts: Fact[] }) {
+  return (
+    <div className="bg-slate-50 dark:bg-slate-950/40 border-2 border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
+      <LayerHeader
+        letter="f"
+        color="slate"
+        icon={<FileText className="size-4 text-slate-600" />}
+        title="原始事实"
+        count={facts.length}
+        readingHint={`${facts.length} 项`}
+      />
+      <div>
+        {facts.map((f, idx) => (
+          <FactRow key={f.id || `f-${idx}`} fact={f} index={idx} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* -------------------------------------------------------------------- */
+/* Sidebar strips                                                         */
 /* -------------------------------------------------------------------- */
 
 function GroupsStrip({ groups }: { groups: InductionGroup[] }) {
@@ -496,11 +582,7 @@ function GroupsStrip({ groups }: { groups: InductionGroup[] }) {
   )
 }
 
-function JudgementStrip({
-  judgement,
-}: {
-  judgement: PyramidJudgement
-}) {
+function JudgementStrip({ judgement }: { judgement: PyramidJudgement }) {
   return (
     <div className="border-t pt-4 mt-2">
       <div className="flex items-center gap-2 mb-2.5">
@@ -639,32 +721,42 @@ export function PyramidView({
         </div>
         <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
           <CornerDownRight className="size-3" />
-          自下而上推理:原始事实 → 基础观点 → 中层观点 → 核心观点
+          自上而下阅读:核心观点 → 中层观点 → 基础观点 → 原始事实
         </p>
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {/* Pyramid visual: top→bottom = core → facts */}
-        <div className="flex flex-col items-center gap-0">
+        {/* Top-to-bottom reading flow */}
+        <div className="flex flex-col gap-0 items-stretch">
           {core && (
             <>
-              <CoreCard core={core} />
+              <div className="w-3/5 mx-auto">
+                <CoreCard core={core} />
+              </div>
               {mids.length > 0 && <Connector />}
             </>
           )}
           {mids.length > 0 && (
             <>
-              <MidBand mids={mids} />
+              <div className="w-4/5 mx-auto">
+                <MidLayer mids={mids} />
+              </div>
               {bases.length > 0 && <Connector />}
             </>
           )}
           {bases.length > 0 && (
             <>
-              <BaseBand bases={bases} />
+              <div className="w-[92%] mx-auto">
+                <BaseLayer bases={bases} />
+              </div>
               {facts.length > 0 && <Connector />}
             </>
           )}
-          {facts.length > 0 && <FactsBand facts={facts} />}
+          {facts.length > 0 && (
+            <div className="w-full">
+              <FactsLayer facts={facts} />
+            </div>
+          )}
         </div>
 
         {/* Sidebar strips */}
