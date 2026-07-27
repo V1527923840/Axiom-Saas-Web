@@ -92,14 +92,12 @@ export function ResearchAnalysisDetailDialog({
               {/* Pyramid View */}
               <PyramidView
                 pyramidVersion={item.pyramidVersion}
-                data={{
-                  rawFacts: item.rawFacts,
-                  inductionGroups: item.inductionGroups,
-                  baseView: item.baseView,
-                  midView: item.midView,
-                  coreView: item.coreView,
-                  pyramidJudgement: item.pyramidJudgement,
-                }}
+                rawFacts={item.rawFacts}
+                inductionGroups={item.inductionGroups}
+                baseView={item.baseView}
+                midView={item.midView}
+                coreView={item.coreView}
+                pyramidJudgement={item.pyramidJudgement}
               />
 
               {/* Stock Mapping */}

@@ -11,7 +11,9 @@ export const columns: ColumnDef<IntelligenceItem>[] = [
     accessorKey: "title",
     header: "标题",
     cell: ({ row }) => (
-      <div className="font-medium max-w-[250px] truncate">{row.getValue("title")}</div>
+      <div className="font-medium max-w-[250px] truncate">
+        {row.getValue("title")}
+      </div>
     ),
     meta: { tooltip: true },
   },
@@ -28,7 +30,11 @@ export const columns: ColumnDef<IntelligenceItem>[] = [
     header: "群组名称",
     cell: ({ row }) => {
       const groupName = row.getValue("groupName") as string | undefined
-      return <span className="text-sm text-muted-foreground">{groupName || "-"}</span>
+      return (
+        <span className="text-sm text-muted-foreground">
+          {groupName || "-"}
+        </span>
+      )
     },
   },
   {
@@ -110,7 +116,10 @@ export const columns: ColumnDef<IntelligenceItem>[] = [
       const text = row.original.originalTextRaw
       if (!text) return <span className="text-muted-foreground">-</span>
       return (
-        <span className="text-sm text-muted-foreground max-w-[200px] truncate block" title={text}>
+        <span
+          className="text-sm text-muted-foreground max-w-[200px] truncate block"
+          title={text}
+        >
           {text.slice(0, 50)}...
         </span>
       )
@@ -125,11 +134,8 @@ export const columns: ColumnDef<IntelligenceItem>[] = [
           variant="outline"
           size="sm"
           className="cursor-pointer"
-          onClick={() => {
-            window.dispatchEvent(
-              new CustomEvent("open-intelligence-detail", { detail: item })
-            )
-          }}
+          data-testid="intelligence-view-button"
+          data-intelligence-id={item.id}
         >
           查看
         </Button>

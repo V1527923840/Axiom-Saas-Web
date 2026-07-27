@@ -48,49 +48,46 @@ export default function ResearchAnalysisPage() {
     resetFilters,
   } = useResearchAnalysisStore()
 
-  // Initial fetch - only on mount using ref to track
+  // Initial fetch — guard against React 19 strict-mode double-fire
   const initialized = useRef(false)
   useEffect(() => {
-    if (!initialized.current) {
-      initialized.current = true
-      fetchItems(0, {})
-    }
+    if (initialized.current) return
+    initialized.current = true
+    void fetchItems(0, {})
   }, [fetchItems])
 
-  // Listen for custom event to open detail
-  useEffect(() => {
-    const handleOpenDetail = (event: CustomEvent) => {
-      openDetail(event.detail)
-    }
-
-    window.addEventListener("open-research-detail", handleOpenDetail as EventListener)
-    return () => {
-      window.removeEventListener("open-research-detail", handleOpenDetail as EventListener)
-    }
-  }, [openDetail])
-
-  const handleSortingChange = useCallback((sorting: { id: string; desc: boolean }[]) => {
-    const sortItem = sorting[0]
-    if (sortItem) {
-      fetchItems(pagination.page, { sortBy: sortItem.id, sortOrder: sortItem.desc ? "desc" : "asc" })
-    } else {
-      fetchItems(pagination.page, {})
-    }
-  }, [fetchItems, pagination.page])
+  const handleSortingChange = useCallback(
+    (sorting: { id: string; desc: boolean }[]) => {
+      const sortItem = sorting[0]
+      if (sortItem) {
+        void fetchItems(pagination.page, {
+          sortBy: sortItem.id,
+          sortOrder: sortItem.desc ? "desc" : "asc",
+        })
+      } else {
+        void fetchItems(pagination.page, {})
+      }
+    },
+    [fetchItems, pagination.page],
+  )
 
   const handleSearch = useCallback(() => {
-    fetchItems(0, {
+    void fetchItems(0, {
       categoryL1: filters.categoryL1 || undefined,
       categoryL2: filters.categoryL2 || undefined,
       keyword: filters.keyword || undefined,
-      dateFrom: filters.dateRange?.from ? formatLocalDate(filters.dateRange.from) : undefined,
-      dateTo: filters.dateRange?.to ? formatLocalDate(filters.dateRange.to) : undefined,
+      dateFrom: filters.dateRange?.from
+        ? formatLocalDate(filters.dateRange.from)
+        : undefined,
+      dateTo: filters.dateRange?.to
+        ? formatLocalDate(filters.dateRange.to)
+        : undefined,
     })
   }, [fetchItems, filters])
 
   const handleReset = useCallback(() => {
     resetFilters()
-    fetchItems(0, {})
+    void fetchItems(0, {})
   }, [resetFilters, fetchItems])
 
   return (
@@ -196,6 +193,7 @@ export default function ResearchAnalysisPage() {
           showSearch={false}
           onSortingChange={handleSortingChange}
           initialSorting={[{ id: "createdAt", desc: true }]}
+          onRowClick={openDetail}
           pagination={{
             page: pagination.page,
             pageSize: pagination.pageSize,

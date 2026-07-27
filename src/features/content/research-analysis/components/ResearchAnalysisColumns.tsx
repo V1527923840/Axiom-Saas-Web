@@ -98,22 +98,15 @@ export const columns: ColumnDef<ResearchAnalysisItem>[] = [
   },
   {
     id: "actions",
-    cell: ({ row }) => {
-      const item = row.original
-      return (
-        <Button
-          variant="outline"
-          size="sm"
-          className="cursor-pointer"
-          onClick={() => {
-            window.dispatchEvent(
-              new CustomEvent("open-research-detail", { detail: item })
-            )
-          }}
-        >
-          查看
-        </Button>
-      )
-    },
+    cell: () => (
+      <Button
+        variant="outline"
+        size="sm"
+        className="cursor-pointer"
+        data-testid="research-view-button"
+      >
+        查看
+      </Button>
+    ),
   },
 ]

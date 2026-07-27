@@ -95,14 +95,12 @@ export function IntelligenceDetailDialog({
               <PyramidView
                 pyramidVersion={item.pyramidVersion}
                 classificationMethod={item.classificationMethod}
-                data={{
-                  rawFacts: item.rawFacts,
-                  inductionGroups: item.inductionGroups,
-                  baseView: item.baseView,
-                  midView: item.midView,
-                  coreView: item.coreView,
-                  pyramidJudgement: item.pyramidJudgement,
-                }}
+                rawFacts={item.rawFacts}
+                inductionGroups={item.inductionGroups}
+                baseView={item.baseView}
+                midView={item.midView}
+                coreView={item.coreView}
+                pyramidJudgement={item.pyramidJudgement}
               />
 
               {/* Stock Mapping */}
