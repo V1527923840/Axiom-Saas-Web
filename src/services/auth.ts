@@ -1,49 +1,29 @@
+// src/services/auth.ts
 import { get, post } from "@/lib/api"
+import type { components } from "@/types/api"
 
-export interface User {
-  id: number
-  email: string
-  firstName: string
-  lastName: string
-  role: { id: number; name: string }
-  status: { id: number; name: string }
-  tier?: string
-  currentPlanId?: string | null
-  pointsBalance?: number
-  chatQuotaUsed?: number
-  chatQuotaTotal?: number
-  subscriptionExpiredAt?: string | null
-  registeredAt?: string | null
-  lastLoginAt?: string | null
-}
+type UserDto = components["schemas"]["User"]
+type LoginResponseDto = components["schemas"]["LoginResponseDto"]
 
 export interface LoginResponse {
   token: string
   refreshToken: string
   tokenExpires: number
-  user: User
-}
-
-export interface SignupResponse {
-  // Returns 204 on success, so empty
+  user: UserDto
 }
 
 export const authApi = {
   login: (email: string, password: string) =>
-    post<LoginResponse>("/v1/auth/email/login", { email, password }),
+    post<LoginResponseDto>("/v1/auth/email/login", { email, password }),
 
   register: (firstName: string, lastName: string, email: string, password: string) =>
-    post<SignupResponse>("/v1/auth/email/register", {
-      firstName,
-      lastName,
-      email,
-      password,
-    }),
+    post<void>("/v1/auth/email/register", { firstName, lastName, email, password }),
 
-  getMe: (token: string) => get<User>("/v1/auth/me", token),
+  getMe: (token: string) => get<UserDto>("/v1/auth/me", { token }),
 
   refresh: (refreshToken: string) =>
-    post<LoginResponse>("/v1/auth/refresh", {}, refreshToken),
+    post<LoginResponseDto>("/v1/auth/refresh", {}, { token: refreshToken }),
 
-  logout: (token: string) => post<void>("/v1/auth/logout", {}, token),
+  logout: (token: string) =>
+    post<void>("/v1/auth/logout", {}, { token }),
 }
