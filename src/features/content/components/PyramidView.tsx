@@ -13,7 +13,6 @@ import {
   Filter,
   FileText,
   ArrowDown,
-  CornerDownRight,
 } from "lucide-react"
 
 /**
@@ -320,6 +319,10 @@ function CoreCard({ core }: { core: CoreView }) {
             </Badge>
           )}
         </div>
+
+        <p className="text-[15px] leading-relaxed font-medium text-amber-950 dark:text-amber-100">
+          {core.content}
+        </p>
 
         {core.premises && core.premises.length > 0 && (
           <div>
@@ -696,32 +699,7 @@ export function PyramidView({
 
   return (
     <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between gap-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <PyramidIcon className="size-5" />
-            金字塔观点
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            {classificationMethod && (
-              <Badge variant="outline" className="text-xs">
-                {classificationMethod}
-              </Badge>
-            )}
-            {pyramidVersion && (
-              <Badge variant="default" className="text-xs">
-                {pyramidVersion}
-              </Badge>
-            )}
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
-          <CornerDownRight className="size-3" />
-          自上而下阅读:核心观点 → 中层观点 → 基础观点 → 原始事实
-        </p>
-      </CardHeader>
-
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-3 pt-6">
         {/* Top-to-bottom reading flow — all layers 100% width */}
         <div className="flex flex-col gap-0 items-stretch">
           {core && (
