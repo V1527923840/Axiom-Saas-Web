@@ -79,21 +79,6 @@ export const columns: ColumnDef<ResearchAnalysisItem>[] = [
     sortingFn: "datetime",
   },
   {
-    accessorKey: "valueRating",
-    header: "价值评级",
-    cell: ({ row }) => {
-      const rating = row.getValue("valueRating") as string
-      const ratingConfig: Record<string, { label: string; className: string }> = {
-        高: { label: "高", className: "bg-green-100 text-green-800" },
-        中: { label: "中", className: "bg-yellow-100 text-yellow-800" },
-        低: { label: "低", className: "bg-orange-100 text-orange-800" },
-        高风险: { label: "高风险", className: "bg-red-100 text-red-800" },
-      }
-      const config = ratingConfig[rating] || ratingConfig["中"]
-      return <Badge className={config.className}>{config.label}</Badge>
-    },
-  },
-  {
     accessorKey: "categoryL1",
     header: "一级分类",
     cell: ({ row }) => {
@@ -102,20 +87,13 @@ export const columns: ColumnDef<ResearchAnalysisItem>[] = [
     },
   },
   {
-    accessorKey: "overallScore",
-    header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        className="cursor-pointer p-0 hover:bg-transparent hover:text-foreground"
-      >
-        综合评分
-        <ArrowUpDown className="ml-2 size-4" />
-      </Button>
-    ),
+    accessorKey: "pyramidVersion",
+    header: "金字塔版本",
     cell: ({ row }) => {
-      const score = row.getValue("overallScore") as number
-      return <span className="font-mono">{score ?? "-"}</span>
+      const version = row.getValue("pyramidVersion") as string | undefined
+      if (!version) return <span className="text-muted-foreground">-</span>
+      const variant = version === "v2.0" ? "default" : "outline"
+      return <Badge variant={variant}>{version}</Badge>
     },
   },
   {

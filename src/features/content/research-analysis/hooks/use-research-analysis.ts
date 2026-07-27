@@ -11,7 +11,6 @@ import type {
 interface ResearchAnalysisFilters {
   categoryL1: string | null;
   categoryL2: string | null;
-  valueRating: string | null;
   keyword: string;
   dateRange: { from: Date | undefined; to: Date | undefined } | undefined;
 }
@@ -21,7 +20,6 @@ interface FetchItemsOptions {
   sortOrder?: string;
   categoryL1?: string;
   categoryL2?: string;
-  valueRating?: string;
   keyword?: string;
   dateFrom?: string;
   dateTo?: string;
@@ -42,7 +40,6 @@ export function useResearchAnalysisStore() {
   const [filters, setFilters] = useState<ResearchAnalysisFilters>({
     categoryL1: null,
     categoryL2: null,
-    valueRating: null,
     keyword: "",
     dateRange: undefined,
   })
@@ -73,7 +70,6 @@ export function useResearchAnalysisStore() {
       const currentFilters = filtersRef.current
       searchParams.categoryL1 = options?.categoryL1 ?? currentFilters.categoryL1 ?? undefined
       searchParams.categoryL2 = options?.categoryL2 ?? currentFilters.categoryL2 ?? undefined
-      searchParams.valueRating = options?.valueRating ?? currentFilters.valueRating ?? undefined
       searchParams.keyword = options?.keyword ?? currentFilters.keyword ?? undefined
       searchParams.dateFrom = options?.dateFrom ?? (currentFilters.dateRange?.from ? currentFilters.dateRange.from.toISOString().split('T')[0] : undefined)
       searchParams.dateTo = options?.dateTo ?? (currentFilters.dateRange?.to ? currentFilters.dateRange.to.toISOString().split('T')[0] : undefined)
@@ -149,10 +145,6 @@ export function useResearchAnalysisStore() {
     setFilters(prev => ({ ...prev, categoryL2: value }))
   }, [])
 
-  const setValueRating = useCallback((value: string | null) => {
-    setFilters(prev => ({ ...prev, valueRating: value }))
-  }, [])
-
   const setKeyword = useCallback((value: string) => {
     setFilters(prev => ({ ...prev, keyword: value }))
   }, [])
@@ -165,7 +157,6 @@ export function useResearchAnalysisStore() {
     setFilters({
       categoryL1: null,
       categoryL2: null,
-      valueRating: null,
       keyword: "",
       dateRange: undefined,
     })
@@ -187,7 +178,6 @@ export function useResearchAnalysisStore() {
     closeDetail,
     setCategoryL1,
     setCategoryL2,
-    setValueRating,
     setKeyword,
     setDateRange,
     resetFilters,

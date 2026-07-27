@@ -25,7 +25,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { X } from "lucide-react"
-import { CATEGORY_L1_OPTIONS, VALUE_RATING_OPTIONS } from "./types"
+import { CATEGORY_L1_OPTIONS } from "./types"
 import { formatLocalDate } from "@/lib/utils"
 
 export default function ResearchAnalysisPage() {
@@ -43,7 +43,6 @@ export default function ResearchAnalysisPage() {
     closeDetail,
     setCategoryL1,
     setCategoryL2,
-    setValueRating,
     setKeyword,
     setDateRange,
     resetFilters,
@@ -83,7 +82,6 @@ export default function ResearchAnalysisPage() {
     fetchItems(0, {
       categoryL1: filters.categoryL1 || undefined,
       categoryL2: filters.categoryL2 || undefined,
-      valueRating: filters.valueRating || undefined,
       keyword: filters.keyword || undefined,
       dateFrom: filters.dateRange?.from ? formatLocalDate(filters.dateRange.from) : undefined,
       dateTo: filters.dateRange?.to ? formatLocalDate(filters.dateRange.to) : undefined,
@@ -128,26 +126,6 @@ export default function ResearchAnalysisPage() {
               onChange={(e) => setCategoryL2(e.target.value)}
               className="w-[140px]"
             />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs">价值评级</Label>
-            <Select
-              value={filters.valueRating ?? "all"}
-              onValueChange={(value) => setValueRating(value === "all" ? null : value)}
-            >
-              <SelectTrigger className="w-[120px]">
-                <SelectValue placeholder="全部" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                {VALUE_RATING_OPTIONS.map((rating) => (
-                  <SelectItem key={rating} value={rating}>
-                    {rating}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="space-y-1">
