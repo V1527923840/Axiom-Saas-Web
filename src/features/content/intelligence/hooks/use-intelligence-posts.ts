@@ -44,12 +44,14 @@ export function useIntelligencePostsStore() {
         })
       }
 
-      const response = await apiGet<any>(`/v1/intelligence?${searchParams.toString()}`)
+      const response = await apiGet<IntelligenceItem[]>(
+        `/v1/intelligence?${searchParams.toString()}`,
+      )
 
       const postsArray = Array.isArray(response.data) ? response.data : []
-      const total = response.total ?? 0
-      const responsePage = response.page ?? page
-      const responsePageSize = response.pageSize ?? pageSize
+      const total = response.meta?.total ?? 0
+      const responsePage = response.meta?.page ?? page
+      const responsePageSize = response.meta?.pageSize ?? pageSize
 
       setPosts(postsArray)
       setPagination((prev) => ({
@@ -66,16 +68,20 @@ export function useIntelligencePostsStore() {
   }, [])
 
   const fetchDetail = useCallback(async (id: string) => {
-    setLoading(true)
+    setDetailLoading(true)
     setError(null)
     try {
-      const response = await apiGet<{ data: IntelligenceDetail }>(`/v1/intelligence/${id}`)
-      return (response.data as { data?: IntelligenceDetail })?.data ?? null
+      // Wire shape: { data: IntelligenceDetail }. The api.ts wrapper's
+      // `response.data` is the wire body itself, so unwrap one level.
+      const response = await apiGet<{ data: IntelligenceDetail }>(
+        `/v1/intelligence/${id}`,
+      )
+      return response.data?.data ?? null
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch detail")
       return null
     } finally {
-      setLoading(false)
+      setDetailLoading(false)
     }
   }, [])
 

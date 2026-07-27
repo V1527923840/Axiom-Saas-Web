@@ -63,7 +63,7 @@ export function useResearchAnalysisStore() {
       const pageSize = pageSizeOverride ?? paginationRef.current.pageSize
 
       const searchParams: ResearchAnalysisQueryParams = {
-        sortBy: options?.sortBy as 'analyzedAt' | 'overallScore' | 'createdAt' | undefined,
+        sortBy: options?.sortBy as 'analyzedAt' | 'createdAt' | undefined,
         sortOrder: options?.sortOrder as 'asc' | 'desc' | undefined,
       }
 

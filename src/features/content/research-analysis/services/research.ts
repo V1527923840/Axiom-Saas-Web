@@ -35,20 +35,15 @@ export const researchApi = {
       })
     }
 
-    return get<{
-      data: ResearchAnalysisItem[];
-      total: number;
-      page: number;
-      pageSize: number;
-    }>(`/v1/research-analysis?${searchParams.toString()}`).then(response => {
-      // API returns direct format: {data:[...], total, page, pageSize}
-      // Some endpoints wrap in {success, data}, need to handle both
-      const data = Array.isArray(response.data) ? response.data : (response.data?.data || [])
+    return get<ResearchAnalysisItem[]>(
+      `/v1/research-analysis?${searchParams.toString()}`,
+    ).then(response => {
+      const data = Array.isArray(response.data) ? response.data : []
       return {
         data,
-        total: response.total ?? 0,
-        page: response.page ?? page,
-        pageSize: response.pageSize ?? pageSize,
+        total: response.meta?.total ?? 0,
+        page: response.meta?.page ?? page,
+        pageSize: response.meta?.pageSize ?? pageSize,
       }
     })
   },
