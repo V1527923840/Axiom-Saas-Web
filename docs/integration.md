@@ -22,12 +22,12 @@ The web repo does not own the API contract. It consumes server's Swagger:
 
 - Source: `../Axiom-Saas-Server/docs/swagger.json` (committed in server repo)
 - Generated: `src/types/api.d.ts` (committed in this repo)
-- CI: `npm run api:check` — fails the PR if `api.d.ts` is stale
+- CI: `pnpm api:check` — fails the PR if `api.d.ts` is stale
 
 When server's contract changes:
 
 1. Server PR includes `BREAKING CHANGE:` footer if applicable.
-2. Web PR in the same `feature/vX.Y.Z` cycle runs `npm run api:generate` and updates affected mappers/services.
+2. Web PR in the same `feature/vX.Y.Z` cycle runs `pnpm api:generate` and updates affected mappers/services.
 3. Both PRs land in their respective repos before either merges to `main`.
 
 ## API access pattern
