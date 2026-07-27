@@ -5,6 +5,8 @@ import type { components } from "@/types/api"
 type UserDto = components["schemas"]["User"]
 type LoginResponseDto = components["schemas"]["LoginResponseDto"]
 
+export type User = UserDto
+
 export interface LoginResponse {
   token: string
   refreshToken: string

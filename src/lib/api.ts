@@ -7,6 +7,8 @@ export type ApiResponse<T> = {
   meta?: PaginationMeta
 }
 
+// TODO: replace with components["schemas"]["PaginationMetaDto"] from
+// src/types/api.d.ts once the server emits it under that name.
 export interface PaginationMeta {
   total?: number
   page?: number
