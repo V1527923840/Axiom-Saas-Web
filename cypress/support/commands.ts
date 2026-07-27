@@ -27,6 +27,8 @@ Cypress.Commands.add(
 )
 
 Cypress.Commands.add("logout", () => {
+  // TODO: requires data-testid="user-menu" + data-testid="logout-button"
+  // on the respective UI elements (not yet added in Phase 0).
   cy.dataTestId("user-menu").click()
   cy.dataTestId("logout-button").click()
   cy.url().should("include", "/auth/sign-in")
