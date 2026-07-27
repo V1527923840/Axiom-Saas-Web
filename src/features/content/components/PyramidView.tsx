@@ -321,10 +321,6 @@ function CoreCard({ core }: { core: CoreView }) {
           )}
         </div>
 
-        <p className="text-[15px] leading-relaxed font-medium text-amber-950 dark:text-amber-100">
-          {core.content}
-        </p>
-
         {core.premises && core.premises.length > 0 && (
           <div>
             <div className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300 mb-1.5">
