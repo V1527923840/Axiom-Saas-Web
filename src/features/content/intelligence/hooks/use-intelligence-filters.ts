@@ -1,12 +1,11 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import type { CategoryL1, ValueRating } from "../types"
+import type { CategoryL1 } from "../types"
 
 export interface IntelligenceFiltersState {
   categoryL1: CategoryL1 | null
   categoryL2: string
-  valueRating: ValueRating | null
   title: string
   dateRange: { from: Date; to: Date } | undefined
 }
@@ -15,7 +14,6 @@ export function useIntelligenceFilters() {
   const [filters, setFilters] = useState<IntelligenceFiltersState>({
     categoryL1: null,
     categoryL2: "",
-    valueRating: null,
     title: "",
     dateRange: undefined,
   })
@@ -32,10 +30,6 @@ export function useIntelligenceFilters() {
     setFilters((prev) => ({ ...prev, categoryL2 }))
   }, [])
 
-  const setValueRating = useCallback((valueRating: ValueRating | null) => {
-    setFilters((prev) => ({ ...prev, valueRating }))
-  }, [])
-
   const setTitle = useCallback((title: string) => {
     setFilters((prev) => ({ ...prev, title }))
   }, [])
@@ -48,7 +42,6 @@ export function useIntelligenceFilters() {
     setFilters({
       categoryL1: null,
       categoryL2: "",
-      valueRating: null,
       title: "",
       dateRange: undefined,
     })
@@ -58,7 +51,6 @@ export function useIntelligenceFilters() {
     filters,
     setCategoryL1,
     setCategoryL2,
-    setValueRating,
     setTitle,
     setDateRange,
     resetFilters,

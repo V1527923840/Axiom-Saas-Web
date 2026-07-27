@@ -26,7 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { X } from "lucide-react"
-import { CATEGORY_L1_OPTIONS, VALUE_RATING_OPTIONS } from "./types"
+import { CATEGORY_L1_OPTIONS } from "./types"
 import { formatLocalDate } from "@/lib/utils"
 
 export default function IntelligencePostsPage() {
@@ -43,7 +43,7 @@ export default function IntelligencePostsPage() {
     closeDetail,
   } = useIntelligencePostsStore()
 
-  const { filters, setCategoryL1, setCategoryL2, setValueRating, setTitle, setDateRange, resetFilters } = useIntelligenceFilters()
+  const { filters, setCategoryL1, setCategoryL2, setTitle, setDateRange, resetFilters } = useIntelligenceFilters()
 
   // Initial fetch - only on mount using ref to track
   const initialized = useRef(false)
@@ -79,7 +79,6 @@ export default function IntelligencePostsPage() {
     fetchPosts(0, {
       categoryL1: filters.categoryL1 || undefined,
       categoryL2: filters.categoryL2 || undefined,
-      valueRating: filters.valueRating || undefined,
       title: filters.title || undefined,
       dateFrom: filters.dateRange?.from ? formatLocalDate(filters.dateRange.from) : undefined,
       dateTo: filters.dateRange?.to ? formatLocalDate(filters.dateRange.to) : undefined,
@@ -124,26 +123,6 @@ export default function IntelligencePostsPage() {
               onChange={(e) => setCategoryL2(e.target.value)}
               className="w-[140px]"
             />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs">价值评级</Label>
-            <Select
-              value={filters.valueRating || "all"}
-              onValueChange={(value) => setValueRating(value === "all" ? null : value as typeof VALUE_RATING_OPTIONS[number])}
-            >
-              <SelectTrigger className="w-[120px]">
-                <SelectValue placeholder="全部" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                {VALUE_RATING_OPTIONS.map((rating) => (
-                  <SelectItem key={rating} value={rating}>
-                    {rating}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           <div className="space-y-1">
