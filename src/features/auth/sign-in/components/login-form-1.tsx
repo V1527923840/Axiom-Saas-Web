@@ -69,7 +69,10 @@ export function LoginForm1({
             <form onSubmit={form.handleSubmit(onSubmit)}>
               <div className="grid gap-6">
                 {error && (
-                  <div className="bg-destructive/10 text-destructive text-sm p-3 rounded-md">
+                  <div
+                    data-testid="error-message"
+                    className="bg-destructive/10 text-destructive text-sm p-3 rounded-md"
+                  >
                     {error}
                   </div>
                 )}
@@ -82,6 +85,7 @@ export function LoginForm1({
                         <FormLabel>Email</FormLabel>
                         <FormControl>
                           <Input
+                            data-testid="email-input"
                             type="email"
                             placeholder="test@example.com"
                             {...field}
@@ -106,13 +110,21 @@ export function LoginForm1({
                           </a>
                         </div>
                         <FormControl>
-                          <Input type="password" {...field} />
+                          <Input
+                            data-testid="password-input"
+                            type="password"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" className="w-full cursor-pointer">
+                  <Button
+                    data-testid="sign-in-button"
+                    type="submit"
+                    className="w-full cursor-pointer"
+                  >
                     Login
                   </Button>
 
