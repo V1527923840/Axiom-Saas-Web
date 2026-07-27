@@ -29,9 +29,11 @@ export const researchApi = {
 
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== "") {
-          searchParams.set(key, String(value))
-        }
+        if (value === undefined || value === null || value === "") return
+        // Server DTO expects uppercase sortOrder (enum: ASC | DESC).
+        const v =
+          key === "sortOrder" ? String(value).toUpperCase() : String(value)
+        searchParams.set(key, v)
       })
     }
 
