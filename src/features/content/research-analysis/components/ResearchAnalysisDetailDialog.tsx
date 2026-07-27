@@ -81,14 +81,6 @@ export function ResearchAnalysisDetailDialog({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
             {/* Left Column - Details */}
             <div className="space-y-4 overflow-y-auto min-h-0 pr-2">
-              {/* Key Thesis Section */}
-              {item.keyThesis && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-muted-foreground">核心观点</h3>
-                  <p className="text-sm leading-relaxed">{item.keyThesis}</p>
-                </div>
-              )}
-
               {/* Pyramid View */}
               <PyramidView
                 pyramidVersion={item.pyramidVersion}
