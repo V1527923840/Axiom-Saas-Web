@@ -1,4 +1,4 @@
-// Research Analysis Types
+// Research Analysis Types — pyramid-view schema
 
 // Stock mapping
 export interface MentionedStock {
@@ -14,10 +14,10 @@ export interface ResearchAnalysisItem {
   createdAt: string;
   categoryL1: string;
   categoryL2: string;
-  valueRating: string;
-  overallScore: number;
   swIndustryTag: Record<string, any>[];
   mentionedStocks: Record<string, any>[];
+  coreView?: Record<string, unknown> | null;
+  pyramidVersion?: string | null;
 }
 
 // Full detail item
@@ -28,24 +28,12 @@ export interface ResearchAnalysisDetail extends ResearchAnalysisItem {
   ossUrl?: string | null;
   localPath?: string | null;
   scrapeLogId: string;
-  summaryPoints: string[];
-  sourceCredibility: number;
-  timelinessScore: number;
-  dataDensity: number;
-  differentiationScore: number;
-  actionability: number;
-  riskDisclosure: number;
-  confidenceFactor: number;
-  expectationGap: Record<string, unknown>;
-  recommendation: string;
-  targetPrice: string;
-  investmentHorizon: string;
-  risksWarnings: Record<string, any>[];
-  impactLevel: string;
-  affectedSectors: Record<string, any>[];
-  marketSentiment: string;
-  originalText: string;
-  originalTextRaw: string;
+  // Pyramid-view
+  rawFacts?: Record<string, unknown> | null;
+  inductionGroups?: Record<string, unknown> | null;
+  baseView?: Record<string, unknown> | null;
+  midView?: Record<string, unknown> | null;
+  pyramidJudgement?: Record<string, unknown> | null;
   analysisVersion: string;
   updatedAt: string;
 }
@@ -56,11 +44,10 @@ export interface ResearchAnalysisQueryParams {
   pageSize?: number;
   categoryL1?: string;
   categoryL2?: string;
-  valueRating?: string;
   keyword?: string;
   dateFrom?: string;
   dateTo?: string;
-  sortBy?: 'analyzedAt' | 'overallScore' | 'createdAt';
+  sortBy?: 'analyzedAt' | 'createdAt';
   sortOrder?: 'asc' | 'desc';
 }
 
@@ -71,27 +58,6 @@ export interface ListResponse<T> {
   page: number;
   pageSize: number;
 }
-
-// Radar chart data point
-export interface RadarChartDataPoint {
-  dimension: string;
-  value: number;
-  fullMark?: number;
-}
-
-// Dimension name mapping (Chinese)
-export const DIMENSION_NAME_MAP: Record<string, string> = {
-  sourceCredibility: '来源可信度',
-  timelinessScore: '时效性评分',
-  dataDensity: '数据密度',
-  differentiationScore: '差异化评分',
-  actionability: '可执行性',
-  riskDisclosure: '风险揭示',
-};
-
-// Value rating options
-export const VALUE_RATING_OPTIONS = ['高', '中', '低', '高风险'] as const;
-export type ValueRating = typeof VALUE_RATING_OPTIONS[number];
 
 // Category L1 options
 export const CATEGORY_L1_OPTIONS = [
