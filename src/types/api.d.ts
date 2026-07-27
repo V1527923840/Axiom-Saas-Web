@@ -1686,13 +1686,16 @@ export interface operations {
     UsersController_findAll_v1: {
         parameters: {
             query: {
+                /** @description 1-based page number. */
                 page: number;
                 limit: number;
                 role: string;
                 status: string;
                 tier: string;
+                /** @description Column to sort by. Use a domain field name. */
                 sortBy: string;
-                sortOrder: string;
+                /** @description Sort direction. Applied when sortBy is set. */
+                sortOrder: "ASC" | "DESC";
             };
             header?: {
                 "x-custom-lang"?: unknown;
@@ -1996,6 +1999,7 @@ export interface operations {
     MenusController_findAll_v1: {
         parameters: {
             query: {
+                /** @description 1-based page number. */
                 page: number;
                 limit: number;
             };
@@ -2194,13 +2198,16 @@ export interface operations {
     PlansController_findAll_v1: {
         parameters: {
             query: {
+                /** @description 1-based page number. */
                 page: number;
                 limit: number;
                 cycle: string;
                 tier: string;
                 status: string;
+                /** @description Column to sort by. Use a domain field name. */
                 sortBy: string;
-                sortOrder: string;
+                /** @description Sort direction. Applied when sortBy is set. */
+                sortOrder: "ASC" | "DESC";
             };
             header?: {
                 "x-custom-lang"?: unknown;
@@ -2727,7 +2734,9 @@ export interface operations {
     ContentController_getContentList_v1: {
         parameters: {
             query?: {
+                /** @description 1-based page number. */
                 page?: number;
+                /** @description Items per page (1-100). */
                 pageSize?: number;
                 filters?: string;
                 sort?: string;
@@ -2823,12 +2832,15 @@ export interface operations {
     SubscriptionsController_findAll_v1: {
         parameters: {
             query: {
+                /** @description 1-based page number. */
                 page: number;
                 limit: number;
                 status: string;
                 userId: string;
+                /** @description Column to sort by. Use a domain field name. */
                 sortBy: string;
-                sortOrder: string;
+                /** @description Sort direction. Applied when sortBy is set. */
+                sortOrder: "ASC" | "DESC";
             };
             header?: {
                 "x-custom-lang"?: unknown;
@@ -2918,6 +2930,7 @@ export interface operations {
     SubscriptionsController_getHistory_v1: {
         parameters: {
             query: {
+                /** @description 1-based page number. */
                 page: number;
                 limit: number;
             };
@@ -2984,6 +2997,7 @@ export interface operations {
     BillsController_findAllFlows_v1: {
         parameters: {
             query: {
+                /** @description 1-based page number. */
                 page: number;
                 limit: number;
                 userName: string;
@@ -2993,8 +3007,10 @@ export interface operations {
                 status: string;
                 dateFrom: string;
                 dateTo: string;
+                /** @description Column to sort by. Use a domain field name. */
                 sortBy: string;
-                sortOrder: string;
+                /** @description Sort direction. Applied when sortBy is set. */
+                sortOrder: "ASC" | "DESC";
             };
             header?: {
                 "x-custom-lang"?: unknown;
@@ -3084,6 +3100,7 @@ export interface operations {
     BillsController_findAllConsumptions_v1: {
         parameters: {
             query: {
+                /** @description 1-based page number. */
                 page: number;
                 limit: number;
                 userName: string;
@@ -3091,8 +3108,10 @@ export interface operations {
                 consumeType: string;
                 dateFrom: string;
                 dateTo: string;
+                /** @description Column to sort by. Use a domain field name. */
                 sortBy: string;
-                sortOrder: string;
+                /** @description Sort direction. Applied when sortBy is set. */
+                sortOrder: "ASC" | "DESC";
             };
             header?: {
                 "x-custom-lang"?: unknown;
@@ -3320,7 +3339,7 @@ export interface operations {
     CategoriesController_findAll_v1: {
         parameters: {
             query?: {
-                /** @description Page number */
+                /** @description 1-based page number. */
                 page?: number;
                 /** @description Items per page */
                 limit?: number;
@@ -3502,7 +3521,9 @@ export interface operations {
     EtlController_getJobHistory_v1: {
         parameters: {
             query?: {
+                /** @description 1-based page number. */
                 page?: number;
+                /** @description Items per page (1-100). */
                 pageSize?: number;
                 status?: string;
                 dateFrom?: string;
@@ -3664,6 +3685,7 @@ export interface operations {
     ScrapeLogController_findAll_v1: {
         parameters: {
             query: {
+                /** @description 1-based page number. */
                 page: number;
                 limit: number;
             };
@@ -3711,7 +3733,7 @@ export interface operations {
                 source?: string;
                 /** @description Filter by status */
                 status?: string;
-                /** @description Page number */
+                /** @description 1-based page number. */
                 page?: number;
                 /** @description Items per page */
                 limit?: number;
@@ -3888,9 +3910,9 @@ export interface operations {
     IntelligenceController_getIntelligenceList_v1: {
         parameters: {
             query?: {
-                /** @description Page number (default: 1) */
+                /** @description 1-based page number. */
                 page?: number;
-                /** @description Page size (default: 10) */
+                /** @description Items per page (1-100). */
                 pageSize?: number;
                 /** @description Level 1 category filter */
                 categoryL1?: string;
@@ -3906,10 +3928,10 @@ export interface operations {
                 dateFrom?: string;
                 /** @description End date filter (YYYY-MM-DD) */
                 dateTo?: string;
-                /** @description Sort field */
+                /** @description Column to sort by. Use a domain field name. */
                 sortBy?: string;
-                /** @description Sort order */
-                sortOrder?: string;
+                /** @description Sort direction. Applied when sortBy is set. */
+                sortOrder?: "ASC" | "DESC";
             };
             header?: {
                 "x-custom-lang"?: unknown;
@@ -3951,9 +3973,9 @@ export interface operations {
     ResearchController_getResearchList_v1: {
         parameters: {
             query?: {
-                /** @description Page number (default: 1) */
+                /** @description 1-based page number. */
                 page?: number;
-                /** @description Page size (default: 10) */
+                /** @description Items per page (1-100). */
                 pageSize?: number;
                 /** @description Level 1 category filter */
                 categoryL1?: string;
@@ -3967,10 +3989,10 @@ export interface operations {
                 dateFrom?: string;
                 /** @description End date filter (YYYY-MM-DD) */
                 dateTo?: string;
-                /** @description Sort field */
+                /** @description Column to sort by. Use a domain field name. */
                 sortBy?: string;
-                /** @description Sort order */
-                sortOrder?: string;
+                /** @description Sort direction. Applied when sortBy is set. */
+                sortOrder?: "ASC" | "DESC";
             };
             header?: {
                 "x-custom-lang"?: unknown;
