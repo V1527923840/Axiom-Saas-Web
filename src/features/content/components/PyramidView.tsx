@@ -726,11 +726,11 @@ export function PyramidView({
       </CardHeader>
 
       <CardContent className="space-y-3">
-        {/* Top-to-bottom reading flow */}
+        {/* Top-to-bottom reading flow — all layers 100% width */}
         <div className="flex flex-col gap-0 items-stretch">
           {core && (
             <>
-              <div className="w-3/5 mx-auto">
+              <div className="w-full">
                 <CoreCard core={core} />
               </div>
               {mids.length > 0 && <Connector />}
@@ -738,7 +738,7 @@ export function PyramidView({
           )}
           {mids.length > 0 && (
             <>
-              <div className="w-4/5 mx-auto">
+              <div className="w-full">
                 <MidLayer mids={mids} />
               </div>
               {bases.length > 0 && <Connector />}
@@ -746,7 +746,7 @@ export function PyramidView({
           )}
           {bases.length > 0 && (
             <>
-              <div className="w-[92%] mx-auto">
+              <div className="w-full">
                 <BaseLayer bases={bases} />
               </div>
               {facts.length > 0 && <Connector />}
