@@ -86,7 +86,7 @@ export function SalesChart() {
                 tickLine={false}
                 className="text-xs"
                 tick={{ fontSize: 12 }}
-                tickFormatter={(value) => `$${value.toLocaleString()}`}
+                tickFormatter={(value: number) => `$${value.toLocaleString()}`}
               />
               <ChartTooltip content={<ChartTooltipContent />} />
               <Area

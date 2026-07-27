@@ -134,7 +134,7 @@ export function RevenueBreakdown() {
                   )}
                 >
                   <Label
-                    content={({ viewBox }) => {
+                    content={({ viewBox }: { viewBox?: { cx?: number; cy?: number } }) => {
                       if (viewBox && "cx" in viewBox && "cy" in viewBox) {
                         return (
                           <text
