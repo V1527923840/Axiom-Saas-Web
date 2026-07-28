@@ -80,7 +80,7 @@ export function MdPreviewDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+      <DialogContent className="w-[80vw] max-w-none max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             {chainName} · v{version}
