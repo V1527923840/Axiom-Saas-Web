@@ -83,14 +83,6 @@ export function IntelligenceDetailDialog({
           <div className="grid grid-cols-2 gap-6 h-full">
             {/* Left Column - Details */}
             <div className="space-y-4 overflow-y-auto pr-2">
-              {/* Summary Section */}
-              {item.summary && (
-                <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-muted-foreground">一句话总结</h3>
-                  <p className="text-sm leading-relaxed">{item.summary}</p>
-                </div>
-              )}
-
               {/* Pyramid View */}
               <PyramidView
                 pyramidVersion={item.pyramidVersion}
@@ -101,6 +93,8 @@ export function IntelligenceDetailDialog({
                 midView={item.midView}
                 coreView={item.coreView}
                 pyramidJudgement={item.pyramidJudgement}
+                contentType="intelligence"
+                contentId={item.id}
               />
 
               {/* Stock Mapping */}
