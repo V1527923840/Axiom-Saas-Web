@@ -55,9 +55,9 @@ export function useUsers() {
       setUsers(transformedUsers)
       // Pagination info is at response root level, not response.data
       setPagination({
-        page: response.page ?? 1,
-        pageSize: response.pageSize ?? 10,
-        total: response.total ?? 0,
+        page: response.meta?.page ?? 1,
+        pageSize: response.meta?.pageSize ?? 10,
+        total: response.meta?.total ?? 0,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch users")
@@ -80,7 +80,7 @@ export function useUsers() {
         tier: data.tier,
         currentPlanId: data.currentPlanId || null,
       }
-      const response = await post<User>("/v1/users", apiData, token || undefined)
+      const response = await post<User>("/v1/users", apiData, { token: token ?? undefined })
       // Transform response to frontend format
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawData = response.data as any
@@ -130,7 +130,7 @@ export function useUsers() {
       if (data.currentPlanId !== undefined) {
         apiData.currentPlanId = data.currentPlanId || null
       }
-      const response = await patch<User>(`/v1/users/${id}`, apiData, token || undefined)
+      const response = await patch<User>(`/v1/users/${id}`, apiData, { token: token ?? undefined })
       // Transform response to frontend format
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawData = response.data as any
@@ -164,7 +164,7 @@ export function useUsers() {
     setError(null)
     try {
       // API expects number id
-      await del(`/v1/users/${id}`, token || undefined)
+      await del(`/v1/users/${id}`, { token: token ?? undefined })
       setUsers((prev) => prev.filter((user) => user.id !== id))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete user")

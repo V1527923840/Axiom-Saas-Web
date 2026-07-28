@@ -32,9 +32,9 @@ export function useSubscription() {
       const subsData = Array.isArray(rawData) ? rawData : (rawData?.data || [])
       setSubscriptions(subsData)
       setPagination({
-        page: response.page ?? 1,
-        pageSize: response.pageSize ?? 10,
-        total: response.total ?? 0,
+        page: response.meta?.page ?? 1,
+        pageSize: response.meta?.pageSize ?? 10,
+        total: response.meta?.total ?? 0,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch subscriptions")
@@ -47,7 +47,7 @@ export function useSubscription() {
     setLoading(true)
     setError(null)
     try {
-      const response = await get<CurrentSubscriptionInfo>("/v1/subscriptions/current", token || undefined)
+      const response = await get<CurrentSubscriptionInfo>("/v1/subscriptions/current", { token: token ?? undefined })
       setCurrentSubscription(response.data)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch current subscription")
@@ -60,7 +60,7 @@ export function useSubscription() {
     setLoading(true)
     setError(null)
     try {
-      const response = await post<Subscription>("/v1/subscriptions", { planId, autoRenew }, token || undefined)
+      const response = await post<Subscription>("/v1/subscriptions", { planId, autoRenew }, { token: token ?? undefined })
       const newSub = response.data
       setSubscriptions((prev) => [newSub, ...prev])
       return newSub
@@ -76,7 +76,7 @@ export function useSubscription() {
     setLoading(true)
     setError(null)
     try {
-      await del(`/v1/subscriptions/${subscriptionId}`, token || undefined)
+      await del(`/v1/subscriptions/${subscriptionId}`, { token: token ?? undefined })
       setSubscriptions((prev) =>
         prev.map((sub) =>
           sub.id === subscriptionId
@@ -96,7 +96,7 @@ export function useSubscription() {
     setLoading(true)
     setError(null)
     try {
-      const response = await post<{ success: boolean, subscription: Subscription }>("/v1/subscriptions/upgrade", { newPlanId }, token || undefined)
+      const response = await post<{ success: boolean, subscription: Subscription }>("/v1/subscriptions/upgrade", { newPlanId }, { token: token ?? undefined })
       return response.data
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to upgrade subscription")

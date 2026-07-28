@@ -51,9 +51,9 @@ export function useMenus() {
 
       setMenus(transformedMenus)
       setPagination({
-        page: response.page ?? 1,
-        pageSize: response.pageSize ?? 10,
-        total: response.total ?? 0,
+        page: response.meta?.page ?? 1,
+        pageSize: response.meta?.pageSize ?? 10,
+        total: response.meta?.total ?? 0,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch menus")

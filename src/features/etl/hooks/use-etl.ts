@@ -43,7 +43,7 @@ export function useEtlImport() {
       const response = await post<EtlImportResponse>("/v1/etl/import", {
         files,
         options,
-      }, token ?? undefined)
+      }, { token: token ?? undefined })
       return response.data
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to import files"
@@ -87,9 +87,9 @@ export function useEtlJobs() {
       const jobsData = Array.isArray(rawData) ? rawData : (rawData?.data || [])
       setJobs(jobsData)
       setPagination({
-        page: response.page ?? 1,
-        pageSize: response.pageSize ?? 20,
-        total: response.total ?? 0,
+        page: response.meta?.page ?? 1,
+        pageSize: response.meta?.pageSize ?? 20,
+        total: response.meta?.total ?? 0,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch jobs")

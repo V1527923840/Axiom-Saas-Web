@@ -35,9 +35,9 @@ export function usePlans() {
       const plansData = Array.isArray(rawData) ? rawData : (rawData?.data || [])
       setPlans(plansData)
       setPagination({
-        page: response.page ?? 1,
-        pageSize: response.pageSize ?? 10,
-        total: response.total ?? 0,
+        page: response.meta?.page ?? 1,
+        pageSize: response.meta?.pageSize ?? 10,
+        total: response.meta?.total ?? 0,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch plans")
@@ -50,7 +50,7 @@ export function usePlans() {
     setLoading(true)
     setError(null)
     try {
-      const response = await post<Plan>("/v1/plans", data, token || undefined)
+      const response = await post<Plan>("/v1/plans", data, { token: token ?? undefined })
       const newPlan = response.data
       setPlans((prev) => [newPlan, ...prev])
       return newPlan
@@ -66,7 +66,7 @@ export function usePlans() {
     setLoading(true)
     setError(null)
     try {
-      const response = await patch<Plan>(`/v1/plans/${id}`, data, token || undefined)
+      const response = await patch<Plan>(`/v1/plans/${id}`, data, { token: token ?? undefined })
       const updatedPlan = response.data
       setPlans((prev) =>
         prev.map((plan) => (plan.id === id ? updatedPlan : plan))
@@ -83,7 +83,7 @@ export function usePlans() {
     setLoading(true)
     setError(null)
     try {
-      await del(`/v1/plans/${id}`, token || undefined)
+      await del(`/v1/plans/${id}`, { token: token ?? undefined })
       setPlans((prev) => prev.filter((plan) => plan.id !== id))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete plan")

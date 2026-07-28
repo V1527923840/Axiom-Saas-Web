@@ -96,7 +96,7 @@ export function useOssDelete() {
     setLoading(true)
     setError(null)
     try {
-      const response = await post<OssDeleteResponse>('/v1/oss/delete', { keys }, token ?? undefined)
+      const response = await post<OssDeleteResponse>('/v1/oss/delete', { keys }, { token: token ?? undefined })
       return response.data
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete files')
@@ -118,7 +118,7 @@ export function useOssMkdir() {
     setLoading(true)
     setError(null)
     try {
-      const response = await post<OssMkdirResponse>('/v1/oss/mkdir', { path }, token ?? undefined)
+      const response = await post<OssMkdirResponse>('/v1/oss/mkdir', { path }, { token: token ?? undefined })
       return response.data
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create directory')
@@ -143,7 +143,7 @@ export function useOssUpload() {
       const response = await post<OssUploadPresignResponse>('/v1/oss/upload/presign', {
         path,
         content_type: contentType,
-      }, token ?? undefined)
+      }, { token: token ?? undefined })
       return response.data
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to get upload URL')

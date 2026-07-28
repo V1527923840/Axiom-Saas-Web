@@ -46,7 +46,7 @@ export function useCategoryCreate() {
     setLoading(true)
     setError(null)
     try {
-      const response = await post<ContentCategory>("/v1/categories", data, token ?? undefined)
+      const response = await post<ContentCategory>("/v1/categories", data, { token: token ?? undefined })
       return response.data
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to create category"
@@ -69,7 +69,7 @@ export function useCategoryUpdate() {
     setLoading(true)
     setError(null)
     try {
-      const response = await patch<ContentCategory>(`/v1/categories/${id}`, data, token ?? undefined)
+      const response = await patch<ContentCategory>(`/v1/categories/${id}`, data, { token: token ?? undefined })
       return response.data
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to update category"
@@ -92,7 +92,7 @@ export function useCategoryDelete() {
     setLoading(true)
     setError(null)
     try {
-      await del(`/v1/categories/${id}`, token ?? undefined)
+      await del(`/v1/categories/${id}`, { token: token ?? undefined })
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to delete category"
       setError(message)
