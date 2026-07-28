@@ -59,8 +59,21 @@ export function usersColumns({ onView, onEdit, onDelete }: UsersColumnsProps): C
       header: "角色",
       cell: ({ row }) => {
         const user = row.original as User
-        const variant = user.role === "super_admin" ? "destructive" : user.role === "admin" ? "default" : "secondary"
-        return <Badge variant={variant as "default" | "destructive" | "secondary" | "outline"}>{user.role}</Badge>
+        const list = (user.roles ?? []).map((r) => (
+          <Badge
+            key={r.id}
+            variant={r.isSuperAdmin ? "destructive" : "secondary"}
+            className="mr-1"
+          >
+            {r.name}
+          </Badge>
+        ))
+        if (list.length > 0) return <div className="flex flex-wrap">{list}</div>
+        // Fallback to legacy single-role display.
+        const roleName = typeof user.role === "string"
+          ? user.role
+          : user.role?.name ?? "user"
+        return <Badge variant="secondary">{roleName}</Badge>
       },
     },
     {

@@ -40,17 +40,6 @@ export function UserDialog({
     })
   }
 
-  const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case "super_admin":
-        return "destructive"
-      case "admin":
-        return "default"
-      default:
-        return "secondary"
-    }
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
@@ -78,7 +67,24 @@ export function UserDialog({
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">角色</p>
-                <Badge variant={getRoleBadgeVariant(user.role)}>{user.role}</Badge>
+                <div className="flex flex-wrap gap-1">
+                  {(user.roles ?? []).map((r) => (
+                    <Badge
+                      key={r.id}
+                      variant={r.isSuperAdmin ? "destructive" : "default"}
+                    >
+                      {r.name}
+                    </Badge>
+                  ))}
+                  {(!user.roles || user.roles.length === 0) &&
+                    user.role && (
+                      <Badge variant="secondary">
+                        {typeof user.role === "string"
+                          ? user.role
+                          : user.role.name}
+                      </Badge>
+                    )}
+                </div>
               </div>
               <div className="space-y-1">
                 <p className="text-xs text-muted-foreground">套餐等级</p>
