@@ -3,10 +3,13 @@
 import { useState, useCallback } from "react"
 import { get, post, patch, del } from "@/lib/api"
 import type { User, UserQueryParams } from "../types"
+import { DEFAULT_USER_PASSWORD } from "../types"
 import { useAuth } from "@/contexts/auth-context"
+import { useRoles } from "./use-roles"
 
 export function useUsers() {
   const { token } = useAuth()
+  const { fetchRoles } = useRoles()
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,7 +44,10 @@ export function useUsers() {
         name: `${user.firstName || ''}${user.lastName || ''}`.trim() || user.email || 'Unknown',
         email: user.email || '',
         avatar: user.avatar,
-        role: (typeof user.role === 'string' ? user.role : user.role?.name?.toLowerCase()) as User['role'] || 'user',
+        role: (typeof user.role === 'string'
+          ? user.role
+          : user.role?.name ?? null) as User['role'] ?? null,
+        roles: Array.isArray(user.roles) ? user.roles : [],
         tier: user.tier || 'Lv0',
         currentPlanId: user.currentPlanId,
         pointsBalance: user.pointsBalance || 0,
@@ -66,17 +72,30 @@ export function useUsers() {
     }
   }, [token])
 
-  const createUser = useCallback(async (data: Omit<User, "id">) => {
+  const createUser = useCallback(async (data: Omit<User, "id"> & { password?: string; roleIds?: number[] }) => {
     setLoading(true)
     setError(null)
     try {
-      // Transform frontend data to API format
+      // Split a single "name" (nickname/display name) into firstName / lastName.
+      // - Multiple whitespace-separated words: first word → firstName, remainder → lastName.
+      // - Single word (e.g. Chinese names like "公开测试", or single tokens):
+      //   whole name → firstName, lastName stays empty.
+      // This avoids sending an empty lastName for names without spaces.
+      const nameParts = (data.name ?? "").trim().split(/\s+/).filter(Boolean)
       const apiData = {
         email: data.email,
-        firstName: data.name.split(' ')[0] || data.name,
-        lastName: data.name.split(' ').slice(1).join(' ') || '',
-        role: { id: data.role === 'super_admin' ? 0 : data.role === 'admin' ? 1 : 2 },
-        status: { id: data.status === 'active' ? 1 : data.status === 'inactive' ? 2 : 3 },
+        firstName: nameParts[0] ?? data.name,
+        lastName: nameParts.slice(1).join(" "),
+        // If the operator left the password field blank, fall back to the
+        // shared default so the user can actually log in. The backend
+        // hashes whatever string it receives.
+        password: data.password?.trim() || DEFAULT_USER_PASSWORD,
+        // Send both: backend prefers roleIds (multi-role), fallback
+        // role.id keeps the legacy single-FK column populated for
+        // list page read performance.
+        role: data.roleIds?.[0] ? { id: data.roleIds[0] } : undefined,
+        roleIds: data.roleIds ?? [],
+        status: { id: data.status === "active" ? 1 : data.status === "inactive" ? 2 : 3 },
         tier: data.tier,
         currentPlanId: data.currentPlanId || null,
       }
@@ -89,6 +108,7 @@ export function useUsers() {
         name: `${rawData.firstName || ''}${rawData.lastName || ''}`.trim() || rawData.email || 'Unknown',
         email: rawData.email || '',
         role: (typeof rawData.role === 'string' ? rawData.role : rawData.role?.name?.toLowerCase()) as User['role'] || 'user',
+        roles: Array.isArray(rawData.roles) ? rawData.roles : [],
         tier: rawData.tier || 'Lv0',
         currentPlanId: rawData.currentPlanId,
         status: (typeof rawData.status === 'string' ? rawData.status : rawData.status?.name?.toLowerCase()) as User['status'] || 'active',
@@ -108,18 +128,29 @@ export function useUsers() {
     }
   }, [token])
 
-  const updateUser = useCallback(async (id: string, data: Partial<User>) => {
+  const updateUser = useCallback(async (id: string, data: Partial<User> & { password?: string; roleIds?: number[] }) => {
     setLoading(true)
     setError(null)
     try {
       // Transform frontend data to API format
       const apiData: Record<string, unknown> = {}
       if (data.name) {
-        apiData.firstName = data.name.split(' ')[0] || data.name
-        apiData.lastName = data.name.split(' ').slice(1).join(' ') || ''
+        // Mirror the splitting logic used in createUser so update + create stay consistent.
+        const nameParts = data.name.trim().split(/\s+/).filter(Boolean)
+        apiData.firstName = nameParts[0] ?? data.name
+        apiData.lastName = nameParts.slice(1).join(" ")
       }
-      if (data.role) {
-        apiData.role = { id: data.role === 'super_admin' ? 0 : data.role === 'admin' ? 1 : 2 }
+      // Forward email edits — without this branch the operator can change
+      // the email input in the form but the change is silently dropped
+      // before the PATCH leaves the browser, making the field appear
+      // "un-editable".
+      if (data.email !== undefined) {
+        apiData.email = data.email
+      }
+      if (data.role !== undefined || data.roleIds !== undefined) {
+        const ids = data.roleIds ?? (data.role ? [data.role] : [])
+        apiData.roleIds = ids
+        if (ids[0]) apiData.role = { id: ids[0] }
       }
       if (data.status) {
         apiData.status = { id: data.status === 'active' ? 1 : data.status === 'inactive' ? 2 : 3 }
@@ -130,6 +161,13 @@ export function useUsers() {
       if (data.currentPlanId !== undefined) {
         apiData.currentPlanId = data.currentPlanId || null
       }
+      // Forward a password reset if the caller supplied one. Empty string
+      // is treated as "reset to default password" — same fallback rule
+      // createUser uses, so admins can hand the account back to the user
+      // without having to type the literal default.
+      if (data.password !== undefined) {
+        apiData.password = data.password.trim() || DEFAULT_USER_PASSWORD
+      }
       const response = await patch<User>(`/v1/users/${id}`, apiData, { token: token ?? undefined })
       // Transform response to frontend format
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -139,6 +177,7 @@ export function useUsers() {
         name: `${rawData.firstName || ''}${rawData.lastName || ''}`.trim() || rawData.email || 'Unknown',
         email: rawData.email || '',
         role: (typeof rawData.role === 'string' ? rawData.role : rawData.role?.name?.toLowerCase()) as User['role'] || 'user',
+        roles: Array.isArray(rawData.roles) ? rawData.roles : [],
         tier: rawData.tier || 'Lv0',
         currentPlanId: rawData.currentPlanId,
         status: (typeof rawData.status === 'string' ? rawData.status : rawData.status?.name?.toLowerCase()) as User['status'] || 'active',
@@ -213,5 +252,6 @@ export function useUsers() {
     deleteUser,
     fetchUserMenus,
     assignMenusToUser,
+    fetchRoles,
   }
 }
