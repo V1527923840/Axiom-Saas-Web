@@ -1,7 +1,7 @@
 // src/features/industry-chain/hooks/use-tree.ts
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { industryChainApi } from "../services/api"
 import type {
   ChainItem,
@@ -44,6 +44,15 @@ export function useTree() {
     version: 0,
     qiniuUrl: "",
   })
+
+  // Mirror the latest `tree` so async callbacks (toggle) can read fresh state
+  // without having `tree` in their useCallback deps, which would otherwise
+  // tear down the callback between renders and let a stale closure trigger
+  // a duplicate lazy-load request.
+  const treeRef = useRef<TreeNode[]>(tree)
+  useEffect(() => {
+    treeRef.current = tree
+  }, [tree])
 
   const fetchL1 = useCallback(async () => {
     setLoadingL1(true)
@@ -206,7 +215,7 @@ export function useTree() {
         }
         return null
       }
-      const node = find(tree)
+      const node = find(treeRef.current)
       if (!node) return
 
       if (expandedIds.has(id)) {
@@ -226,7 +235,7 @@ export function useTree() {
       else if (node.level === 2) await loadChains(node)
       else if (node.level === 3) await loadVersions(node)
     },
-    [tree, expandedIds, loadedIds, loadL2, loadChains, loadVersions],
+    [expandedIds, loadedIds, loadL2, loadChains, loadVersions],
   )
 
   const openPreview = useCallback((node: TreeNode) => {
