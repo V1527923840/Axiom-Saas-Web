@@ -1,19 +1,21 @@
 "use client"
 
-import { useMemo } from "react"
+import { useMemo, useState, useEffect, useCallback, useId } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import {
+  Collapsible,
+  CollapsibleContent,
+} from "@/components/ui/collapsible"
+import {
   PyramidIcon,
   Lightbulb,
   CheckCircle2,
-  Quote,
   Layers,
   Filter,
-  FileText,
   ArrowDown,
-  CornerDownRight,
+  ChevronDown,
 } from "lucide-react"
 
 /**
@@ -92,6 +94,95 @@ interface PyramidViewProps {
   midView?: unknown
   coreView?: unknown
   pyramidJudgement?: unknown
+  /** Used to scope collapse state in localStorage. Pass null to keep state in-memory only (no persistence). */
+  contentType?: "intelligence" | "research-analysis" | null
+  contentId?: string | number | null
+}
+
+const COLLAPSE_STORAGE_PREFIX = "axiom.pyramid.collapse.v2"
+
+function useCollapseState(contentKey: string | null) {
+  const storageKey =
+    contentKey !== null ? `${COLLAPSE_STORAGE_PREFIX}:${contentKey}` : null
+
+  // Default state: every section is collapsed (progressive disclosure).
+  // `expanded` only tracks keys the user has explicitly opened.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (storageKey === null) {
+      setExpanded({})
+      return
+    }
+    try {
+      const raw = window.localStorage.getItem(storageKey)
+      if (!raw) {
+        setExpanded({})
+        return
+      }
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        setExpanded(parsed as Record<string, boolean>)
+      } else {
+        setExpanded({})
+      }
+    } catch {
+      // Silent: corrupted JSON, no localStorage, quota — all fall back to default
+      setExpanded({})
+    }
+  }, [storageKey])
+
+  const persist = useCallback(
+    (next: Record<string, boolean>) => {
+      if (typeof window === "undefined") return
+      if (storageKey === null) return
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(next))
+      } catch {
+        // Silent: privacy mode / quota — keep in-memory state
+      }
+    },
+    [storageKey],
+  )
+
+  // A section is collapsed unless it has been explicitly expanded.
+  const isCollapsed = useCallback(
+    (sectionKey: string) => expanded[sectionKey] !== true,
+    [expanded],
+  )
+
+  const toggle = useCallback(
+    (sectionKey: string) => {
+      setExpanded((prev) => {
+        const next = { ...prev }
+        if (next[sectionKey]) {
+          // Already expanded → collapse back to default
+          delete next[sectionKey]
+        } else {
+          // Currently default (collapsed) → expand
+          next[sectionKey] = true
+        }
+        persist(next)
+        return next
+      })
+    },
+    [persist],
+  )
+
+  const reset = useCallback(() => {
+    setExpanded({})
+    if (typeof window === "undefined" || storageKey === null) return
+    try {
+      window.localStorage.removeItem(storageKey)
+    } catch {
+      // ignore
+    }
+  }, [storageKey])
+
+  const allKeys = useCallback(() => Object.keys(expanded), [expanded])
+
+  return { isCollapsed, toggle, reset, allKeys }
 }
 
 function normalizeFacts(value: unknown): Fact[] {
@@ -295,6 +386,49 @@ function Connector() {
   )
 }
 
+function CollapseTrigger({
+  sectionKey,
+  isOpen,
+  collapsedLabel,
+  expandedLabel,
+  count,
+  onToggle,
+  ariaControls,
+}: {
+  sectionKey: string
+  isOpen: boolean
+  collapsedLabel: string
+  expandedLabel: string
+  count: number
+  onToggle: () => void
+  ariaControls: string
+}) {
+  return (
+    <button
+      type="button"
+      data-section-key={sectionKey}
+      onClick={onToggle}
+      aria-expanded={isOpen}
+      aria-controls={ariaControls}
+      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 rounded"
+    >
+      <ChevronDown
+        className={`size-3.5 transition-transform duration-200 ${
+          isOpen ? "rotate-0" : "-rotate-90"
+        }`}
+      />
+      <span className="font-medium">
+        {isOpen ? expandedLabel : collapsedLabel}
+      </span>
+      {typeof count === "number" && count > 0 && (
+        <span className="text-[10px] text-muted-foreground/70 font-mono">
+          ({count})
+        </span>
+      )}
+    </button>
+  )
+}
+
 /* -------------------------------------------------------------------- */
 /* Layer: Core (single full-width card)                                 */
 /* -------------------------------------------------------------------- */
@@ -310,16 +444,13 @@ function CoreCard({ core }: { core: CoreView }) {
         readingHint="thesis"
       />
       <div className="px-5 py-4 space-y-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-mono text-amber-700 dark:text-amber-300 font-semibold">
-            {core.id}
-          </span>
-          {core.deduction_formula && (
+        {core.deduction_formula && (
+          <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="default" className="text-[10px] font-mono">
               推理范式 {core.deduction_formula}
             </Badge>
-          )}
-        </div>
+          </div>
+        )}
 
         <p className="text-[15px] leading-relaxed font-medium text-amber-950 dark:text-amber-100">
           {core.content}
@@ -355,19 +486,6 @@ function CoreCard({ core }: { core: CoreView }) {
             </p>
           </div>
         )}
-
-        {core.supporting_mid_ids && core.supporting_mid_ids.length > 0 && (
-          <div className="pt-3 border-t border-amber-200 dark:border-amber-800">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">
-              ↑ 基于下方中层观点
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {core.supporting_mid_ids.map((midId) => (
-                <RefChip key={midId} id={midId} direction="up" tone="warm" />
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )
@@ -377,39 +495,110 @@ function CoreCard({ core }: { core: CoreView }) {
 /* Layer: Mid views (full-width rows, one per mid)                      */
 /* -------------------------------------------------------------------- */
 
-function MidCard({ mid }: { mid: MidView }) {
+function MidCard({
+  mid,
+  bases,
+  facts,
+  isCollapsed,
+  toggle,
+}: {
+  mid: MidView
+  bases: BaseView[]
+  facts: Fact[]
+  isCollapsed: (key: string) => boolean
+  toggle: (key: string) => void
+}) {
+  const supportingBases = useMemo(() => {
+    if (!mid.supporting_base_ids || mid.supporting_base_ids.length === 0) {
+      return []
+    }
+    const idSet = new Set(mid.supporting_base_ids)
+    return bases.filter((b) => idSet.has(b.id))
+  }, [mid.supporting_base_ids, bases])
   return (
     <div className="bg-white/80 dark:bg-black/30 rounded-lg p-4 space-y-2 border border-indigo-100 dark:border-indigo-900 shadow-sm">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-mono text-indigo-700 dark:text-indigo-300 font-semibold">
-          {mid.id}
-        </span>
-        {mid.reasoning_dimension && (
+      {mid.reasoning_dimension && (
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline" className="text-[10px]">
             {mid.reasoning_dimension}
           </Badge>
-        )}
-      </div>
+        </div>
+      )}
       <p className="text-sm leading-relaxed text-foreground/90">
         {mid.content}
       </p>
-      {mid.supporting_base_ids && mid.supporting_base_ids.length > 0 && (
-        <div className="pt-2 mt-2 border-t border-indigo-100 dark:border-indigo-900">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-            ↑ 基于下方基础观点
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {mid.supporting_base_ids.map((bid) => (
-              <RefChip key={bid} id={bid} direction="up" />
-            ))}
-          </div>
-        </div>
+      {supportingBases.length > 0 && (
+        <MidSupportsCollapsible
+          midId={mid.id}
+          bases={supportingBases}
+          facts={facts}
+          isCollapsed={isCollapsed}
+          toggle={toggle}
+        />
       )}
     </div>
   )
 }
 
-function MidLayer({ mids }: { mids: MidView[] }) {
+function MidSupportsCollapsible({
+  midId,
+  bases,
+  facts,
+  isCollapsed,
+  toggle,
+}: {
+  midId: string
+  bases: BaseView[]
+  facts: Fact[]
+  isCollapsed: (key: string) => boolean
+  toggle: (key: string) => void
+}) {
+  const sectionKey = `mid:${midId}:supports`
+  const contentId = useId()
+  const open = !isCollapsed(sectionKey)
+  return (
+    <div className="pt-2 mt-2 border-t border-indigo-100 dark:border-indigo-900">
+      <Collapsible open={open}>
+        <CollapseTrigger
+          sectionKey={sectionKey}
+          isOpen={open}
+          collapsedLabel="展开基础观点"
+          expandedLabel="收起基础观点"
+          count={bases.length}
+          onToggle={() => toggle(sectionKey)}
+          ariaControls={contentId}
+        />
+        <CollapsibleContent id={contentId}>
+          <div className="pt-2 space-y-2 ml-4 border-l-2 border-indigo-200 dark:border-indigo-800 pl-3">
+            {bases.map((b) => (
+              <BaseCard
+                key={b.id}
+                base={b}
+                facts={facts}
+                isCollapsed={isCollapsed}
+                toggle={toggle}
+              />
+            ))}
+          </div>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
+  )
+}
+
+function MidLayer({
+  mids,
+  bases,
+  facts,
+  isCollapsed,
+  toggle,
+}: {
+  mids: MidView[]
+  bases: BaseView[]
+  facts: Fact[]
+  isCollapsed: (key: string) => boolean
+  toggle: (key: string) => void
+}) {
   return (
     <div className="bg-indigo-50/60 dark:bg-indigo-950/30 border-2 border-indigo-200 dark:border-indigo-800 rounded-xl shadow-sm">
       <LayerHeader
@@ -423,7 +612,13 @@ function MidLayer({ mids }: { mids: MidView[] }) {
       <div className="p-4 space-y-3">
         {mids.map((m, idx) => (
           <div key={m.id}>
-            <MidCard mid={m} />
+            <MidCard
+              mid={m}
+              bases={bases}
+              facts={facts}
+              isCollapsed={isCollapsed}
+              toggle={toggle}
+            />
             {idx < mids.length - 1 && (
               <Separator className="my-3 bg-indigo-100 dark:bg-indigo-900" />
             )}
@@ -438,94 +633,89 @@ function MidLayer({ mids }: { mids: MidView[] }) {
 /* Layer: Base views (full-width rows, one per base)                    */
 /* -------------------------------------------------------------------- */
 
-function BaseCard({ base }: { base: BaseView }) {
+function BaseCard({
+  base,
+  facts,
+  isCollapsed,
+  toggle,
+}: {
+  base: BaseView
+  facts: Fact[]
+  isCollapsed: (key: string) => boolean
+  toggle: (key: string) => void
+}) {
+  const groundingFacts = useMemo(() => {
+    if (!base.source_fact_refs || base.source_fact_refs.length === 0) {
+      return []
+    }
+    const idSet = new Set(base.source_fact_refs)
+    return facts.filter((f) => idSet.has(f.id))
+  }, [base.source_fact_refs, facts])
   return (
     <div className="bg-white/80 dark:bg-black/30 rounded-lg p-4 space-y-2 border border-blue-100 dark:border-blue-900 shadow-sm">
-      <div className="flex items-center gap-2">
-        <span className="text-xs font-mono text-blue-700 dark:text-blue-300 font-semibold">
-          {base.id}
-        </span>
-      </div>
       <p className="text-sm leading-relaxed text-foreground/90">
         {base.content}
       </p>
-      {base.source_fact_refs && base.source_fact_refs.length > 0 && (
-        <div className="pt-2 mt-2 border-t border-blue-100 dark:border-blue-900">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
-            ↓ 基于下方原始事实
-          </div>
-          <div className="flex flex-wrap gap-1">
-            {base.source_fact_refs.map((fid) => (
-              <RefChip key={fid} id={fid} direction="down" />
-            ))}
-          </div>
-        </div>
+      {groundingFacts.length > 0 && (
+        <BaseFactsCollapsible
+          baseId={base.id}
+          facts={groundingFacts}
+          isCollapsed={isCollapsed}
+          toggle={toggle}
+        />
       )}
     </div>
   )
 }
 
-function BaseLayer({ bases }: { bases: BaseView[] }) {
+function BaseFactsCollapsible({
+  baseId,
+  facts,
+  isCollapsed,
+  toggle,
+}: {
+  baseId: string
+  facts: Fact[]
+  isCollapsed: (key: string) => boolean
+  toggle: (key: string) => void
+}) {
+  const sectionKey = `base:${baseId}:facts`
+  const contentId = useId()
+  const open = !isCollapsed(sectionKey)
   return (
-    <div className="bg-blue-50/60 dark:bg-blue-950/30 border-2 border-blue-200 dark:border-blue-800 rounded-xl shadow-sm">
-      <LayerHeader
-        letter="b"
-        color="blue"
-        icon={<Quote className="size-4 text-blue-600" />}
-        title="基础观点"
-        count={bases.length}
-        readingHint={`${bases.length} 项`}
-      />
-      <div className="p-4 space-y-3">
-        {bases.map((b, idx) => (
-          <div key={b.id}>
-            <BaseCard base={b} />
-            {idx < bases.length - 1 && (
-              <Separator className="my-3 bg-blue-100 dark:bg-blue-900" />
-            )}
+    <div className="pt-2 mt-2 border-t border-blue-100 dark:border-blue-900">
+      <Collapsible open={open}>
+        <CollapseTrigger
+          sectionKey={sectionKey}
+          isOpen={open}
+          collapsedLabel="展开事实"
+          expandedLabel="收起事实"
+          count={facts.length}
+          onToggle={() => toggle(sectionKey)}
+          ariaControls={contentId}
+        />
+        <CollapsibleContent id={contentId}>
+          <div className="pt-2 space-y-0 ml-4 border-l-2 border-blue-200 dark:border-blue-800 pl-3">
+            {facts.map((f) => (
+              <FactRow key={f.id} fact={f} />
+            ))}
           </div>
-        ))}
-      </div>
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   )
 }
 
 /* -------------------------------------------------------------------- */
-/* Layer: Facts (one row per fact, full-width text)                      */
+/* Layer: Facts (one row per fact, used inline under BaseCard)           */
 /* -------------------------------------------------------------------- */
 
-function FactRow({ fact, index }: { fact: Fact; index: number }) {
+function FactRow({ fact }: { fact: Fact }) {
   return (
-    <div className="flex gap-3 px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-b-0 hover:bg-slate-100/40 dark:hover:bg-slate-900/40 transition-colors">
-      <span className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-mono mt-0.5">
-        {index + 1}
-      </span>
-      <span className="shrink-0 font-mono text-[11px] text-purple-700 dark:text-purple-300 font-semibold mt-1">
-        {fact.id}
-      </span>
-      <p className="flex-1 text-sm leading-relaxed text-foreground/90">
+    <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 last:border-b-0 hover:bg-slate-100/40 dark:hover:bg-slate-900/40 transition-colors">
+      <p className="text-sm leading-relaxed text-foreground/90">
         {fact.text}
       </p>
-    </div>
-  )
-}
-
-function FactsLayer({ facts }: { facts: Fact[] }) {
-  return (
-    <div className="bg-slate-50 dark:bg-slate-950/40 border-2 border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden">
-      <LayerHeader
-        letter="f"
-        color="slate"
-        icon={<FileText className="size-4 text-slate-600" />}
-        title="原始事实"
-        count={facts.length}
-        readingHint={`${facts.length} 项`}
-      />
-      <div>
-        {facts.map((f, idx) => (
-          <FactRow key={f.id || `f-${idx}`} fact={f} index={idx} />
-        ))}
-      </div>
     </div>
   )
 }
@@ -534,7 +724,15 @@ function FactsLayer({ facts }: { facts: Fact[] }) {
 /* Sidebar strips                                                         */
 /* -------------------------------------------------------------------- */
 
-function GroupsStrip({ groups }: { groups: InductionGroup[] }) {
+function GroupsStrip({
+  groups,
+  isCollapsed,
+  toggle,
+}: {
+  groups: InductionGroup[]
+  isCollapsed: (key: string) => boolean
+  toggle: (key: string) => void
+}) {
   if (groups.length === 0) return null
   return (
     <div className="border-t pt-4 mt-2">
@@ -549,35 +747,67 @@ function GroupsStrip({ groups }: { groups: InductionGroup[] }) {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
         {groups.map((g) => (
-          <div
+          <InductionGroupCard
             key={g.id}
-            className="bg-cyan-50/50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-900 rounded-md p-2.5 space-y-1.5"
-          >
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {g.dimension && (
-                <Badge variant="outline" className="text-[10px]">
-                  {g.dimension}
-                </Badge>
-              )}
-              <span className="font-mono text-[11px] text-cyan-700 dark:text-cyan-300 font-semibold">
-                {g.id}
-              </span>
-            </div>
-            {g.common_pattern && (
-              <p className="text-xs leading-relaxed text-foreground/80">
-                {g.common_pattern}
-              </p>
-            )}
-            {g.facts.length > 0 && (
-              <div className="pt-1.5 mt-1.5 border-t border-cyan-100 dark:border-cyan-900 flex flex-wrap gap-1">
-                {g.facts.map((fid) => (
-                  <RefChip key={fid} id={fid} direction="down" />
-                ))}
-              </div>
-            )}
-          </div>
+            group={g}
+            isCollapsed={isCollapsed}
+            toggle={toggle}
+          />
         ))}
       </div>
+    </div>
+  )
+}
+
+function InductionGroupCard({
+  group,
+  isCollapsed,
+  toggle,
+}: {
+  group: InductionGroup
+  isCollapsed: (key: string) => boolean
+  toggle: (key: string) => void
+}) {
+  const sectionKey = `group:${group.id}:body`
+  const contentId = useId()
+  const open = !isCollapsed(sectionKey)
+  return (
+    <div className="bg-cyan-50/50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-900 rounded-md p-2.5 space-y-1.5">
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {group.dimension && (
+          <Badge variant="outline" className="text-[10px]">
+            {group.dimension}
+          </Badge>
+        )}
+        <span className="font-mono text-[11px] text-cyan-700 dark:text-cyan-300 font-semibold">
+          {group.id}
+        </span>
+      </div>
+      <Collapsible open={open}>
+        <CollapseTrigger
+          sectionKey={sectionKey}
+          isOpen={open}
+          collapsedLabel="展开分组内容"
+          expandedLabel="收起分组内容"
+          count={group.facts.length}
+          onToggle={() => toggle(sectionKey)}
+          ariaControls={contentId}
+        />
+        <CollapsibleContent id={contentId}>
+          {group.common_pattern && (
+            <p className="text-xs leading-relaxed text-foreground/80 pt-1.5">
+              {group.common_pattern}
+            </p>
+          )}
+          {group.facts.length > 0 && (
+            <div className="pt-1.5 mt-1.5 border-t border-cyan-100 dark:border-cyan-900 flex flex-wrap gap-1">
+              {group.facts.map((fid) => (
+                <RefChip key={fid} id={fid} direction="down" />
+              ))}
+            </div>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
     </div>
   )
 }
@@ -644,7 +874,14 @@ export function PyramidView({
   midView,
   coreView,
   pyramidJudgement,
+  contentType,
+  contentId,
 }: PyramidViewProps) {
+  const contentKey =
+    contentType && contentId !== undefined && contentId !== null
+      ? `${contentType}:${String(contentId)}`
+      : null
+  const { isCollapsed, toggle } = useCollapseState(contentKey)
   const facts = useMemo(() => normalizeFacts(rawFacts), [rawFacts])
   const groups = useMemo(
     () => normalizeGroups(inductionGroups),
@@ -719,10 +956,6 @@ export function PyramidView({
             )}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
-          <CornerDownRight className="size-3" />
-          自上而下阅读:核心观点 → 中层观点 → 基础观点 → 原始事实
-        </p>
       </CardHeader>
 
       <CardContent className="space-y-3">
@@ -737,30 +970,22 @@ export function PyramidView({
             </>
           )}
           {mids.length > 0 && (
-            <>
-              <div className="w-full">
-                <MidLayer mids={mids} />
-              </div>
-              {bases.length > 0 && <Connector />}
-            </>
-          )}
-          {bases.length > 0 && (
-            <>
-              <div className="w-full">
-                <BaseLayer bases={bases} />
-              </div>
-              {facts.length > 0 && <Connector />}
-            </>
-          )}
-          {facts.length > 0 && (
             <div className="w-full">
-              <FactsLayer facts={facts} />
+              <MidLayer
+                mids={mids}
+                bases={bases}
+                facts={facts}
+                isCollapsed={isCollapsed}
+                toggle={toggle}
+              />
             </div>
           )}
         </div>
 
         {/* Sidebar strips */}
-        {groups.length > 0 && <GroupsStrip groups={groups} />}
+        {groups.length > 0 && (
+          <GroupsStrip groups={groups} isCollapsed={isCollapsed} toggle={toggle} />
+        )}
         {judgement && <JudgementStrip judgement={judgement} />}
       </CardContent>
     </Card>

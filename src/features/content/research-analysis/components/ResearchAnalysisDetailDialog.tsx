@@ -90,6 +90,8 @@ export function ResearchAnalysisDetailDialog({
                 midView={item.midView}
                 coreView={item.coreView}
                 pyramidJudgement={item.pyramidJudgement}
+                contentType="research-analysis"
+                contentId={item.id}
               />
 
               {/* Stock Mapping */}
