@@ -59,7 +59,7 @@ export function useTree() {
     setL1Error(null)
     try {
       const res = await industryChainApi.getL1List()
-      const items = Array.isArray(res.data?.data) ? res.data.data : []
+      const items: L1Item[] = Array.isArray(res.data) ? res.data : []
       setTree(
         items.map((it: L1Item) => ({
           id: `1-${it.code}`,
@@ -119,7 +119,7 @@ export function useTree() {
       setNodeLoading(l1.id, true)
       try {
         const res = await industryChainApi.getL2List(l1.code)
-        const items: L2Item[] = Array.isArray(res.data?.data) ? res.data.data : []
+        const items: L2Item[] = Array.isArray(res.data) ? res.data : []
         setChildrenFor(
           l1.id,
           items.map((it) => ({
@@ -147,9 +147,7 @@ export function useTree() {
       setNodeLoading(l2.id, true)
       try {
         const res = await industryChainApi.getChains(l2.code)
-        const items: ChainItem[] = Array.isArray(res.data?.data)
-          ? res.data.data
-          : []
+        const items: ChainItem[] = Array.isArray(res.data) ? res.data : []
         setChildrenFor(
           l2.id,
           items.map((it) => ({
@@ -178,9 +176,7 @@ export function useTree() {
       setNodeLoading(chain.id, true)
       try {
         const res = await industryChainApi.getVersions(chain.code)
-        const items: VersionItem[] = Array.isArray(res.data?.data)
-          ? res.data.data
-          : []
+        const items: VersionItem[] = Array.isArray(res.data) ? res.data : []
         setChildrenFor(
           chain.id,
           items.map((it) => ({
