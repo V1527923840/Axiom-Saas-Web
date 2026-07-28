@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { toast } from "sonner"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -31,18 +32,30 @@ import {
 } from "@/components/ui/dialog"
 import { MenuTree } from "@/features/menus/components/menu-tree"
 import type { User, UserFormValues } from "../types"
+import { DEFAULT_USER_PASSWORD } from "../types"
 import { useAuth } from "@/contexts/auth-context"
 import { usePlans } from "@/features/plans/hooks/use-plans"
-import { get } from "@/lib/api"
+import { useRoles } from "../hooks/use-roles"
+import { MultiSelect } from "@/components/ui/multi-select"
+import { get, post } from "@/lib/api"
 import type { MenuTreeNode } from "@/features/menus/types"
 
 const userFormSchema = z.object({
   name: z.string().min(2, "名字至少需要2个字符"),
   email: z.string().email("请输入有效的邮箱地址"),
-  role: z.enum(["super_admin", "admin", "user"]),
+  roleIds: z.array(z.number()).default([]),
   tier: z.enum(["Lv0", "Lv1", "Lv2", "Lv3"]),
   status: z.enum(["active", "inactive", "suspended", "pending"]),
   currentPlanId: z.string().optional(),
+  // Only validated for create flow. Empty string is allowed and means
+  // "use the shared default password" (applied by the hook before send).
+  password: z
+    .string()
+    .optional()
+    .refine(
+      (val) => !val || val.length === 0 || val.length >= 6,
+      "密码至少需要6个字符",
+    ),
 })
 
 interface UserFormProps {
@@ -50,20 +63,31 @@ interface UserFormProps {
   onSubmit: (values: UserFormValues) => void
   onCancel?: () => void
   loading?: boolean
+  /**
+   * Edit-only: handler invoked when the operator clicks "重置密码".
+   * Receives the user id; the caller is responsible for actually issuing
+   * the password reset (the form does not own that API call). Returns a
+   * promise so the button can show a loading state.
+   */
+  onResetPassword?: (userId: string) => Promise<void>
 }
 
-export function UserForm({ initialData, onSubmit, onCancel, loading }: UserFormProps) {
+export function UserForm({ initialData, onSubmit, onCancel, loading, onResetPassword }: UserFormProps) {
   const { token } = useAuth()
   const { plans, fetchPlans } = usePlans()
+  const { roles: roleOptions, fetchRoles } = useRoles()
+  const USE_MULTI_ROLES = import.meta.env.VITE_USER_MULTI_ROLES === "true"
   const form = useForm({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
       name: initialData?.name || "",
       email: initialData?.email || "",
-      role: initialData?.role || "user",
+      roleIds: initialData?.roles?.map((r) => r.id) ?? [],
       tier: initialData?.tier || "Lv0",
       status: initialData?.status || "active",
       currentPlanId: initialData?.currentPlanId || "",
+      // Empty string => hook substitutes DEFAULT_USER_PASSWORD before send.
+      password: "",
     },
   })
 
@@ -75,9 +99,48 @@ export function UserForm({ initialData, onSubmit, onCancel, loading }: UserFormP
   useEffect(() => {
     if (token) {
       fetchPlans({ page: 0, pageSize: 50, status: 'active' })
+      if (USE_MULTI_ROLES) {
+        fetchRoles()
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
+
+  // Re-sync the form whenever the target user changes (e.g. switching
+  // between two users without closing the dialog, or after the parent
+  // re-mounts the form with new initialData). useForm only reads
+  // defaultValues on the first render, so without this reset the inputs
+  // would keep showing the first user's values.
+  useEffect(() => {
+    form.reset({
+      name: initialData?.name || "",
+      email: initialData?.email || "",
+      roleIds: initialData?.roles?.map((r) => r.id) ?? [],
+      tier: initialData?.tier || "Lv0",
+      status: initialData?.status || "active",
+      currentPlanId: initialData?.currentPlanId || "",
+      password: "",
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData?.id])
+
+  // Edit-mode preload of roleIds via GET /v1/users/:id/roles. When the
+  // multi-role flag is on and we're editing an existing user, fetch the
+  // authoritative role set from the server (the user payload only carries
+  // a legacy `role` field for backward compat).
+  useEffect(() => {
+    if (USE_MULTI_ROLES && initialData?.id && token) {
+      (async () => {
+        const response = await get<number[]>(
+          `/v1/users/${initialData.id}/roles`,
+          { token: token ?? undefined },
+        )
+        const ids = Array.isArray(response.data) ? response.data : []
+        form.setValue("roleIds", ids)
+      })()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialData?.id, token, USE_MULTI_ROLES])
 
   const handleSubmit = (values: z.infer<typeof userFormSchema>) => {
     onSubmit(values as UserFormValues)
@@ -131,6 +194,30 @@ export function UserForm({ initialData, onSubmit, onCancel, loading }: UserFormP
     setMenuDialogOpen(true)
   }
 
+  const [resetting, setResetting] = useState(false)
+  const handleResetPassword = async () => {
+    if (!initialData?.id || !onResetPassword) return
+    // Lightweight confirm via window.confirm — avoids pulling in a dialog
+    // for a one-click admin action. Falls back gracefully if confirm isn't
+    // available (e.g. inside certain test runners).
+    const ok = typeof window === "undefined"
+      ? true
+      : window.confirm(
+          `确认将 ${initialData.name} 的密码重置为默认密码 ${DEFAULT_USER_PASSWORD}?`,
+        )
+    if (!ok) return
+    setResetting(true)
+    try {
+      await onResetPassword(initialData.id)
+      toast.success(`密码已重置为 ${DEFAULT_USER_PASSWORD}`)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "未知错误"
+      toast.error(`重置密码失败: ${message}`)
+    } finally {
+      setResetting(false)
+    }
+  }
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
@@ -164,25 +251,73 @@ export function UserForm({ initialData, onSubmit, onCancel, loading }: UserFormP
           )}
         />
 
+        {/* Password is only collected at create time. For edits we don't
+            expose a password change here — that's a separate self-service
+            flow. The hook substitutes a shared default when this field is
+            left blank, so the new user can log in immediately. */}
+        {!initialData && (
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>初始密码</FormLabel>
+                <FormControl>
+                  <Input
+                    type="password"
+                    placeholder={`留空将使用默认密码 ${DEFAULT_USER_PASSWORD}`}
+                    autoComplete="new-password"
+                    {...field}
+                  />
+                </FormControl>
+                <FormDescription>
+                  留空则使用统一默认密码 ({DEFAULT_USER_PASSWORD}),用户可在首次登录后自行修改
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
         <FormField
           control={form.control}
-          name="role"
+          name="roleIds"
           render={({ field }) => (
             <FormItem>
               <FormLabel>角色</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择用户角色" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="super_admin">超级管理员</SelectItem>
-                  <SelectItem value="admin">管理员</SelectItem>
-                  <SelectItem value="user">普通用户</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormDescription>用户的系统角色权限</FormDescription>
+              {USE_MULTI_ROLES ? (
+                <>
+                  <MultiSelect
+                    options={roleOptions.map((r) => ({
+                      label: r.isSuperAdmin
+                        ? `${r.name}(超管)`
+                        : r.name,
+                      value: String(r.id),
+                    }))}
+                    selected={(field.value ?? []).map(String)}
+                    onChange={(vals) => field.onChange(vals.map(Number))}
+                    placeholder="选择用户角色"
+                  />
+                  <FormDescription>
+                    勾选该用户拥有的角色;超级管理员拥有全部功能权限。
+                  </FormDescription>
+                </>
+              ) : (
+                <Select
+                  onValueChange={(v) => field.onChange([Number(v)])}
+                  defaultValue={String(field.value?.[0] ?? 2)}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择用户角色" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="1">超级管理员</SelectItem>
+                    <SelectItem value="2">管理员</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
               <FormMessage />
             </FormItem>
           )}
@@ -259,6 +394,32 @@ export function UserForm({ initialData, onSubmit, onCancel, loading }: UserFormP
           </div>
         </div>
 
+        {/* Edit-only: reset the user's password back to the shared default.
+            Kept separate from "保存修改" so it doesn't accidentally clobber
+            any other form fields the admin was about to edit. */}
+        {initialData?.id && onResetPassword && (
+          <div className="border-t pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-medium">密码管理</h4>
+                <p className="text-xs text-muted-foreground">
+                  重置后将密码设为默认密码 ({DEFAULT_USER_PASSWORD}),用户下次登录需使用此密码
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleResetPassword}
+                disabled={resetting || loading}
+                className="cursor-pointer"
+              >
+                {resetting ? "重置中..." : "重置密码"}
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="flex justify-end gap-3">
           {onCancel && (
             <Button type="button" variant="outline" onClick={onCancel} className="cursor-pointer">
@@ -302,20 +463,24 @@ export function UserForm({ initialData, onSubmit, onCancel, loading }: UserFormP
             </Button>
             <Button
               onClick={async () => {
-                if (initialData?.id) {
-                  try {
-                    await fetch(`${import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api"}/v1/users/${initialData.id}/extra-menus`, {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                      },
-                      body: JSON.stringify({ menuIds: checkedMenuIds }),
-                    })
-                    setMenuDialogOpen(false)
-                  } catch (err) {
-                    console.error("Failed to save user menus:", err)
-                  }
+                // For new users there is no server-side user id yet, so the
+                // POST /v1/users/:id/extra-menus endpoint cannot be called.
+                // Block the click + surface a hint instead of silently doing
+                // nothing (the previous behavior left the user staring at
+                // an open dialog with no feedback).
+                if (!initialData?.id) {
+                  toast.info("请先保存用户,创建成功后再分配菜单")
+                  return
+                }
+                try {
+                  await post(`/v1/users/${initialData.id}/extra-menus`, {
+                    menuIds: checkedMenuIds,
+                  }, { token: token ?? undefined })
+                  setMenuDialogOpen(false)
+                  toast.success("菜单已保存")
+                } catch (err) {
+                  const message = err instanceof Error ? err.message : "未知错误"
+                  toast.error(`菜单保存失败: ${message}`)
                 }
               }}
               className="cursor-pointer"
