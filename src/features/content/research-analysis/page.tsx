@@ -13,19 +13,11 @@ import { Label } from "@/components/ui/label"
 import { Calendar } from "@/components/ui/calendar"
 import { CalendarIcon } from "lucide-react"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { X } from "lucide-react"
-import { CATEGORY_L1_OPTIONS } from "./types"
 import { formatLocalDate } from "@/lib/utils"
 
 export default function ResearchAnalysisPage() {
@@ -41,8 +33,6 @@ export default function ResearchAnalysisPage() {
     setPageSize,
     openDetail,
     closeDetail,
-    setCategoryL1,
-    setCategoryL2,
     setKeyword,
     setDateRange,
     resetFilters,
@@ -53,7 +43,7 @@ export default function ResearchAnalysisPage() {
   useEffect(() => {
     if (initialized.current) return
     initialized.current = true
-    void fetchItems(0, {})
+    void fetchItems(0, { sortBy: "createdAt", sortOrder: "desc" })
   }, [fetchItems])
 
   const handleSortingChange = useCallback(
@@ -73,8 +63,6 @@ export default function ResearchAnalysisPage() {
 
   const handleSearch = useCallback(() => {
     void fetchItems(0, {
-      categoryL1: filters.categoryL1 || undefined,
-      categoryL2: filters.categoryL2 || undefined,
       keyword: filters.keyword || undefined,
       dateFrom: filters.dateRange?.from
         ? formatLocalDate(filters.dateRange.from)
@@ -87,46 +75,17 @@ export default function ResearchAnalysisPage() {
 
   const handleReset = useCallback(() => {
     resetFilters()
-    void fetchItems(0, {})
+    void fetchItems(0, { sortBy: "createdAt", sortOrder: "desc" })
   }, [resetFilters, fetchItems])
 
   return (
     <BaseLayout title="机构研报" description="浏览和筛选机构研究报告">
       <div className="px-4 lg:px-6 space-y-4">
-        {/* Filters */}
+        {/* Filters — only 文档名称 + 发布日期 remain. The previous
+            一级/二级分类 selects were dropped per UX request. */}
         <div className="flex flex-wrap items-end gap-4 p-4 bg-muted/30 rounded-lg">
           <div className="space-y-1">
-            <Label className="text-xs">一级分类</Label>
-            <Select
-              value={filters.categoryL1 ?? "all"}
-              onValueChange={(value) => setCategoryL1(value === "all" ? null : value)}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="全部" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                {CATEGORY_L1_OPTIONS.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs">二级分类</Label>
-            <Input
-              placeholder="搜索二级分类..."
-              value={filters.categoryL2 ?? ""}
-              onChange={(e) => setCategoryL2(e.target.value)}
-              className="w-[140px]"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs">关键词</Label>
+            <Label className="text-xs">文档名称</Label>
             <Input
               placeholder="搜索文档名..."
               value={filters.keyword}
@@ -136,7 +95,7 @@ export default function ResearchAnalysisPage() {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs">日期范围</Label>
+            <Label className="text-xs">收录日期</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -153,7 +112,7 @@ export default function ResearchAnalysisPage() {
                       format(filters.dateRange.from, "yyyy-MM-dd")
                     )
                   ) : (
-                    "选择日期范围"
+                    "选择收录日期范围"
                   )}
                 </Button>
               </PopoverTrigger>

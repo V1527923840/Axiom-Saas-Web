@@ -13,8 +13,6 @@ export const researchApi = {
     page: number,
     pageSize: number,
     filters?: {
-      categoryL1?: string;
-      categoryL2?: string;
       valueRating?: string;
       keyword?: string;
       dateFrom?: string;

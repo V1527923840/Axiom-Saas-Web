@@ -10,7 +10,6 @@ export interface ResearchAnalysisItem {
   id: number;
   documentName: string;
   keyThesis: string;
-  analyzedAt: string;
   createdAt: string;
   categoryL1: string;
   categoryL2: string;
@@ -38,7 +37,14 @@ export interface ResearchAnalysisDetail extends ResearchAnalysisItem {
   updatedAt: string;
 }
 
-// Query params for research analysis
+// Query params for research analysis.
+// Note: `categoryL1`/`categoryL2` used to live here but the operators
+// asked for them to be removed from the search bar; the backend DTO
+// still accepts them so any pre-existing API clients keep working.
+//
+// The search bar's date filter ("收录日期") now targets the existing
+// `createdAt` column (when the row was inserted), so `sortBy` is
+// keyed off `createdAt` as well.
 export interface ResearchAnalysisQueryParams {
   page?: number;
   pageSize?: number;
@@ -47,7 +53,7 @@ export interface ResearchAnalysisQueryParams {
   keyword?: string;
   dateFrom?: string;
   dateTo?: string;
-  sortBy?: 'analyzedAt' | 'createdAt';
+  sortBy?: 'createdAt';
   sortOrder?: 'asc' | 'desc';
 }
 

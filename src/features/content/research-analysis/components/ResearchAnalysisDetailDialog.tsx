@@ -59,11 +59,6 @@ export function ResearchAnalysisDetailDialog({
         <DialogHeader className="shrink-0">
           <DialogTitle className="text-xl leading-tight pr-8">{item.documentName}</DialogTitle>
           <div className="flex gap-2 mt-2 flex-wrap items-center">
-            {item.analyzedAt && (
-              <Badge variant="secondary">
-                分析: {formatDate(item.analyzedAt)}
-              </Badge>
-            )}
             {item.categoryL1 && (
               <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                 {item.categoryL1}
