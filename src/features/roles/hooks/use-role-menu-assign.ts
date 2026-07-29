@@ -1,9 +1,15 @@
 "use client"
 
 import { useState, useCallback } from "react"
-import { get, post } from "@/lib/api"
+import { get, post, del } from "@/lib/api"
 import type { Role, MenuTreeNode } from "../../menus/types"
 import { useAuth } from "@/contexts/auth-context"
+
+export interface CreateRoleInput {
+  name: string
+  code: string
+  description?: string
+}
 
 export function useRoleMenuAssign() {
   const { token } = useAuth()
@@ -19,11 +25,20 @@ export function useRoleMenuAssign() {
     setLoading(true)
     setError(null)
     try {
-      const response = await get<{ data: Role[] }>("/v1/roles", {
+      // The RolesController returns `{ data: RoleEntity[] }`, which the
+      // global TransformResponseInterceptor passes through unchanged
+      // (it treats `{ data }` as already-enveloped). The resulting wire
+      // body is `{ data: Role[], message: undefined }`. Through
+      // api.ts's `get<T>` typing, `response.data` IS the array (T =
+      // Role[]) — not a `{ data: Role[] }` wrapper. The previous code
+      // tried `get<{data:Role[]}>` and then read
+      // `(response.data as {data: Role[]}).data`, which is always
+      // `undefined` at runtime and produced an empty roles array.
+      const response = await get<Role[]>("/v1/roles", {
         token: token || undefined,
       })
-      const rolesData = (response.data as { data?: Role[] })?.data || []
-      setRoles(Array.isArray(rolesData) ? rolesData : [])
+      const rolesData = Array.isArray(response.data) ? response.data : []
+      setRoles(rolesData)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch roles")
     } finally {
@@ -94,6 +109,64 @@ export function useRoleMenuAssign() {
     }
   }, [token])
 
+  // POST /v1/roles — add a brand-new role. The backend returns the
+  // created `RoleEntity`, which the controller wraps via the global
+  // interceptor as `{ data: Role, message }`. Reading `response.data`
+  // is the unwrapped entity (same shape as Role).
+  const createRole = useCallback(
+    async (input: CreateRoleInput): Promise<Role | null> => {
+      setLoading(true)
+      setError(null)
+      try {
+        const response = await post<Role>("/v1/roles", input, {
+          token: token || undefined,
+        })
+        const created = response.data
+        if (!created) return null
+        // Optimistic local update so the new row shows up immediately
+        // without a round-trip. The next full fetch will reconcile if
+        // the optimistic insert drifts from the server's source of truth.
+        setRoles((prev) => [...prev, created])
+        return created
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to create role",
+        )
+        throw err
+      } finally {
+        setLoading(false)
+      }
+    },
+    [token],
+  )
+
+  // DELETE /v1/roles/:id — hard delete (the role entity doesn't soft-
+  // delete). On success we drop the row from local state; on failure
+  // we re-throw so the caller can surface a toast and skip the
+  // optimistic removal.
+  const deleteRole = useCallback(
+    async (roleId: string): Promise<void> => {
+      setLoading(true)
+      setError(null)
+      try {
+        await del(`/v1/roles/${roleId}`, {
+          token: token || undefined,
+        })
+        setRoles((prev) =>
+          prev.filter((r) => String(r.id) !== String(roleId)),
+        )
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to delete role",
+        )
+        throw err
+      } finally {
+        setLoading(false)
+      }
+    },
+    [token],
+  )
+
   const selectRole = useCallback((roleId: string) => {
     setSelectedRoleId(roleId)
   }, [])
@@ -110,6 +183,8 @@ export function useRoleMenuAssign() {
     fetchMenuTree,
     fetchRoleMenus,
     saveRoleMenus,
+    createRole,
+    deleteRole,
     selectRole,
     setCheckedMenuIds,
   }
