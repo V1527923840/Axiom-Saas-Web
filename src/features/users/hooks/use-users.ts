@@ -90,10 +90,6 @@ export function useUsers() {
         // shared default so the user can actually log in. The backend
         // hashes whatever string it receives.
         password: data.password?.trim() || DEFAULT_USER_PASSWORD,
-        // Send both: backend prefers roleIds (multi-role), fallback
-        // role.id keeps the legacy single-FK column populated for
-        // list page read performance.
-        role: data.roleIds?.[0] ? { id: data.roleIds[0] } : undefined,
         roleIds: data.roleIds ?? [],
         status: { id: data.status === "active" ? 1 : data.status === "inactive" ? 2 : 3 },
         tier: data.tier,
@@ -107,7 +103,7 @@ export function useUsers() {
         id: String(rawData.id),
         name: `${rawData.firstName || ''}${rawData.lastName || ''}`.trim() || rawData.email || 'Unknown',
         email: rawData.email || '',
-        role: (typeof rawData.role === 'string' ? rawData.role : rawData.role?.name?.toLowerCase()) as User['role'] || 'user',
+        role: rawData.role ?? null,
         roles: Array.isArray(rawData.roles) ? rawData.roles : [],
         tier: rawData.tier || 'Lv0',
         currentPlanId: rawData.currentPlanId,
@@ -147,10 +143,8 @@ export function useUsers() {
       if (data.email !== undefined) {
         apiData.email = data.email
       }
-      if (data.role !== undefined || data.roleIds !== undefined) {
-        const ids = data.roleIds ?? (data.role ? [data.role] : [])
-        apiData.roleIds = ids
-        if (ids[0]) apiData.role = { id: ids[0] }
+      if (data.roleIds !== undefined) {
+        apiData.roleIds = data.roleIds
       }
       if (data.status) {
         apiData.status = { id: data.status === 'active' ? 1 : data.status === 'inactive' ? 2 : 3 }
@@ -176,7 +170,7 @@ export function useUsers() {
         id: String(rawData.id),
         name: `${rawData.firstName || ''}${rawData.lastName || ''}`.trim() || rawData.email || 'Unknown',
         email: rawData.email || '',
-        role: (typeof rawData.role === 'string' ? rawData.role : rawData.role?.name?.toLowerCase()) as User['role'] || 'user',
+        role: rawData.role ?? null,
         roles: Array.isArray(rawData.roles) ? rawData.roles : [],
         tier: rawData.tier || 'Lv0',
         currentPlanId: rawData.currentPlanId,

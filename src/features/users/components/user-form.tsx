@@ -76,7 +76,6 @@ export function UserForm({ initialData, onSubmit, onCancel, loading, onResetPass
   const { token } = useAuth()
   const { plans, fetchPlans } = usePlans()
   const { roles: roleOptions, fetchRoles } = useRoles()
-  const USE_MULTI_ROLES = import.meta.env.VITE_USER_MULTI_ROLES === "true"
   const form = useForm({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
@@ -99,9 +98,7 @@ export function UserForm({ initialData, onSubmit, onCancel, loading, onResetPass
   useEffect(() => {
     if (token) {
       fetchPlans({ page: 0, pageSize: 50, status: 'active' })
-      if (USE_MULTI_ROLES) {
-        fetchRoles()
-      }
+      fetchRoles()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
@@ -124,12 +121,11 @@ export function UserForm({ initialData, onSubmit, onCancel, loading, onResetPass
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialData?.id])
 
-  // Edit-mode preload of roleIds via GET /v1/users/:id/roles. When the
-  // multi-role flag is on and we're editing an existing user, fetch the
-  // authoritative role set from the server (the user payload only carries
-  // a legacy `role` field for backward compat).
+  // Edit-mode preload of roleIds via GET /v1/users/:id/roles. When editing
+  // an existing user, fetch the authoritative role set from the server
+  // (the user payload only carries a legacy `role` field for backward compat).
   useEffect(() => {
-    if (USE_MULTI_ROLES && initialData?.id && token) {
+    if (initialData?.id && token) {
       (async () => {
         const response = await get<number[]>(
           `/v1/users/${initialData.id}/roles`,
@@ -140,7 +136,7 @@ export function UserForm({ initialData, onSubmit, onCancel, loading, onResetPass
       })()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialData?.id, token, USE_MULTI_ROLES])
+  }, [initialData?.id, token])
 
   const handleSubmit = (values: z.infer<typeof userFormSchema>) => {
     onSubmit(values as UserFormValues)
@@ -285,39 +281,20 @@ export function UserForm({ initialData, onSubmit, onCancel, loading, onResetPass
           render={({ field }) => (
             <FormItem>
               <FormLabel>角色</FormLabel>
-              {USE_MULTI_ROLES ? (
-                <>
-                  <MultiSelect
-                    options={roleOptions.map((r) => ({
-                      label: r.isSuperAdmin
-                        ? `${r.name}(超管)`
-                        : r.name,
-                      value: String(r.id),
-                    }))}
-                    selected={(field.value ?? []).map(String)}
-                    onChange={(vals) => field.onChange(vals.map(Number))}
-                    placeholder="选择用户角色"
-                  />
-                  <FormDescription>
-                    勾选该用户拥有的角色;超级管理员拥有全部功能权限。
-                  </FormDescription>
-                </>
-              ) : (
-                <Select
-                  onValueChange={(v) => field.onChange([Number(v)])}
-                  defaultValue={String(field.value?.[0] ?? 2)}
-                >
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="选择用户角色" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="1">超级管理员</SelectItem>
-                    <SelectItem value="2">管理员</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
+              <MultiSelect
+                options={roleOptions.map((r) => ({
+                  label: r.isSuperAdmin
+                    ? `${r.name}(超管)`
+                    : r.name,
+                  value: String(r.id),
+                }))}
+                selected={(field.value ?? []).map(String)}
+                onChange={(vals) => field.onChange(vals.map(Number))}
+                placeholder="选择用户角色"
+              />
+              <FormDescription>
+                勾选该用户拥有的角色;超级管理员拥有全部功能权限。
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
