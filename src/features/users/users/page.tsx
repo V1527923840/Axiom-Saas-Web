@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useRef } from "react"
+import { toast } from "sonner"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { useAuth } from "@/contexts/auth-context"
@@ -111,8 +112,10 @@ export default function UsersPage() {
     if (userToDelete) {
       try {
         await deleteUser(userToDelete.id)
+        toast.success(`已删除用户 ${userToDelete.name}`)
       } catch (error) {
-        console.error("Failed to delete user:", error)
+        const message = error instanceof Error ? error.message : "未知错误"
+        toast.error(`删除失败: ${message}`)
       }
     }
   }
@@ -121,15 +124,28 @@ export default function UsersPage() {
     try {
       if (selectedUser) {
         await updateUser(selectedUser.id, values)
+        toast.success("用户已更新")
       } else {
         await createUser(values as any)
+        toast.success("用户已创建")
       }
       setFormDialogOpen(false)
       setDialogOpen(false)
       setSelectedUser(null)
     } catch (error) {
-      console.error("Failed to save user:", error)
+      // Surface backend errors (e.g. 422 validation, 422 emailAlreadyExists)
+      // instead of silently logging to console — the user needs feedback.
+      const message = error instanceof Error ? error.message : "未知错误"
+      toast.error(`${selectedUser ? "更新" : "创建"}失败: ${message}`)
     }
+  }
+
+  // Edit-only: reset the targeted user's password back to the default.
+  // Implemented as a focused PATCH that only carries `password` so we
+  // don't disturb any unsaved edits the operator may have made in the
+  // form before clicking the reset button.
+  const handleResetPassword = async (userId: string) => {
+    await updateUser(userId, { password: "" } as any)
   }
 
   const columns = usersColumns({ onView: handleView, onEdit: handleEdit, onDelete: handleDelete })
@@ -235,6 +251,7 @@ export default function UsersPage() {
                 setSelectedUser(null)
               }}
               loading={loading}
+              onResetPassword={handleResetPassword}
             />
           </div>
         </div>

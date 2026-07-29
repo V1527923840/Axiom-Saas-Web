@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { SidebarConfigProvider } from "@/contexts/sidebar-context"
 import { AuthProvider } from "@/contexts/auth-context"
 import { MenuProvider } from "@/contexts/menu-context"
+import { Toaster } from "@/components/ui/sonner"
 
 interface ProvidersProps {
   children: ReactNode
@@ -17,6 +18,7 @@ export function Providers({ children }: ProvidersProps) {
         <SidebarConfigProvider>
           <MenuProvider>
             {children}
+            <Toaster />
           </MenuProvider>
         </SidebarConfigProvider>
       </AuthProvider>
