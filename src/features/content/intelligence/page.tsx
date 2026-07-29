@@ -7,50 +7,40 @@ import { DataTable } from "@/components/data-table"
 import { columns } from "./components/IntelligenceColumns"
 import { IntelligenceDetailDialog } from "./components/IntelligenceDetailDialog"
 import { useIntelligencePostsStore } from "./hooks/use-intelligence-posts"
-import { useIntelligenceFilters } from "./hooks/use-intelligence-filters"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Calendar } from "@/components/ui/calendar"
 import { CalendarIcon } from "lucide-react"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { X } from "lucide-react"
-import { CATEGORY_L1_OPTIONS } from "./types"
 import { formatLocalDate } from "@/lib/utils"
 
 export default function IntelligencePostsPage() {
+  // Filter state moved from a separate useIntelligenceFilters hook into
+  // the store below — pagination (setPage/setPageSize) now picks up the
+  // latest saved filters automatically, instead of silently dropping them
+  // when the operator clicks prev/next without re-running 搜索.
   const {
     posts,
     loading,
     pagination,
     selectedItem,
     detailDialogOpen,
+    filters,
     fetchPosts,
     setPage,
     setPageSize,
     openDetail,
     closeDetail,
-  } = useIntelligencePostsStore()
-
-  const {
-    filters,
-    setCategoryL1,
-    setCategoryL2,
     setTitle,
     setDateRange,
     resetFilters,
-  } = useIntelligenceFilters()
+  } = useIntelligencePostsStore()
 
   // Initial fetch — guard against React 19 strict-mode double-fire
   const initialized = useRef(false)
@@ -75,19 +65,13 @@ export default function IntelligencePostsPage() {
     [fetchPosts, pagination.page],
   )
 
+  // 搜索 button: reset to page 0 and re-fetch. We pass empty params —
+  // the store's fetchPosts will then read from filtersRef and re-attach
+  // the latest title / dateRange values the operator typed into the
+  // search bar. The page doesn't need to construct the query manually.
   const handleSearch = useCallback(() => {
-    void fetchPosts(0, {
-      categoryL1: filters.categoryL1 || undefined,
-      categoryL2: filters.categoryL2 || undefined,
-      title: filters.title || undefined,
-      dateFrom: filters.dateRange?.from
-        ? formatLocalDate(filters.dateRange.from)
-        : undefined,
-      dateTo: filters.dateRange?.to
-        ? formatLocalDate(filters.dateRange.to)
-        : undefined,
-    })
-  }, [fetchPosts, filters])
+    void fetchPosts(0, {})
+  }, [fetchPosts])
 
   const handleReset = useCallback(() => {
     resetFilters()
@@ -97,38 +81,11 @@ export default function IntelligencePostsPage() {
   return (
     <BaseLayout title="情报精选" description="浏览和筛选知识星球高价值内容">
       <div className="px-4 lg:px-6 space-y-4">
-        {/* Filters */}
+        {/* Filters — 标题 + 发布日期 are the only search criteria; the
+            previous 一级分类 / 二级分类 selects were dropped per UX
+            request because the same data is already broken out as
+            dedicated table columns and rarely needed as a filter. */}
         <div className="flex flex-wrap items-end gap-4 p-4 bg-muted/30 rounded-lg">
-          <div className="space-y-1">
-            <Label className="text-xs">一级分类</Label>
-            <Select
-              value={filters.categoryL1 || "all"}
-              onValueChange={(value) => setCategoryL1(value === "all" ? null : value as typeof CATEGORY_L1_OPTIONS[number])}
-            >
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="全部" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                {CATEGORY_L1_OPTIONS.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1">
-            <Label className="text-xs">二级分类</Label>
-            <Input
-              placeholder="搜索二级分类..."
-              value={filters.categoryL2}
-              onChange={(e) => setCategoryL2(e.target.value)}
-              className="w-[140px]"
-            />
-          </div>
-
           <div className="space-y-1">
             <Label className="text-xs">标题</Label>
             <Input
@@ -140,7 +97,7 @@ export default function IntelligencePostsPage() {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs">日期范围</Label>
+            <Label className="text-xs">发布日期</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -157,14 +114,18 @@ export default function IntelligencePostsPage() {
                       format(filters.dateRange.from, "yyyy-MM-dd")
                     )
                   ) : (
-                    "选择日期范围"
+                    "选择发布日期范围"
                   )}
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0" align="start">
                 <Calendar
                   mode="range"
-                  selected={filters.dateRange}
+                  selected={
+                    filters.dateRange?.from && filters.dateRange?.to
+                      ? { from: filters.dateRange.from, to: filters.dateRange.to }
+                      : undefined
+                  }
                   onSelect={(range) => {
                     if (range?.from && range?.to) {
                       setDateRange({ from: range.from, to: range.to })

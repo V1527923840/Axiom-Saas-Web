@@ -7,6 +7,24 @@ import type { IntelligenceItem, IntelligenceDetail } from "../types"
 /**
  * Hook for the intelligence posts list + detail.
  *
+ * Pagination bug fix note (this hook previously did not own the
+ * search-bar filters):
+ *
+ *   When the DataTable called the store's `setPage(newPage)`, the
+ *   store would dispatch `fetchPosts(page, {})` with empty params,
+ *   silently dropping the title / date range the user had typed into
+ *   the search bar — because those values lived in a separate
+ *   `useIntelligenceFilters` hook in the page component. Clicking the
+ *   pagination chevrons on a filtered result set would therefore jump
+ *   to the wrong (unfiltered) page and confuse the operator.
+ *
+ *   The fix is to keep filter state here, alongside the pagination
+ *   state, and let `setPage` / `setPageSize` fall back to the latest
+ *   saved filters — the same pattern used by `useScrapeLogStore` and
+ *   `useParseTaskStore`. The page still owns the visible filter UI;
+ *   it just writes into the store via the setters exposed below
+ *   instead of into a sibling hook.
+ *
  * Note on response shape: the server returns `{ data: T[], meta: { total,
  * page, pageSize } }` (envelope) for list endpoints and `{ data: T }` for
  * single-item endpoints. The api.ts wrapper's `response` IS the parsed
@@ -32,14 +50,24 @@ export function useIntelligencePostsStore() {
     null,
   )
   const [detailDialogOpen, setDetailDialogOpen] = useState(false)
+  // Search-bar filters now live in the store so that pagination, search,
+  // and sort all see the same source of truth. Previously these lived in
+  // a separate `useIntelligenceFilters` hook in the page, which caused
+  // the pagination bug described in the comment above.
+  const [filters, setFilters] = useState({
+    title: "",
+    dateRange: { from: undefined as Date | undefined, to: undefined as Date | undefined },
+  })
 
   const paginationRef = useRef(pagination)
   paginationRef.current = pagination
+  const filtersRef = useRef(filters)
+  filtersRef.current = filters
 
   const fetchPosts = useCallback(
     async (
       pageOverride?: number,
-      params?: Record<string, string | number | boolean | undefined>,
+      params?: Record<string, string | number | boolean | Date | undefined>,
       pageSizeOverride?: number,
     ) => {
       setLoading(true)
@@ -57,8 +85,33 @@ export function useIntelligencePostsStore() {
         searchParams.set("page", String(page))
         searchParams.set("pageSize", String(pageSize))
 
-        if (params) {
-          Object.entries(params).forEach(([key, value]) => {
+        // `params` is the explicit set the caller wants to forward
+        // (e.g. the values typed into the search bar the moment the
+        // operator clicked 搜索). When `params` is missing/empty we
+        // fall back to the latest saved filters — this is what keeps
+        // pagination in sync with the visible search state when the
+        // operator only clicks next/prev without re-running 搜索.
+        //
+        // Param name mapping note: the UI shows the filter as "标题"
+        // (title) but the backend DTO `QueryIntelligenceDto` only
+        // declares `keyword` (which on the server side maps to a
+        // `WHERE title ILIKE %keyword%` clause — see
+        // intelligence.repository.ts). The visual label and the
+        // wire-protocol name do not match — we keep "标题" in the UI
+        // (it's the right operator-facing word) and emit "keyword"
+        // on the wire so the backend accepts it.
+        let effectiveParams: Record<string, string | number | boolean | Date | undefined> | undefined = params
+        if (!effectiveParams || Object.keys(effectiveParams).length === 0) {
+          const f = filtersRef.current
+          const fallback: Record<string, string | number | boolean | Date | undefined> = {}
+          if (f.title) fallback.keyword = f.title
+          if (f.dateRange?.from) fallback.dateFrom = f.dateRange.from.toISOString().split("T")[0]
+          if (f.dateRange?.to) fallback.dateTo = f.dateRange.to.toISOString().split("T")[0]
+          effectiveParams = fallback
+        }
+
+        if (effectiveParams) {
+          Object.entries(effectiveParams).forEach(([key, value]) => {
             if (value === undefined || value === null || value === "") return
             // Server DTO expects uppercase sortOrder (enum: ASC | DESC).
             // Accept lowercase from callers and normalize here.
@@ -127,6 +180,9 @@ export function useIntelligencePostsStore() {
     }
   }, [])
 
+  // The setPage/setPageSize flows now use `fetchPosts(page, {})` —
+  // empty params — which triggers the `filterRef` fallback path
+  // above, so the user's search bar values are always re-attached.
   const setPage = useCallback(
     (page: number) => {
       setPagination((prev) => ({ ...prev, page }))
@@ -142,6 +198,24 @@ export function useIntelligencePostsStore() {
     },
     [fetchPosts],
   )
+
+  const setTitle = useCallback((title: string) => {
+    setFilters((prev) => ({ ...prev, title }))
+  }, [])
+
+  const setDateRange = useCallback(
+    (dateRange: { from: Date | undefined; to: Date | undefined } | undefined) => {
+      setFilters((prev) => ({ ...prev, dateRange }))
+    },
+    [],
+  )
+
+  const resetFilters = useCallback(() => {
+    setFilters({
+      title: "",
+      dateRange: { from: undefined, to: undefined },
+    })
+  }, [])
 
   const openDetail = useCallback(
     async (item: IntelligenceItem) => {
@@ -162,10 +236,14 @@ export function useIntelligencePostsStore() {
     pagination,
     selectedItem,
     detailDialogOpen,
+    filters,
     fetchPosts,
     setPage,
     setPageSize,
     openDetail,
     closeDetail,
+    setTitle,
+    setDateRange,
+    resetFilters,
   }
 }

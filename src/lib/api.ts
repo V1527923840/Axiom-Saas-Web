@@ -91,8 +91,21 @@ async function request<T>(
     if (response.headers.get("content-type")?.includes("application/json")) {
       try {
         const errorData = await response.json()
-        errorMessage = errorData.message || errorData.error || errorMessage
-        errorCode = errorData.code || errorCode
+        // NestJS validation errors use { status, errors: { field: msg } }.
+        // Other NestJS exceptions can also surface as { statusCode, message, error }.
+        // Fall back through several known shapes before using the generic default.
+        const nested = errorData?.errors
+        if (nested && typeof nested === "object") {
+          const details = Object.entries(nested)
+            .map(([field, msg]) => `${field}: ${msg}`)
+            .join("; ")
+          if (details) errorMessage = details
+        } else if (typeof errorData?.message === "string") {
+          errorMessage = errorData.message
+        } else if (typeof errorData?.error === "string") {
+          errorMessage = errorData.error
+        }
+        if (typeof errorData?.code === "string") errorCode = errorData.code
       } catch {
         /* fall through */
       }

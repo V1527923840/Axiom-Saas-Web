@@ -48,6 +48,37 @@ export const columns: ColumnDef<IntelligenceItem>[] = [
     meta: { tooltip: true },
   },
   {
+    accessorKey: "version",
+    header: "版本号",
+    cell: ({ row }) => {
+      const version = row.getValue("version") as string | undefined
+      if (!version) return <span className="text-muted-foreground">-</span>
+      // Highlight the current pyramid-analysis version; older / unknown
+      // versions stay as outline badges so operators can spot drift.
+      const variant = version === "v2.0" ? "default" : "outline"
+      return <Badge variant={variant}>{version}</Badge>
+    },
+  },
+  {
+    accessorKey: "originalTextRaw",
+    header: "原文",
+    cell: ({ row }) => {
+      const text = row.original.originalTextRaw
+      if (!text) return <span className="text-muted-foreground">-</span>
+      return (
+        <span
+          className="text-sm text-muted-foreground max-w-[200px] truncate block"
+          title={text}
+        >
+          {text.slice(0, 50)}...
+        </span>
+      )
+    },
+  },
+  {
+    // 时间 columns grouped together (per UX request) and pushed to the
+    // end so the operator scans metadata first, then jumps to the
+    // 时间 → 操作 column on the right.
     accessorKey: "createdAt",
     header: ({ column }) => (
       <Button
@@ -98,32 +129,6 @@ export const columns: ColumnDef<IntelligenceItem>[] = [
       )
     },
     sortingFn: "datetime",
-  },
-  {
-    accessorKey: "pyramidVersion",
-    header: "金字塔版本",
-    cell: ({ row }) => {
-      const version = row.getValue("pyramidVersion") as string | undefined
-      if (!version) return <span className="text-muted-foreground">-</span>
-      const variant = version === "v2.0" ? "default" : "outline"
-      return <Badge variant={variant}>{version}</Badge>
-    },
-  },
-  {
-    accessorKey: "originalTextRaw",
-    header: "原文",
-    cell: ({ row }) => {
-      const text = row.original.originalTextRaw
-      if (!text) return <span className="text-muted-foreground">-</span>
-      return (
-        <span
-          className="text-sm text-muted-foreground max-w-[200px] truncate block"
-          title={text}
-        >
-          {text.slice(0, 50)}...
-        </span>
-      )
-    },
   },
   {
     id: "actions",
