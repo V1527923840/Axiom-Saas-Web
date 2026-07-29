@@ -18,7 +18,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { X } from "lucide-react"
-import { formatLocalDate } from "@/lib/utils"
 
 export default function IntelligencePostsPage() {
   // Filter state moved from a separate useIntelligenceFilters hook into

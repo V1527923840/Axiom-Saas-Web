@@ -26,19 +26,6 @@ export function ResearchAnalysisDetailDialog({
 }: ResearchAnalysisDetailDialogProps) {
   if (!item) return null
 
-  const formatDate = (dateString: string | null | undefined) => {
-    if (!dateString) return null
-    const date = new Date(dateString)
-    if (isNaN(date.getTime())) return null
-    return date.toLocaleString("zh-CN", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-  }
-
   // Extract mentioned stocks names
   const mentionedStocks =
     item.mentionedStocks

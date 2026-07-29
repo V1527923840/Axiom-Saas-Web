@@ -54,9 +54,12 @@ export function useIntelligencePostsStore() {
   // and sort all see the same source of truth. Previously these lived in
   // a separate `useIntelligenceFilters` hook in the page, which caused
   // the pagination bug described in the comment above.
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<{
+    title: string
+    dateRange: { from: Date | undefined; to: Date | undefined } | undefined
+  }>({
     title: "",
-    dateRange: { from: undefined as Date | undefined, to: undefined as Date | undefined },
+    dateRange: undefined,
   })
 
   const paginationRef = useRef(pagination)
@@ -213,7 +216,7 @@ export function useIntelligencePostsStore() {
   const resetFilters = useCallback(() => {
     setFilters({
       title: "",
-      dateRange: { from: undefined, to: undefined },
+      dateRange: undefined,
     })
   }, [])
 
