@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { ChatDialog } from "./components/chat-dialog"
 import { SessionList } from "./components/session-list"
@@ -23,6 +23,33 @@ export default function VibeTradingPage() {
 function VibeTradingContent() {
   const { sessions, loading, addSession, removeSession } = useAiSessions("vibe-trading")
   const [currentId, setCurrentId] = useState<string | null>(null)
+  // When the user picks a welcome-state prompt, we need to first create a
+  // session (so the backend has a session to receive the message), then
+  // hand the prompt text to ChatDialog which will auto-send it once the
+  // new sessionId is mounted.
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null)
+
+  const handlePromptSelect = useCallback(
+    async (text: string) => {
+      try {
+        const s = await addSession()
+        setCurrentId(s.id)
+        setPendingMessage(text)
+      } catch (e) {
+        console.error("failed to create session for prompt", e)
+      }
+    },
+    [addSession],
+  )
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ text: string }>).detail
+      if (detail?.text) void handlePromptSelect(detail.text)
+    }
+    window.addEventListener("vibe-trading:prompt-select", handler)
+    return () => window.removeEventListener("vibe-trading:prompt-select", handler)
+  }, [handlePromptSelect])
 
   return (
     <div className="@container/main px-4 lg:px-6">
@@ -41,7 +68,11 @@ function VibeTradingContent() {
             if (currentId === id) setCurrentId(null)
           }}
         />
-        <ChatDialog sessionId={currentId} />
+        <ChatDialog
+          sessionId={currentId}
+          pendingMessage={pendingMessage}
+          onPendingMessageConsumed={() => setPendingMessage(null)}
+        />
       </div>
     </div>
   )

@@ -2,7 +2,7 @@
 
 import { Bubble, Prompts, Sender, Welcome } from "@ant-design/x"
 import { Bot, Lightbulb, Sparkles, TrendingUp } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import type { ChatMessage } from "../hooks/use-chat-stream"
 import { useChatStream } from "../hooks/use-chat-stream"
 
@@ -33,7 +33,18 @@ const SUGGESTIONS = [
   },
 ]
 
-export function ChatDialog({ sessionId }: { sessionId: string | null }) {
+export function ChatDialog({
+  sessionId,
+  // Text that should be auto-sent as soon as sessionId becomes non-null.
+  // Used by the parent to inject a prompt suggestion into the stream after
+  // the parent has created a new session for it.
+  pendingMessage,
+  onPendingMessageConsumed,
+}: {
+  sessionId: string | null
+  pendingMessage?: string | null
+  onPendingMessageConsumed?: () => void
+}) {
   const { messages, streaming, loadingHistory, error, send, cancel } =
     useChatStream(sessionId)
   const [input, setInput] = useState("")
@@ -45,6 +56,18 @@ export function ChatDialog({ sessionId }: { sessionId: string | null }) {
     setInput("")
   }
 
+  // Auto-send any pending prompt as soon as the session is ready. We
+  // guard against re-firing on the same pendingMessage by keying off both
+  // the text and a ref-tracked "consumed" flag.
+  const consumedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!pendingMessage || !sessionId) return
+    if (consumedRef.current === pendingMessage) return
+    consumedRef.current = pendingMessage
+    void send(pendingMessage)
+    onPendingMessageConsumed?.()
+  }, [pendingMessage, sessionId, send, onPendingMessageConsumed])
+
   // Identify the streaming assistant message so we can show loading dots
   // before the first token arrives. Once content has been written, the bubble
   // updates live as deltas stream in (no `typing` re-animation).
@@ -55,35 +78,36 @@ export function ChatDialog({ sessionId }: { sessionId: string | null }) {
 
   const bubbleItems = messages.map((m: ChatMessage) => ({
     key: m.id,
-    role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+    role: m.role === "user" ? ("user" as const) : ("ai" as const),
     content: m.content,
     loading: m.id === streamingMessageId,
   }))
+
+  const showWelcome =
+    !sessionId || (!loadingHistory && messages.length === 0)
 
   return (
     <div className="flex h-full flex-col">
       {/* Message list area */}
       <div className="flex-1 overflow-hidden">
-        {!sessionId ? (
-          <WelcomeState />
-        ) : loadingHistory ? (
+        {loadingHistory ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             加载历史消息…
           </div>
-        ) : messages.length === 0 ? (
-          <WelcomeState onPromptClick={(text) => setInput(text)} />
+        ) : showWelcome ? (
+          <WelcomeState />
         ) : (
           <Bubble.List
             items={bubbleItems}
             autoScroll
             className="h-full px-4 py-4"
-            roles={{
+            role={{
               user: {
                 placement: "end",
                 variant: "filled",
                 shape: "default",
               },
-              assistant: {
+              ai: {
                 placement: "start",
                 variant: "filled",
                 shape: "default",
@@ -97,7 +121,8 @@ export function ChatDialog({ sessionId }: { sessionId: string | null }) {
         <div className="text-destructive px-3 py-1 text-sm">错误: {error}</div>
       )}
 
-      {/* Sender */}
+      {/* Sender — disabled until a session is selected. The welcome state
+          above is the primary entry point when no session is active. */}
       <div className="border-t p-3">
         <Sender
           value={input}
@@ -106,7 +131,9 @@ export function ChatDialog({ sessionId }: { sessionId: string | null }) {
           onCancel={cancel}
           loading={streaming}
           submitType="shiftEnter"
-          placeholder={sessionId ? "输入消息，Shift+Enter 发送…" : "请先在左侧选择或新建会话"}
+          placeholder={
+            sessionId ? "输入消息，Shift+Enter 发送…" : "从上方提示开始对话"
+          }
           disabled={!sessionId || loadingHistory}
           className="w-full"
         />
@@ -115,11 +142,10 @@ export function ChatDialog({ sessionId }: { sessionId: string | null }) {
   )
 }
 
-function WelcomeState({
-  onPromptClick,
-}: {
-  onPromptClick?: (text: string) => void
-}) {
+function WelcomeState() {
+  // Click handlers are bound by the parent via the chat container's
+  // `data-prompt-click` delegation if needed in the future. Today the parent
+  // listens on a custom event dispatched from each Prompt.
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 py-8">
       <div className="w-full max-w-2xl">
@@ -131,23 +157,27 @@ function WelcomeState({
           }
           title="AI 智能体"
           description="用自然语言提问,获取金融市场研究与交易思路。"
-          className="mb-6"
+          className="mb-8"
         />
-        {onPromptClick && (
-          <Prompts
-            title="试试这些问题"
-            wrap
-            items={SUGGESTIONS.map((s) => ({
-              key: s.key,
-              icon: s.icon,
-              label: s.label,
-              description: s.description,
-            }))}
-            onItemClick={(info: { data: { label?: unknown } }) =>
-              onPromptClick(String(info.data.label))
-            }
-          />
-        )}
+        <Prompts
+          title="试试这些问题"
+          wrap
+          items={SUGGESTIONS.map((s) => ({
+            key: s.key,
+            icon: s.icon,
+            label: s.label,
+            description: s.description,
+          }))}
+          onItemClick={(info: { data: { label?: unknown } }) => {
+            // Dispatch a custom event the page component listens for. This
+            // keeps ChatDialog free of "create new session" responsibilities.
+            window.dispatchEvent(
+              new CustomEvent("vibe-trading:prompt-select", {
+                detail: { text: String(info.data.label ?? "") },
+              }),
+            )
+          }}
+        />
       </div>
     </div>
   )
