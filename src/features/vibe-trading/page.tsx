@@ -6,6 +6,8 @@ import { ChatDialog } from "./components/chat-dialog"
 import { SessionList } from "./components/session-list"
 import { XThemeProvider } from "./components/x-theme-provider"
 import { useAiSessions } from "./hooks/use-ai-sessions"
+import { unsubscribeAll } from "./services/events-stream"
+import { useSessionStore } from "./stores/session-store"
 
 export default function VibeTradingPage() {
   return (
@@ -24,11 +26,15 @@ function VibeTradingContent() {
   const { sessions, loading, addSession, removeSession, updateTitle } =
     useAiSessions("vibe-trading")
   const [currentId, setCurrentId] = useState<string | null>(null)
-  // When the user picks a welcome-state prompt, we need to first create a
-  // session (so the backend has a session to receive the message), then
-  // hand the prompt text to ChatDialog which will auto-send it once the
-  // new sessionId is mounted.
   const [pendingMessage, setPendingMessage] = useState<string | null>(null)
+
+  // 离开页面：关闭所有 /events 长连接 + 清 store
+  useEffect(() => {
+    return () => {
+      unsubscribeAll()
+      useSessionStore.getState().reset()
+    }
+  }, [])
 
   const handlePromptSelect = useCallback(
     async (text: string) => {
@@ -52,6 +58,9 @@ function VibeTradingContent() {
     return () => window.removeEventListener("vibe-trading:prompt-select", handler)
   }, [handlePromptSelect])
 
+  const currentSession = sessions.find((s) => s.id === currentId) ?? null
+  const currentTitle = currentSession?.title ?? null
+
   return (
     <div className="@container/main px-4 lg:px-6">
       <div className="h-[calc(100vh-220px)] min-h-[520px] flex rounded-lg border overflow-hidden bg-background">
@@ -68,10 +77,13 @@ function VibeTradingContent() {
             await removeSession(id)
             if (currentId === id) setCurrentId(null)
           }}
-          onRename={updateTitle}
+          onRename={async (id, title) => {
+            await updateTitle(id, title)
+          }}
         />
         <ChatDialog
           sessionId={currentId}
+          title={currentTitle}
           pendingMessage={pendingMessage}
           onPendingMessageConsumed={() => setPendingMessage(null)}
         />
