@@ -4,6 +4,7 @@ import {
   createSession,
   deleteSession,
   listSessions,
+  patchSession,
 } from "@/services/vibe-trading"
 
 export function useAiSessions(agentType: string) {
@@ -39,5 +40,20 @@ export function useAiSessions(agentType: string) {
     setSessions((prev) => prev.filter((s) => s.id !== id))
   }, [])
 
-  return { sessions, loading, error, refresh, addSession, removeSession }
+  const updateTitle = useCallback(async (id: string, newTitle: string) => {
+    const updated = await patchSession(id, { title: newTitle })
+    setSessions((prev) =>
+      prev.map((s) => (s.id === id ? updated : s)),
+    )
+  }, [])
+
+  return {
+    sessions,
+    loading,
+    error,
+    refresh,
+    addSession,
+    removeSession,
+    updateTitle,
+  }
 }
