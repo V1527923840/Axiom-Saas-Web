@@ -1,127 +1,183 @@
-import { useCallback, useEffect, useRef, useState } from "react"
-import { type AiMessage, getMessages, sendMessageStream } from "@/services/vibe-trading"
+import { useCallback, useEffect } from "react"
+import {
+  cancelSession,
+  getMessages,
+  patchSession,
+  submitMessage,
+} from "@/services/vibe-trading"
+import {
+  type ChatMessage,
+  type PerSession,
+  useSessionStore,
+} from "../stores/session-store"
+import { subscribeSession } from "../services/events-stream"
 
-export type ChatMessage = {
-  id: string
-  role: "user" | "assistant"
-  content: string
-  createdAt: string
-}
+type Slice = Pick<PerSession, "messages" | "streaming" | "error" | "historyLoaded">
 
-export function useChatStream(sessionId: string | null) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [streaming, setStreaming] = useState(false)
-  const [loadingHistory, setLoadingHistory] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
+export type { ChatMessage }
 
-  // Load historical messages when sessionId changes.
+export function useChatStream(
+  sessionId: string | null,
+  title?: string | null,
+) {
+  // 响应式订阅 store 切片（避免重渲染整个 store）
+  const slice = useSessionStore((s): Slice | undefined =>
+    sessionId ? s.byId[sessionId] : undefined,
+  )
+  const ensure = useSessionStore((s) => s.ensure)
+  const setHistoryLoaded = useSessionStore((s) => s.setHistoryLoaded)
+
+  const loadingHistory =
+    !!sessionId && (!slice || !slice.historyLoaded) && (slice?.messages.length ?? 0) === 0
+
+  // 进入会话：确保 store 槽存在 + 拉历史 + 开 /events 订阅
   useEffect(() => {
-    if (!sessionId) {
-      setMessages([])
-      setError(null)
-      return
+    if (!sessionId) return
+    ensure(sessionId)
+    const cur = useSessionStore.getState().byId[sessionId]
+    if (cur && !cur.historyLoaded) {
+      void getMessages(sessionId)
+        .then((msgs) => setHistoryLoaded(sessionId, msgs.map(toChatMessage)))
+        .catch((e) =>
+          useSessionStore.setState((s) => {
+            const c = s.byId[sessionId]
+            if (!c) return s
+            return {
+              byId: {
+                ...s.byId,
+                [sessionId]: {
+                  ...c,
+                  error: e instanceof Error ? e.message : "Failed to load history",
+                },
+              },
+            }
+          }),
+        )
     }
-    let cancelled = false
-    setLoadingHistory(true)
-    setError(null)
-    setMessages([])
-    getMessages(sessionId)
-      .then((history) => {
-        if (cancelled) return
-        setMessages(history.map(toChatMessage))
-      })
-      .catch((e) => {
-        if (cancelled) return
-        setError(e instanceof Error ? e.message : "Failed to load history")
-      })
-      .finally(() => {
-        if (cancelled) return
-        setLoadingHistory(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [sessionId])
+    subscribeSession(sessionId)
+    // 不在 effect cleanup 中 unsubscribe —— 后台继续收 events
+  }, [sessionId, ensure, setHistoryLoaded])
 
   const send = useCallback(
     async (content: string) => {
       if (!sessionId) return
-      setError(null)
+      const cur = useSessionStore.getState().byId[sessionId]
+      if (!cur || cur.streaming) return   // per-session 串行保护
+
       const userMsg: ChatMessage = {
         id: `u-${Date.now()}`,
         role: "user",
         content,
         createdAt: new Date().toISOString(),
       }
-      const assistantMsg: ChatMessage = {
+      const placeholder: ChatMessage = {
         id: `a-${Date.now()}`,
         role: "assistant",
         content: "",
         createdAt: new Date().toISOString(),
       }
-      setMessages((prev) => [...prev, userMsg, assistantMsg])
-      setStreaming(true)
-      const controller = new AbortController()
-      abortRef.current = controller
+
+      // 乐观插入 + 锁 streaming
+      useSessionStore.setState((s) => ({
+        byId: {
+          ...s.byId,
+          [sessionId]: {
+            ...cur,
+            messages: [...cur.messages, userMsg, placeholder],
+            streaming: true,
+            error: null,
+          },
+        },
+      }))
+
+      // 自动标题判断（cur 是 send 入口快照,length===0 表示首条 user 消息）
+      const isFirstUserMessage = cur.messages.length === 0
+      const currentSessionTitle = typeof title === "string" ? title : null
+
       try {
-        for await (const chunk of sendMessageStream(sessionId, content, {
-          signal: controller.signal,
-        })) {
-          if (chunk.type === "message") {
-            const delta = chunk.data.delta ?? ""
-            if (!delta) continue
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === assistantMsg.id ? { ...m, content: m.content + delta } : m,
-              ),
-            )
-          } else if (chunk.type === "error") {
-            setError(chunk.data.message ?? "Stream error")
-          } else if (chunk.type === "done") {
-            // stream finished — no-op
+        const { attemptId } = await submitMessage(sessionId, content)
+
+        // 把 attemptId 写回占位
+        useSessionStore.setState((s) => {
+          const c = s.byId[sessionId]
+          if (!c) return s
+          return {
+            byId: {
+              ...s.byId,
+              [sessionId]: {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === placeholder.id ? { ...m, attemptId } : m,
+                ),
+                activeAttemptId: attemptId,
+              },
+            },
+          }
+        })
+
+        // 自动标题 PATCH（fire-and-forget，失败不影响 UI）
+        if (isFirstUserMessage && !currentSessionTitle) {
+          const t = content.slice(0, 30).trim()
+          if (t) {
+            void patchSession(sessionId, { title: t }).catch(() => undefined)
           }
         }
+        // attempt 完成由 events 流触发 markAttemptComplete
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to send message")
-      } finally {
-        if (abortRef.current === controller) {
-          abortRef.current = null
-        }
-        setStreaming(false)
+        useSessionStore.setState((s) => {
+          const c = s.byId[sessionId]
+          if (!c) return s
+          return {
+            byId: {
+              ...s.byId,
+              [sessionId]: {
+                ...c,
+                messages: c.messages.filter((m) => m.id !== placeholder.id),
+                streaming: false,
+                error: e instanceof Error ? e.message : "Submit failed",
+              },
+            },
+          }
+        })
       }
     },
-    [sessionId],
+    [sessionId, title],
   )
 
-  const cancel = useCallback(() => {
-    abortRef.current?.abort()
-    abortRef.current = null
-    setStreaming(false)
-  }, [])
-
-  const reset = useCallback(() => {
-    cancel()
-    setMessages([])
-    setError(null)
-  }, [cancel])
+  const cancel = useCallback(async () => {
+    if (!sessionId) return
+    const cur = useSessionStore.getState().byId[sessionId]
+    if (!cur?.streaming) return
+    // 立即本地标记 —— UI 立刻反映
+    useSessionStore.setState((s) => ({
+      byId: {
+        ...s.byId,
+        [sessionId]: {
+          ...(s.byId[sessionId] ?? cur),
+          streaming: false,
+          activeAttemptId: null,
+        },
+      },
+    }))
+    // fire-and-forget 调后端 cancel
+    void cancelSession(sessionId).catch(() => undefined)
+  }, [sessionId])
 
   return {
-    messages,
-    streaming,
+    messages: slice?.messages ?? [],
+    streaming: slice?.streaming ?? false,
+    error: slice?.error ?? null,
     loadingHistory,
-    error,
     send,
     cancel,
-    reset,
   }
 }
 
-function toChatMessage(m: AiMessage): ChatMessage {
+function toChatMessage(m: { id: string; role: string; content: string; createdAt: string | Date }): ChatMessage {
   return {
     id: m.id,
     role: m.role === "user" ? "user" : "assistant",
     content: m.content,
-    createdAt: m.createdAt,
+    createdAt: typeof m.createdAt === "string" ? m.createdAt : m.createdAt.toISOString(),
   }
 }
