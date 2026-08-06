@@ -4,15 +4,18 @@ import { useState } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { ChatDialog } from "./components/chat-dialog"
 import { SessionList } from "./components/session-list"
+import { XThemeProvider } from "./components/x-theme-provider"
 import { useAiSessions } from "./hooks/use-ai-sessions"
 
 export default function VibeTradingPage() {
   return (
     <BaseLayout
-      title="AI Vibe Trading"
-      description="Chat with the Vibe Trading AI agent for natural-language finance research"
+      title="AI 智能体"
+      description="用自然语言与 Vibe Trading AI 智能体对话,获取金融市场研究与交易思路"
     >
-      <VibeTradingContent />
+      <XThemeProvider>
+        <VibeTradingContent />
+      </XThemeProvider>
     </BaseLayout>
   )
 }

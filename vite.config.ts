@@ -13,5 +13,12 @@ export default defineConfig({
   },
   define: {
     'import.meta.env.VITE_BASENAME': JSON.stringify(process.env.VITE_BASENAME || ''),
-  }
+  },
+  optimizeDeps: {
+    // Pre-bundle antd + @ant-design/x to avoid cold-start slowness when the user
+    // navigates into the vibe-trading module. The library is mounted locally
+    // (only inside `features/vibe-trading/`), so this only matters when the
+    // route is actually visited.
+    include: ["antd", "@ant-design/x", "@ant-design/icons", "rc-util/es"],
+  },
 })

@@ -1,6 +1,8 @@
+"use client"
+
+import { Conversations } from "@ant-design/x"
+import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { cn } from "@/lib/utils"
 import type { AiSession } from "@/services/vibe-trading"
 
 export function SessionList({
@@ -18,38 +20,47 @@ export function SessionList({
   onDelete: (id: string) => void
   loading: boolean
 }) {
+  const items = sessions.map((s) => ({
+    key: s.id,
+    label: s.title || "新会话",
+    timestamp: s.lastActiveAt ? new Date(s.lastActiveAt).getTime() : undefined,
+  }))
+
   return (
-    <div className="flex h-full flex-col border-r">
+    <div className="flex h-full w-72 flex-col border-r">
       <div className="p-3 border-b">
-        <Button onClick={onNew} className="w-full" disabled={loading}>
+        <Button
+          onClick={onNew}
+          disabled={loading}
+          className="w-full"
+          size="sm"
+        >
+          <Plus className="mr-1 h-4 w-4" />
           新建会话
         </Button>
       </div>
-      <ScrollArea className="flex-1">
-        {sessions.map((s) => (
-          <div
-            key={s.id}
-            className={cn(
-              "group flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-muted",
-              currentId === s.id && "bg-muted",
-            )}
-            onClick={() => onSelect(s.id)}
-          >
-            <div className="truncate text-sm">{s.title || "新会话"}</div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="opacity-0 group-hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation()
-                onDelete(s.id)
-              }}
-            >
-              删除
-            </Button>
-          </div>
-        ))}
-      </ScrollArea>
+      <div className="flex-1 overflow-hidden">
+        <Conversations
+          items={items}
+          activeKey={currentId ?? undefined}
+          onActiveChange={(key: string | number) => onSelect(String(key))}
+          menu={(item: { key: string }) => ({
+            trigger: ["hover"],
+            items: [
+              {
+                key: "delete",
+                label: "删除",
+                danger: true,
+                onClick: () => onDelete(item.key),
+              },
+            ],
+          })}
+          className="h-full"
+          styles={{
+            item: { paddingInline: 12 },
+          }}
+        />
+      </div>
     </div>
   )
 }
