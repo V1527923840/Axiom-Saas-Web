@@ -69,6 +69,9 @@ const Roles = lazy(() => import('@/features/roles/page'))
 // Menus pages
 const Menus = lazy(() => import('@/features/menus/menus/page'))
 
+// Vibe Trading pages
+const VibeTrading = lazy(() => import('@/features/vibe-trading/page'))
+
 // Settings pages
 const UserSettings = lazy(() => import('@/app/settings/user/page'))
 const AccountSettings = lazy(() => import('@/app/settings/account/page'))
@@ -218,6 +221,12 @@ export const routes: RouteConfig[] = [
   {
     path: "/menus",
     element: <ProtectedRoute menuPaths={['/menus']}><Menus /></ProtectedRoute>
+  },
+
+  // Vibe Trading Routes - menu-based permission
+  {
+    path: "/vibe-trading",
+    element: <ProtectedRoute menuPaths={['/vibe-trading']}><VibeTrading /></ProtectedRoute>
   },
 
   // Public Pages
