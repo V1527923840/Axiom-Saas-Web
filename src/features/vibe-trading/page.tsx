@@ -21,7 +21,8 @@ export default function VibeTradingPage() {
 }
 
 function VibeTradingContent() {
-  const { sessions, loading, addSession, removeSession } = useAiSessions("vibe-trading")
+  const { sessions, loading, addSession, removeSession, updateTitle } =
+    useAiSessions("vibe-trading")
   const [currentId, setCurrentId] = useState<string | null>(null)
   // When the user picks a welcome-state prompt, we need to first create a
   // session (so the backend has a session to receive the message), then
@@ -67,6 +68,7 @@ function VibeTradingContent() {
             await removeSession(id)
             if (currentId === id) setCurrentId(null)
           }}
+          onRename={updateTitle}
         />
         <ChatDialog
           sessionId={currentId}
