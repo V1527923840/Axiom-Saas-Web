@@ -45,7 +45,6 @@ export function SessionList({
           activeKey={currentId ?? undefined}
           onActiveChange={(key: string | number) => onSelect(String(key))}
           menu={(item: { key: string }) => ({
-            trigger: ["hover"],
             items: [
               {
                 key: "delete",
