@@ -37,7 +37,17 @@ export function useChatStream(
     const cur = useSessionStore.getState().byId[sessionId]
     if (cur && !cur.historyLoaded) {
       void getMessages(sessionId)
-        .then((msgs) => setHistoryLoaded(sessionId, msgs.map(toChatMessage)))
+        .then((msgs) => {
+          const history = msgs.map(toChatMessage)
+          // 拉历史期间可能已乐观插入了消息（pendingMessage 自动发送场景）;
+          // setHistoryLoaded 会整体替换 messages,这里把乐观消息接在历史之后,避免被冲掉。
+          // 此刻 historyLoaded 仍为 false 且槽位初始为空,所以现存消息必为乐观插入,无需去重。
+          const optimistic = useSessionStore.getState().byId[sessionId]?.messages ?? []
+          setHistoryLoaded(
+            sessionId,
+            optimistic.length > 0 ? [...history, ...optimistic] : history,
+          )
+        })
         .catch((e) =>
           useSessionStore.setState((s) => {
             const c = s.byId[sessionId]
@@ -47,6 +57,10 @@ export function useChatStream(
                 ...s.byId,
                 [sessionId]: {
                   ...c,
+                  // 同时置 historyLoaded,否则 loadingHistory 永远为 true:
+                  // effect 依赖不变不会重跑,UI 会卡在"加载历史消息…"且 Sender 一直 disabled。
+                  // 置为 true 后至少能解锁输入框并展示错误提示。
+                  historyLoaded: true,
                   error: e instanceof Error ? e.message : "Failed to load history",
                 },
               },
