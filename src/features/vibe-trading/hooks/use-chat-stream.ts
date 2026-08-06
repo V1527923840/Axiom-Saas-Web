@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from "react"
-import { sendMessageStream } from "@/services/vibe-trading"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { type AiMessage, getMessages, sendMessageStream } from "@/services/vibe-trading"
 
 export type ChatMessage = {
   id: string
@@ -11,8 +11,38 @@ export type ChatMessage = {
 export function useChatStream(sessionId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [streaming, setStreaming] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  // Load historical messages when sessionId changes.
+  useEffect(() => {
+    if (!sessionId) {
+      setMessages([])
+      setError(null)
+      return
+    }
+    let cancelled = false
+    setLoadingHistory(true)
+    setError(null)
+    setMessages([])
+    getMessages(sessionId)
+      .then((history) => {
+        if (cancelled) return
+        setMessages(history.map(toChatMessage))
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setError(e instanceof Error ? e.message : "Failed to load history")
+      })
+      .finally(() => {
+        if (cancelled) return
+        setLoadingHistory(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [sessionId])
 
   const send = useCallback(
     async (content: string) => {
@@ -76,5 +106,22 @@ export function useChatStream(sessionId: string | null) {
     setError(null)
   }, [cancel])
 
-  return { messages, streaming, error, send, cancel, reset }
+  return {
+    messages,
+    streaming,
+    loadingHistory,
+    error,
+    send,
+    cancel,
+    reset,
+  }
+}
+
+function toChatMessage(m: AiMessage): ChatMessage {
+  return {
+    id: m.id,
+    role: m.role === "user" ? "user" : "assistant",
+    content: m.content,
+    createdAt: m.createdAt,
+  }
 }
