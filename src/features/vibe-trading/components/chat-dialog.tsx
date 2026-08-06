@@ -3,50 +3,28 @@
 import { Bubble, Prompts, Sender, Welcome } from "@ant-design/x"
 import { Bot, Lightbulb, Sparkles, TrendingUp } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
-import type { ChatMessage } from "../hooks/use-chat-stream"
 import { useChatStream } from "../hooks/use-chat-stream"
 
 const SUGGESTIONS = [
-  {
-    key: "market-brief",
-    icon: <TrendingUp className="h-4 w-4" />,
-    label: "今日市场概览",
-    description: "拉一下美股 / A 股 / 港股的当日行情速览",
-  },
-  {
-    key: "stock-deepdive",
-    icon: <Sparkles className="h-4 w-4" />,
-    label: "深度分析某只股票",
-    description: "基本面 + 技术面 + 资金面,给一份研报式的拆解",
-  },
-  {
-    key: "strategy",
-    icon: <Lightbulb className="h-4 w-4" />,
-    label: "聊聊交易策略",
-    description: "讨论仓位管理、止盈止损、风格切换思路",
-  },
-  {
-    key: "macro",
-    icon: <Bot className="h-4 w-4" />,
-    label: "宏观经济解读",
-    description: "利率、通胀、就业数据对资产价格的影响",
-  },
+  { key: "market-brief", icon: <TrendingUp className="h-4 w-4" />, label: "今日市场概览", description: "拉一下美股 / A 股 / 港股的当日行情速览" },
+  { key: "stock-deepdive", icon: <Sparkles className="h-4 w-4" />, label: "深度分析某只股票", description: "基本面 + 技术面 + 资金面,给一份研报式的拆解" },
+  { key: "strategy", icon: <Lightbulb className="h-4 w-4" />, label: "聊聊交易策略", description: "讨论仓位管理、止盈止损、风格切换思路" },
+  { key: "macro", icon: <Bot className="h-4 w-4" />, label: "宏观经济解读", description: "利率、通胀、就业数据对资产价格的影响" },
 ]
 
 export function ChatDialog({
   sessionId,
-  // Text that should be auto-sent as soon as sessionId becomes non-null.
-  // Used by the parent to inject a prompt suggestion into the stream after
-  // the parent has created a new session for it.
+  title,
   pendingMessage,
   onPendingMessageConsumed,
 }: {
   sessionId: string | null
+  title?: string | null
   pendingMessage?: string | null
   onPendingMessageConsumed?: () => void
 }) {
   const { messages, streaming, loadingHistory, error, send, cancel } =
-    useChatStream(sessionId)
+    useChatStream(sessionId, title)
   const [input, setInput] = useState("")
 
   const handleSend = () => {
@@ -56,9 +34,7 @@ export function ChatDialog({
     setInput("")
   }
 
-  // Auto-send any pending prompt as soon as the session is ready. We
-  // guard against re-firing on the same pendingMessage by keying off both
-  // the text and a ref-tracked "consumed" flag.
+  // pendingMessage 自动发送（保留 v1 行为）
   const consumedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!pendingMessage || !sessionId) return
@@ -68,28 +44,19 @@ export function ChatDialog({
     onPendingMessageConsumed?.()
   }, [pendingMessage, sessionId, send, onPendingMessageConsumed])
 
-  // Identify the streaming assistant message so we can show loading dots
-  // before the first token arrives. Once content has been written, the bubble
-  // updates live as deltas stream in (no `typing` re-animation).
-  const streamingAssistant = messages.find(
-    (m) => m.role === "assistant" && m.content === "" && streaming,
-  )
-  const streamingMessageId = streamingAssistant?.id
-
-  const bubbleItems = messages.map((m: ChatMessage) => ({
+  const bubbleItems = messages.map((m) => ({
     key: m.id,
-    role: m.role === "user" ? ("user" as const) : ("ai" as const),
+    role: (m.role === "user" ? "user" : "ai") as "user" | "ai",
     content: m.content,
-    loading: m.id === streamingMessageId,
+    loading: false,   // 占位消息的 loading 动效不再用 per-msg；流式已结束的 bubble 不再闪
   }))
 
   const showWelcome =
     !sessionId || (!loadingHistory && messages.length === 0)
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Message list area */}
-      <div className="flex-1 overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {loadingHistory ? (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             加载历史消息…
@@ -102,16 +69,8 @@ export function ChatDialog({
             autoScroll
             className="h-full px-4 py-4"
             role={{
-              user: {
-                placement: "end",
-                variant: "filled",
-                shape: "default",
-              },
-              ai: {
-                placement: "start",
-                variant: "filled",
-                shape: "default",
-              },
+              user: { placement: "end", variant: "filled", shape: "default" },
+              ai: { placement: "start", variant: "filled", shape: "default" },
             }}
           />
         )}
@@ -121,8 +80,6 @@ export function ChatDialog({
         <div className="text-destructive px-3 py-1 text-sm">错误: {error}</div>
       )}
 
-      {/* Sender — disabled until a session is selected. The welcome state
-          above is the primary entry point when no session is active. */}
       <div className="border-t p-3">
         <Sender
           value={input}
@@ -131,9 +88,7 @@ export function ChatDialog({
           onCancel={cancel}
           loading={streaming}
           submitType="shiftEnter"
-          placeholder={
-            sessionId ? "输入消息，Shift+Enter 发送…" : "从上方提示开始对话"
-          }
+          placeholder={sessionId ? "输入消息，Shift+Enter 发送…" : "从上方提示开始对话"}
           disabled={!sessionId || loadingHistory}
           className="w-full"
         />
@@ -143,9 +98,6 @@ export function ChatDialog({
 }
 
 function WelcomeState() {
-  // Click handlers are bound by the parent via the chat container's
-  // `data-prompt-click` delegation if needed in the future. Today the parent
-  // listens on a custom event dispatched from each Prompt.
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 py-8">
       <div className="w-full max-w-2xl">
@@ -162,15 +114,8 @@ function WelcomeState() {
         <Prompts
           title="试试这些问题"
           wrap
-          items={SUGGESTIONS.map((s) => ({
-            key: s.key,
-            icon: s.icon,
-            label: s.label,
-            description: s.description,
-          }))}
+          items={SUGGESTIONS.map((s) => ({ key: s.key, icon: s.icon, label: s.label, description: s.description }))}
           onItemClick={(info: { data: { label?: unknown } }) => {
-            // Dispatch a custom event the page component listens for. This
-            // keeps ChatDialog free of "create new session" responsibilities.
             window.dispatchEvent(
               new CustomEvent("vibe-trading:prompt-select", {
                 detail: { text: String(info.data.label ?? "") },
