@@ -1,5 +1,13 @@
 // src/services/vibe-trading.ts
-import { API_BASE_URL, ApiRequestError, UnauthorizedError, del, get, post } from "@/lib/api"
+import {
+  API_BASE_URL,
+  ApiRequestError,
+  UnauthorizedError,
+  del,
+  get,
+  patch,
+  post,
+} from "@/lib/api"
 
 const BASE = "/v1/ai-agent"
 
@@ -210,4 +218,32 @@ function parseSseEvent(raw: string): SseChunk | null {
 
 function isSseChunkType(value: string): value is SseChunk["type"] {
   return (SSE_CHUNK_TYPES as readonly string[]).includes(value)
+}
+
+/**
+ * 同步提交一条消息。流式输出走独立的 GET /events SSE（见 events-stream.ts）。
+ */
+export async function submitMessage(
+  sessionId: string,
+  content: string,
+): Promise<{ messageId: string; attemptId: string }> {
+  const response = await post<{ messageId: string; attemptId: string }>(
+    `${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`,
+    { content },
+  )
+  return response.data
+}
+
+/**
+ * 更新会话元数据（当前仅 title）。
+ */
+export async function patchSession(
+  id: string,
+  patchBody: { title?: string },
+): Promise<AiSession> {
+  const response = await patch<AiSession>(
+    `${BASE}/sessions/${encodeURIComponent(id)}`,
+    patchBody,
+  )
+  return response.data
 }
