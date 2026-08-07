@@ -172,16 +172,26 @@ function parseSseEvent(raw: string): { event: string; data: Record<string, unkno
   // 上游 vibe SSE 不发 `event:` 字段,所有帧默认归到 "message"。
   // 这里按 data 形状推断真实事件类型,匹配 routeEvent 的 switch 分支。
   if (event === "message") {
-    if (typeof obj.delta === "string" && obj.attempt_id) event = "text_delta"
+    // 工具事件优先判定 —— 上游 vibe service 把 tool 调用发为独立事件
+    // {"tool":"name","elapsed_s":12,"attempt_id":"..."} 或
+    // {"tool":"name","status":"error","elapsed_ms":N,"attempt_id":"..."} (工具失败)
+    // 工具事件可能带 status:"ok"/"error",但那是工具的成败,不是整个 attempt 的成败
+    if (typeof obj.tool === "string" && obj.attempt_id) event = "tool_event"
+    else if (typeof obj.delta === "string" && obj.attempt_id) event = "text_delta"
     else if (typeof obj.content === "string" && obj.attempt_id) event = "text_delta"
     else if (obj.status === "completed" && obj.attempt_id) event = "attempt.completed"
     else if (obj.status === "error" && obj.attempt_id) event = "attempt.error"
-    // 上游 vibe service 把 tool 调用作为独立事件发出(非 inline <tool_call> 标签)。
-    // 形状: {"tool":"name","elapsed_s":12,"attempt_id":"..."}  (in progress)
-    // 或:   {"tool":"name","status":"ok","elapsed_ms":9828,"preview":"...","attempt_id":"..."}
-    else if (typeof obj.tool === "string" && obj.attempt_id) event = "tool_event"
   }
   return { event, data: obj }
+}
+
+/**
+ * 仅供单测使用:从原始 SSE 帧推断事件类型,不分发副作用。
+ * 真实流式消费请走 subscribeSession()。
+ */
+export function inferSseEvent(raw: string): string | null {
+  const ev = parseSseEvent(raw)
+  return ev ? ev.event : null
 }
 
 function sleep(ms: number): Promise<void> {
