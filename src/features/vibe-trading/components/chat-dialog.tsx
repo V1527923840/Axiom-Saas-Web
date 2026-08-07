@@ -378,10 +378,14 @@ export function ChatDialog({
             disabled={streaming || uploading}
             onPickFile={() => fileInputRef.current?.click()}
             onCreateGoal={() => {
+              // 互斥:进入目标模式自动清掉蜂群 preset。
+              setSwarmPreset(null)
               setGoalComposerActive(true)
               inputRef.current?.focus()
             }}
             onStartSwarm={() => {
+              // 互斥:进入蜂群模式自动退出目标模式。
+              setGoalComposerActive(false)
               setSwarmPreset({ name: "auto", title: "Agent Swarm" })
               inputRef.current?.focus()
             }}
