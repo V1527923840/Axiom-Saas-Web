@@ -4,14 +4,6 @@ import { useSessionStore } from "../stores/session-store"
 
 const controllers = new Map<string, AbortController>()
 
-// ===== TEMP DEBUG: 全局事件计数器,供 debug 面板展示 =====
-export const sseDebug = {
-  routeCount: 0,
-  textDeltaCount: 0,
-  lastEventName: "" as string,
-  lastAttemptId: "" as string,
-}
-
 /** 超过这个时长没收到事件就认为控制器可能已死,触发强制重连。 */
 export const STALE_THRESHOLD_MS = 30_000
 
@@ -43,9 +35,6 @@ export function subscribeSession(sessionId: string): void {
   const ctrl = new AbortController()
   controllers.set(sessionId, ctrl)
   useSessionStore.getState().setEventsSubscribed(sessionId, true)
-  if (import.meta.env.DEV) {
-    console.log("[vibe-debug] subscribeSession", sessionId)
-  }
   void runStream(sessionId, ctrl)
 }
 
@@ -82,31 +71,18 @@ async function runStream(sessionId: string, ctrl: AbortController): Promise<void
         throw new ApiRequestError(`events: ${res.status}`, res.status, "EVENTS_FAILED")
       }
 
-      if (import.meta.env.DEV) {
-        console.log("[vibe-debug] SSE opened", sessionId, "status", res.status)
-      }
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buf = ""
       while (!ctrl.signal.aborted) {
         const { done, value } = await reader.read()
-        if (done) {
-          if (import.meta.env.DEV) {
-            console.log("[vibe-debug] SSE done", sessionId)
-          }
-          break
-        }
+        if (done) break
         buf += decoder.decode(value, { stream: true })
         const frames = buf.split("\n\n")
         buf = frames.pop() ?? ""
         for (const raw of frames) {
           const ev = parseSseEvent(raw)
-          if (ev) {
-            if (import.meta.env.DEV) {
-              console.log("[vibe-debug] SSE ev", sessionId, ev.event, ev.data)
-            }
-            routeEvent(sessionId, ev)
-          }
+          if (ev) routeEvent(sessionId, ev)
         }
       }
       backoff = 1000   // 干净断开重置
@@ -123,10 +99,6 @@ function routeEvent(
   sessionId: string,
   ev: { event: string; data: Record<string, unknown> },
 ): void {
-  sseDebug.routeCount++
-  sseDebug.lastEventName = ev.event
-  sseDebug.lastAttemptId = (ev.data?.attempt_id as string) ?? ""
-  if (ev.event === "text_delta") sseDebug.textDeltaCount++
   const store = useSessionStore.getState()
   const aid = ev.data?.attempt_id as string | undefined
   switch (ev.event) {
