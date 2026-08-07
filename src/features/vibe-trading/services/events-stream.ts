@@ -190,7 +190,13 @@ export function routeEvent(
 
     case "swarm.started": {
       const status = buildSwarmStatusFromStarted(ev.data as Record<string, unknown>)
-      if (status) store.upsertSwarmStatus(sessionId, status)
+      if (status) {
+        // 占位卡片 (chat-dialog 在用户选 "启动智能体蜂群" 时立刻注入的 sentinel
+        // runId="__pending_swarm__") 用真实 runId 替换前先清掉,否则会同时
+        // 显示 placeholder + 真实 run 两张卡。
+        store.removeSwarmStatus(sessionId, "__pending_swarm__")
+        store.upsertSwarmStatus(sessionId, status)
+      }
       break
     }
 

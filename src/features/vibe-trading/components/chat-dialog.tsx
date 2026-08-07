@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react"
 import { useGoal } from "../hooks/use-goal"
 import { useSwarmStatus } from "../hooks/use-swarm-status"
 import { useChatStream } from "../hooks/use-chat-stream"
-import type { GoalSnapshot, GoalCriterion } from "../lib/vibe-types"
+import type { GoalSnapshot, GoalCriterion, SwarmRunStatus } from "../lib/vibe-types"
 import { findOpenToolCalls } from "../lib/parse-message"
 import { STALE_THRESHOLD_MS } from "../services/events-stream"
 import { vibeApi } from "../services/vibe-api"
@@ -21,6 +21,14 @@ import { MoreMenu } from "./more-menu"
 import { SwarmChip } from "./swarm-chip"
 import { SwarmStatusCard } from "./swarm-status-card"
 import { ToolCallIndicator } from "./tool-call-indicator"
+
+/**
+ * 选中 "启动智能体蜂群" 时立刻注入的占位 SwarmRunStatus 的 sentinel runId。
+ * 这个 runId 由 chat-dialog 自己写,跟后端真实的 runId 永远不会撞 —— 真 run
+ * 到达 (SSE swarm.started) 时,events-stream 会先 removeSwarmStatus(sid, 这个)
+ * 再 upsert 真实的 SwarmRunStatus,把 placeholder 替换掉。
+ */
+const PENDING_SWARM_RUN_ID = "__pending_swarm__"
 
 const SUGGESTIONS = [
   { key: "market-brief", icon: <TrendingUp className="h-4 w-4" />, label: "今日市场概览", description: "拉一下美股 / A 股 / 港股的当日行情速览" },
@@ -228,6 +236,42 @@ export function ChatDialog({
       }
     })()
   }, [sessionId, pendingGoalObjective, createGoalAction, send])
+
+  // 蜂群模式占位卡片:用户在 MoreMenu 选中 "启动智能体蜂群" 时,真实的 swarm
+  // run 还没有被 agent 启动 (依赖 send() 之后 agent 识别 swarm 前缀才会走
+  // create_swarm_run),但用户已经能看到 SwarmChip 提示模式激活了 —— 视觉与
+  // 卡片之间的间隙会让用户以为卡片丢了。这里在 swarmPreset 变化时直接往
+  // store 里塞一个 sentinel-runId 的占位 SwarmRunStatus (status="pending"),
+  // 由 bubbleItems 流水线走 SwarmStatusCard 渲染,后端 swarm.started SSE
+  // 事件到达时由 events-stream.ts 先 removeSwarmStatus 占位再 upsert 真实
+  // run,实现无缝替换。
+  //
+  // 不覆盖已有真实 run:如果用户刷新页面或切到别的会话再回来,hydration 已经
+  // 把真实 run 灌进 store,这时再叠一张 placeholder 是噪音。
+  useEffect(() => {
+    if (!sessionId || !swarmPreset) return
+    const slot = useSessionStore.getState().byId[sessionId]
+    const hasRealSwarm = slot?.messages.some(
+      (m) => m.type === "swarm_status" && m.swarmStatus?.runId !== PENDING_SWARM_RUN_ID,
+    )
+    if (hasRealSwarm) return
+    const placeholder: SwarmRunStatus = {
+      runId: PENDING_SWARM_RUN_ID,
+      preset: swarmPreset.name,
+      status: "pending",
+      currentLayer: 0,
+      totalLayers: 0,
+      startedAt: Date.now(),
+      agents: [],
+    }
+    useSessionStore.getState().upsertSwarmStatus(sessionId, placeholder)
+    // cleanup:swarmPreset 清空 / 切换到别的 preset / 组件卸载时,把 placeholder
+    // 收掉。如果用户已经发出消息并触发了真实的 swarm.started,events-stream
+    // 已经先把 placeholder remove 掉了,这里再 remove 一次是 no-op。
+    return () => {
+      useSessionStore.getState().removeSwarmStatus(sessionId, PENDING_SWARM_RUN_ID)
+    }
+  }, [sessionId, swarmPreset])
 
   // 找出当前正在流的 assistant message 上未闭合的 <tool_call>
   const streamingAssistant = [...messages]
