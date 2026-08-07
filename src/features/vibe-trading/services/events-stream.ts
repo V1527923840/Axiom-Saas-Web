@@ -1,6 +1,13 @@
 // src/features/vibe-trading/services/events-stream.ts
 import { API_BASE_URL, ApiRequestError } from "@/lib/api"
 import { useSessionStore } from "../stores/session-store"
+import { buildSwarmStatusFromStarted, applySwarmEvent } from "../lib/swarm-status"
+import { vibeApi } from "./vibe-api"
+import type { GoalSnapshot } from "../lib/vibe-types"
+
+const TERMINAL_GOAL_STATUSES = new Set([
+  "complete", "cancelled", "blocked", "superseded", "usage_limited",
+])
 
 const controllers = new Map<string, AbortController>()
 
@@ -95,7 +102,7 @@ async function runStream(sessionId: string, ctrl: AbortController): Promise<void
   }
 }
 
-function routeEvent(
+export function routeEvent(
   sessionId: string,
   ev: { event: string; data: Record<string, unknown> },
 ): void {
@@ -137,6 +144,71 @@ function routeEvent(
           typeof ev.data.status === "string" ? ev.data.status : undefined,
         )
       }
+      break
+    case "goal.created":
+      // 事件载荷不带 snapshot,需 fetch
+      void (async () => {
+        try {
+          const snapshot = await vibeApi.getGoal(sessionId)
+          if (snapshot) store.setGoalSnapshot(sessionId, snapshot)
+        } catch (e) {
+          if (import.meta.env.DEV) console.warn("[SSE] goal.created fetch failed:", e)
+        }
+      })()
+      break
+
+    case "goal.evidence":
+      void (async () => {
+        try {
+          const snapshot = await vibeApi.getGoal(sessionId)
+          if (snapshot) store.setGoalSnapshot(sessionId, snapshot)
+          else store.clearGoalSnapshot(sessionId)
+        } catch (e) {
+          if (import.meta.env.DEV) console.warn("[SSE] goal.evidence fetch failed:", e)
+        }
+      })()
+      break
+
+    case "goal.updated": {
+      const goal = ev.data?.goal as { status?: string } | undefined
+      const snapshot = ev.data?.snapshot as GoalSnapshot | undefined
+      if (goal && TERMINAL_GOAL_STATUSES.has(goal.status ?? "")) {
+        store.clearGoalSnapshot(sessionId)
+      } else if (snapshot) {
+        store.setGoalSnapshot(sessionId, snapshot)
+      } else {
+        // 没有 snapshot 时降级为 fetch
+        void (async () => {
+          try {
+            const fresh = await vibeApi.getGoal(sessionId)
+            if (fresh) store.setGoalSnapshot(sessionId, fresh)
+          } catch {}
+        })()
+      }
+      break
+    }
+
+    case "swarm.started": {
+      const status = buildSwarmStatusFromStarted(ev.data as Record<string, unknown>)
+      if (status) store.upsertSwarmStatus(sessionId, status)
+      break
+    }
+
+    case "swarm.event": {
+      const runId = typeof ev.data?.run_id === "string" ? ev.data.run_id : null
+      const innerEvent = ev.data?.event
+      if (!runId || !innerEvent) break
+      store.updateSwarmStatus(sessionId, runId, (cur) => applySwarmEvent(cur, innerEvent))
+      break
+    }
+
+    // mandate / live.* 预留扩展点 — 当前不渲染 UI,但保留事件 trace
+    case "mandate.proposal":
+    case "mandate.committed":
+    case "live.action":
+    case "live.halted":
+    case "live.resumed":
+      if (import.meta.env.DEV) console.warn(`[SSE] unhandled ${ev.event}:`, ev.data)
       break
     // ignored: message.received, attempt.created, attempt.started, thinking_done
   }
