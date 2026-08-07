@@ -57,6 +57,14 @@ export function ChatDialog({
     edit: editGoal,
     cancel: cancelGoal,
   } = useGoal(sessionId)
+  // Goal-attempt lifecycle 比 chat streaming 范围更大。一个 goal 可能由多个
+  // sub-attempt 组成 (think → tool → respond),中间 attempt.completed 会让
+  // streaming 暂时回到 false,但 goal.status === "active" 期间整个 AI 仍在
+  // 工作中。Sender 上 loading 只看 streaming 会出现"运行中"和"取消任务"
+  // 按钮闪烁/中途消失的问题;以 streaming || goal_active 作为统一的 "还有任务
+  // 在跑" 信号,保证 cancel button 一直可见,直到整个 goal 结束。
+  const goalIsActive = goalSnapshot?.goal.status === "active"
+  const isRunning = streaming || goalIsActive
   const [input, setInput] = useState("")
   const [attachment, setAttachment] = useState<
     { filename: string; file_path: string } | null
@@ -164,7 +172,7 @@ export function ChatDialog({
 
   // 继续现有目标:汇总未完成的 required criteria,作为一条 message 发出。
   const handleContinueGoal = () => {
-    if (!sessionId || !goalSnapshot || streaming) return
+    if (!sessionId || !goalSnapshot || isRunning) return
     const openCriteria = goalSnapshot.criteria
       .filter((c) => !criterionCovered(goalSnapshot, c) && c.required)
       .map((c) => `- ${c.text}`)
@@ -351,8 +359,8 @@ export function ChatDialog({
                   void cancelGoal()
                 }}
                 onCancelTask={cancel}
-                running={streaming}
-                continueDisabled={streaming}
+                running={isRunning}
+                continueDisabled={isRunning}
               />
             )}
           </div>
@@ -405,7 +413,9 @@ export function ChatDialog({
             onChange={setInput}
             onSubmit={handleSend}
             onCancel={cancel}
-            loading={streaming}
+            // 参见上面 isRunning 的注释:goal-attempt 期间整体保持红方块 cancel,
+            // 不因为某个 sub-attempt 完成就切回 send。
+            loading={isRunning}
             submitType="enter"
             placeholder={
               goalComposerActive
