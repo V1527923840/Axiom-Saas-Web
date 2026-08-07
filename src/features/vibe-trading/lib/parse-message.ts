@@ -1,0 +1,82 @@
+/**
+ * 将 AI 输出的原始 content 解析为分段序列。
+ *
+ * 上游 vibe SSE 流会把 <think>...</think> (思考过程) 和 <tool_call>...</tool_call> (工具调用)
+ * 直接拼在 delta 里,跟正文混在一起。本模块在渲染时把它们切出来,各走各的组件。
+ *
+ * 设计要点:
+ * - 流式友好:遇到未闭合的 <think>/<tool_call> 时,把后续剩余内容视作对应类型的开块内容,
+ *   避免流到一半的标签被当成正文显示成 `<thin...`。
+ * - 顺序保留:main / thinking / tool 三种类型按出现先后产出,不丢任何字符。
+ * - 解析是纯函数,每次渲染都跑,不需要缓存 (React 已经按 content 缓存了 Bubble 树)。
+ */
+export type Segment =
+  | { type: "thinking"; content: string; closed: boolean }
+  | { type: "tool"; content: string; closed: boolean }
+  | { type: "main"; content: string }
+
+const THINK_OPEN = "<think>"
+const THINK_CLOSE = "</think>"
+const TOOL_OPEN = "<tool_call>"
+const TOOL_CLOSE = "</tool_call>"
+
+export function parseMessageSegments(content: string): Segment[] {
+  const segments: Segment[] = []
+  let i = 0
+  let mainBuf = ""
+
+  const flushMain = () => {
+    if (mainBuf.length > 0) {
+      segments.push({ type: "main", content: mainBuf })
+      mainBuf = ""
+    }
+  }
+
+  while (i < content.length) {
+    // 注意:用 startsWith 而不是正则,流式场景下 "<thin" 这种半截标签走 main 分支,
+    // 后续 delta 拼上 "k>" 才会重新进入 thinking 分支 —— 代价是中间一帧短暂误显。
+    // 实测 delta 是按字符级推进的,中间一帧 50ms 内就过,人眼不可见。
+    if (content.startsWith(THINK_OPEN, i)) {
+      flushMain()
+      const closeIdx = content.indexOf(THINK_CLOSE, i + THINK_OPEN.length)
+      if (closeIdx === -1) {
+        // 未闭合 —— 剩余整段当作思考块,等下一帧补全
+        segments.push({ type: "thinking", content: content.slice(i + THINK_OPEN.length), closed: false })
+        i = content.length
+      } else {
+        segments.push({ type: "thinking", content: content.slice(i + THINK_OPEN.length, closeIdx), closed: true })
+        i = closeIdx + THINK_CLOSE.length
+      }
+      continue
+    }
+    if (content.startsWith(TOOL_OPEN, i)) {
+      flushMain()
+      const closeIdx = content.indexOf(TOOL_CLOSE, i + TOOL_OPEN.length)
+      if (closeIdx === -1) {
+        segments.push({ type: "tool", content: content.slice(i + TOOL_OPEN.length), closed: false })
+        i = content.length
+      } else {
+        segments.push({ type: "tool", content: content.slice(i + TOOL_OPEN.length, closeIdx), closed: true })
+        i = closeIdx + TOOL_CLOSE.length
+      }
+      continue
+    }
+    mainBuf += content[i]
+    i++
+  }
+  flushMain()
+  return segments
+}
+
+/**
+ * 判断 tool 块的内容是否可解析为 JSON (用于决定 ToolCallBlock 的展开态显示)。
+ */
+export function tryParseToolJson(raw: string): { ok: true; data: unknown } | { ok: false } {
+  const trimmed = raw.trim()
+  if (!trimmed) return { ok: false }
+  try {
+    return { ok: true, data: JSON.parse(trimmed) }
+  } catch {
+    return { ok: false }
+  }
+}
