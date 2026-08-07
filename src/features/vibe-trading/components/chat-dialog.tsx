@@ -33,12 +33,19 @@ export function ChatDialog({
   pendingMessage,
   onPendingMessageConsumed,
   onCreateAndSend,
+  onCreateSessionOnly,
 }: {
   sessionId: string | null
   title?: string | null
   pendingMessage?: string | null
   onPendingMessageConsumed?: () => void
   onCreateAndSend?: (content: string) => Promise<void> | void
+  /**
+   * 用于"无会话路径下"目标创建等场景:只创建会话,不发送任何消息。
+   * 父组件需在 addSession 完成后将 currentId 切到新会话,本组件会用
+   * pendingGoalObjective + 新 sessionId 触发目标创建与 kickoff。
+   */
+  onCreateSessionOnly?: () => Promise<void> | void
 }) {
   const { messages, streaming, error, send, cancel } =
     useChatStream(sessionId, title)
@@ -59,6 +66,10 @@ export function ChatDialog({
   const [uploading, setUploading] = useState(false)
   const [goalDetailsOpen, setGoalDetailsOpen] = useState(false)
   const [goalComposerActive, setGoalComposerActive] = useState(false)
+  // 无会话路径下,用户已输入目标文本但还没创建会话 —— 等 sessionId 出现后由
+  // 下方 useEffect 触发 createGoalAction + kickoff,避免老逻辑里"必须先发消息"
+  // 的限制。
+  const [pendingGoalObjective, setPendingGoalObjective] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<SenderRef>(null)
 
@@ -102,12 +113,20 @@ export function ChatDialog({
     if (goalComposerActive) {
       void (async () => {
         try {
-          // 必须有 sessionId 才能 POST /goal;无会话路径下让用户先发一条普通
-          // 消息建好会话,再触发目标创建。简化起见:无会话时直接退出 composer
-          // 并提示用户先发消息。
           if (!sessionId) {
-            alert("请先发送一条消息创建会话,再创建研究目标。")
+            // 无会话:不要让用户手动再发一条"占位消息"。把 objective 暂存
+            // 为 pendingGoalObjective,然后让父组件创建一个空会话;
+            // sessionId 一到位,下面的 useEffect 会接着 POST /goal 并发 kickoff。
+            if (!onCreateSessionOnly) {
+              // 极端退化:父组件没有提供只建会话的入口,仍然报警。
+              alert("无法创建研究目标:页面未提供会话创建入口。")
+              setGoalComposerActive(false)
+              return
+            }
+            setPendingGoalObjective(trimmed)
             setGoalComposerActive(false)
+            setInput("")
+            void onCreateSessionOnly()
             return
           }
           await createGoalAction(trimmed)
@@ -169,6 +188,30 @@ export function ChatDialog({
     void send(pendingMessage)
     onPendingMessageConsumed?.()
   }, [pendingMessage, sessionId, send, onPendingMessageConsumed])
+
+  // 无会话路径下的目标创建接力:handleSend 把 objective 暂存在
+  // pendingGoalObjective 并触发 onCreateSessionOnly;当父组件完成 addSession
+  // 并把新 sessionId 注入本组件后,本 effect 接力 POST /goal,然后把 kickoff
+  // 发出去。pendingGoalObjective 在 effect 内清空,避免重复触发。
+  const goalInFlightRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!sessionId || !pendingGoalObjective) return
+    if (goalInFlightRef.current === pendingGoalObjective) return
+    goalInFlightRef.current = pendingGoalObjective
+    const objective = pendingGoalObjective
+    setPendingGoalObjective(null)
+    void (async () => {
+      try {
+        await createGoalAction(objective)
+        setGoalDetailsOpen(true)
+        const kickoff = `Start working on this research goal now.\nGoal: ${objective}`
+        await send(kickoff)
+      } catch (err) {
+        alert(`创建目标失败: ${err instanceof Error ? err.message : "未知"}`)
+        goalInFlightRef.current = null
+      }
+    })()
+  }, [sessionId, pendingGoalObjective, createGoalAction, send])
 
   // 找出当前正在流的 assistant message 上未闭合的 <tool_call>
   const streamingAssistant = [...messages]

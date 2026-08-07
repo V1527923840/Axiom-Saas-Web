@@ -76,6 +76,14 @@ function VibeTradingContent() {
     [handlePromptSelect],
   )
 
+  // 仅建空会话（用于"无会话路径下创建研究目标"：ChatDialog 在等 sessionId
+  // 到位后自行 POST /goal 并发 kickoff,这里不需要再代发任何 message）。
+  // 走 handlePromptSelect("") 触发 addSession + setCurrentId,pendingMessage
+  // 收到空串会被 ChatDialog 的 effect 直接 short-circuit 掉。
+  const handleCreateSessionOnly = useCallback(async () => {
+    await handlePromptSelect("")
+  }, [handlePromptSelect])
+
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ text: string }>).detail
@@ -114,6 +122,7 @@ function VibeTradingContent() {
           pendingMessage={pendingMessage}
           onPendingMessageConsumed={() => setPendingMessage(null)}
           onCreateAndSend={handleCreateAndSend}
+          onCreateSessionOnly={handleCreateSessionOnly}
         />
       </div>
     </div>
