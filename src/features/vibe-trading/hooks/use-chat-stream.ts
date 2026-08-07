@@ -27,9 +27,6 @@ export function useChatStream(
   const ensure = useSessionStore((s) => s.ensure)
   const setHistoryLoaded = useSessionStore((s) => s.setHistoryLoaded)
 
-  const loadingHistory =
-    !!sessionId && (!slice || !slice.historyLoaded) && (slice?.messages.length ?? 0) === 0
-
   // 进入会话：确保 store 槽存在 + 拉历史 + 开 /events 订阅
   useEffect(() => {
     if (!sessionId) return
@@ -181,7 +178,6 @@ export function useChatStream(
     messages: slice?.messages ?? [],
     streaming: slice?.streaming ?? false,
     error: slice?.error ?? null,
-    loadingHistory,
     send,
     cancel,
   }

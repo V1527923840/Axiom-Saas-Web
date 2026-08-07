@@ -49,6 +49,15 @@ function VibeTradingContent() {
     [addSession],
   )
 
+  // 无会话时,用户在 Sender 输入并发送 → 自动建一个新会话并把内容作为 pendingMessage
+  // 走 ChatDialog 内已有的 pendingMessage 自动发送链路。
+  const handleCreateAndSend = useCallback(
+    async (content: string) => {
+      await handlePromptSelect(content)
+    },
+    [handlePromptSelect],
+  )
+
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ text: string }>).detail
@@ -86,6 +95,7 @@ function VibeTradingContent() {
           title={currentTitle}
           pendingMessage={pendingMessage}
           onPendingMessageConsumed={() => setPendingMessage(null)}
+          onCreateAndSend={handleCreateAndSend}
         />
       </div>
     </div>

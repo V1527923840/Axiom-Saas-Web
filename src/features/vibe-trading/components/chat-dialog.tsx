@@ -17,20 +17,31 @@ export function ChatDialog({
   title,
   pendingMessage,
   onPendingMessageConsumed,
+  onCreateAndSend,
 }: {
   sessionId: string | null
   title?: string | null
   pendingMessage?: string | null
   onPendingMessageConsumed?: () => void
+  onCreateAndSend?: (content: string) => Promise<void> | void
 }) {
-  const { messages, streaming, loadingHistory, error, send, cancel } =
+  const { messages, streaming, error, send, cancel } =
     useChatStream(sessionId, title)
   const [input, setInput] = useState("")
 
   const handleSend = () => {
     const trimmed = input.trim()
-    if (!trimmed || !sessionId || streaming) return
-    void send(trimmed)
+    if (!trimmed) return
+    if (sessionId) {
+      // 有会话:正常提交。streaming 由 store 内部拒绝(per-session 串行保护)。
+      if (streaming) return
+      void send(trimmed)
+    } else if (onCreateAndSend) {
+      // 无会话:让上层建一个新会话并把内容作为 pendingMessage 自动发出。
+      void onCreateAndSend(trimmed)
+    } else {
+      return
+    }
     setInput("")
   }
 
@@ -51,17 +62,15 @@ export function ChatDialog({
     loading: false,   // 占位消息的 loading 动效不再用 per-msg；流式已结束的 bubble 不再闪
   }))
 
-  const showWelcome =
-    !sessionId || (!loadingHistory && messages.length === 0)
+  // 只要有消息就显示对话,空消息一律走欢迎态。
+  // 不再用 loadingHistory 阻塞 — 历史是异步加载的,拉回来前就显示空列表/欢迎态,
+  // 期间用户也可以照常输入;流式事件直接 append 到 Bubble.List,实时刷新。
+  const showWelcome = messages.length === 0
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-1 min-w-0 flex-col">
       <div className="flex-1 min-h-0 overflow-hidden">
-        {loadingHistory ? (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            加载历史消息…
-          </div>
-        ) : showWelcome ? (
+        {showWelcome ? (
           <WelcomeState />
         ) : (
           <Bubble.List
@@ -80,7 +89,7 @@ export function ChatDialog({
         <div className="text-destructive px-3 py-1 text-sm">错误: {error}</div>
       )}
 
-      <div className="border-t p-3">
+      <div className="w-full shrink-0 border-t p-3">
         <Sender
           value={input}
           onChange={setInput}
@@ -88,8 +97,12 @@ export function ChatDialog({
           onCancel={cancel}
           loading={streaming}
           submitType="shiftEnter"
-          placeholder={sessionId ? "输入消息，Shift+Enter 发送…" : "从上方提示开始对话"}
-          disabled={!sessionId || loadingHistory}
+          placeholder={
+            sessionId
+              ? "输入消息，Shift+Enter 发送…"
+              : "输入消息,自动创建会话…"
+          }
+          autoFocus
           className="w-full"
         />
       </div>
