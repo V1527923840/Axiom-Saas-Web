@@ -16,6 +16,7 @@ import { AiMessageContent } from "./ai-message-content"
 import { GoalChip } from "./goal-chip"
 import { GoalPanel } from "./goal-panel"
 import { MoreMenu } from "./more-menu"
+import { SwarmStatusCard } from "./swarm-status-card"
 import { ToolCallIndicator } from "./tool-call-indicator"
 
 const SUGGESTIONS = [
@@ -172,23 +173,39 @@ export function ChatDialog({
     ? findOpenToolCalls(streamingAssistant.content)
     : []
 
-  const bubbleItems = messages.map((m) => ({
-    key: m.id,
-    role: (m.role === "user" ? "user" : "ai") as "user" | "ai",
-    content: m.content,
-    // 流式增量由 appendDelta 触发 React 重渲染,这里关掉 Bubble 自带的 typing 动画避免双重打字机。
-    // streaming=true 让 Bubble.List 跳过 typing 渲染走纯 React 树。
-    streaming: m.role === "assistant" && Boolean(m.attemptId) && streaming,
-    loading: false,
-    // AI 走自定义渲染(解析 thinking/tool/markdown + cancelled 角标);用户消息保持纯文本。
-    // closure 捕获 m.cancelledAt —— use-chat-stream.cancel() 在 cancel 时往当前正在流的 assistant 消息上写 cancelledAt。
-    contentRender:
-      m.role === "assistant"
-        ? (content: string) => (
-            <AiMessageContent content={content} cancelledAt={m.cancelledAt} />
-          )
-        : undefined,
-  }))
+  const bubbleItems = messages.map((m) => {
+    // swarm_status 是 store 合成的消息(upsertSwarmStatus,按 runId 去重),没有
+    // attemptId 也没有文本 content —— 整条气泡交给 SwarmStatusCard 画,content
+    // 传空串只是为了满足 Bubble item 的类型。
+    if (m.type === "swarm_status" && m.swarmStatus) {
+      const status = m.swarmStatus
+      return {
+        key: m.id,
+        role: "ai" as const,
+        content: "",
+        streaming: false,
+        loading: false,
+        contentRender: () => <SwarmStatusCard status={status} />,
+      }
+    }
+    return {
+      key: m.id,
+      role: (m.role === "user" ? "user" : "ai") as "user" | "ai",
+      content: m.content,
+      // 流式增量由 appendDelta 触发 React 重渲染,这里关掉 Bubble 自带的 typing 动画避免双重打字机。
+      // streaming=true 让 Bubble.List 跳过 typing 渲染走纯 React 树。
+      streaming: m.role === "assistant" && Boolean(m.attemptId) && streaming,
+      loading: false,
+      // AI 走自定义渲染(解析 thinking/tool/markdown + cancelled 角标);用户消息保持纯文本。
+      // closure 捕获 m.cancelledAt —— use-chat-stream.cancel() 在 cancel 时往当前正在流的 assistant 消息上写 cancelledAt。
+      contentRender:
+        m.role === "assistant"
+          ? (content: string) => (
+              <AiMessageContent content={content} cancelledAt={m.cancelledAt} />
+            )
+          : undefined,
+    }
+  })
 
   // 只要有消息就显示对话,空消息一律走欢迎态。
   // 不再用 loadingHistory 阻塞 — 历史是异步加载的,拉回来前就显示空列表/欢迎态,
