@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { ChatDialog } from "./components/chat-dialog"
 import { SessionList } from "./components/session-list"
@@ -35,6 +35,24 @@ function VibeTradingContent() {
       useSessionStore.getState().reset()
     }
   }, [])
+
+  // 切 session 时精细化：清上一个 session 的 text 流式状态,
+  // 但保留 goalSnapshot 与 swarm_status 消息(同 session 多次对话间持续)。
+  // 用 ref 锁定"上一个 id"以避免初次挂载就触发 (currentId 仍为 null)。
+  const prevIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!currentId) {
+      prevIdRef.current = null
+      return
+    }
+    const prev = prevIdRef.current
+    // 第一次出现 currentId —— 不 reset (还没"切")
+    prevIdRef.current = currentId
+    return () => {
+      // 卸载 / currentId 变化时 —— 软重置前一个 session 的 slot
+      if (prev) useSessionStore.getState().softReset(prev)
+    }
+  }, [currentId])
 
   const handlePromptSelect = useCallback(
     async (text: string) => {

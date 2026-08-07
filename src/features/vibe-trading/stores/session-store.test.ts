@@ -789,3 +789,119 @@ describe("goal + swarm — per-slot state and message upsert", () => {
     expect(synth?.id).toBe(`stream-${AID}`)
   })
 })
+
+// T15: softReset mutator for session-switch. Drops non-swarm_status messages,
+// resets streaming/error/active/pending/historyLoaded, but PRESERVES goalSnapshot
+// and all swarm_status messages. The goal + swarm state is the whole point of
+// session-switch persistence — wiping it on every chat swap would force a refetch
+// round-trip for zero reason.
+describe("softReset — preserve goalSnapshot and swarm_status messages", () => {
+  it("keeps only swarm_status messages and clears streaming/pending/error state", () => {
+    // Build a populated slot: 2 text assistant, 1 user, 2 swarm_status, 1 user
+    useSessionStore.setState((s) => {
+      const c = s.byId[SID]
+      return {
+        byId: {
+          ...s.byId,
+          [SID]: {
+            ...c,
+            messages: [
+              { id: "u-1", role: "user" as const, content: "hi", createdAt: "t1" },
+              { id: "a-1", role: "assistant" as const, content: "hello", createdAt: "t2" },
+              {
+                id: "swarm-1",
+                role: "assistant" as const,
+                type: "swarm_status" as const,
+                content: "",
+                swarmStatus: swarmStatusFixture({ runId: "r1" }),
+                createdAt: "t3",
+              },
+              { id: "u-2", role: "user" as const, content: "and?", createdAt: "t4" },
+              { id: "a-2", role: "assistant" as const, content: "more", createdAt: "t5" },
+              {
+                id: "swarm-2",
+                role: "assistant" as const,
+                type: "swarm_status" as const,
+                content: "",
+                swarmStatus: swarmStatusFixture({ runId: "r2", preset: "compete" }),
+                createdAt: "t6",
+              },
+            ],
+            streaming: true,
+            error: "old error",
+            activeAttemptId: AID,
+            pendingDeltas: { [AID]: "buffered" },
+            pendingSnapshot: { [AID]: "snap" },
+            historyLoaded: true,
+          },
+        },
+      }
+    })
+
+    useSessionStore.getState().softReset(SID)
+    const cur = useSessionStore.getState().byId[SID]
+    // 5 messages dropped (2 text + 1 swarm_status + 2 user roles above) — wait: 6 - 2 swarm_status = 4 dropped
+    expect(cur.messages).toHaveLength(2)
+    expect(cur.messages.every((m) => m.type === "swarm_status")).toBe(true)
+    expect(cur.messages.map((m) => m.swarmStatus?.runId)).toEqual(["r1", "r2"])
+    // streaming/error/activeAttemptId all reset
+    expect(cur.streaming).toBe(false)
+    expect(cur.error).toBeNull()
+    expect(cur.activeAttemptId).toBeNull()
+    // pending buffers cleared
+    expect(cur.pendingDeltas).toBeUndefined()
+    expect(cur.pendingSnapshot).toBeUndefined()
+    // historyLoaded back to false so the next load refetches
+    expect(cur.historyLoaded).toBe(false)
+  })
+
+  it("PRESERVES goalSnapshot on softReset", () => {
+    const snap = goalSnapshotFixture()
+    useSessionStore.getState().setGoalSnapshot(SID, snap)
+    useSessionStore.getState().softReset(SID)
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.goalSnapshot).toEqual(snap)
+  })
+
+  it("is a no-op when the session does not exist", () => {
+    // session not ensured — store should silently ignore (matches reset semantics
+    // for missing sessions in other mutators).
+    useSessionStore.getState().reset()
+    expect(() =>
+      useSessionStore.getState().softReset("missing-sess"),
+    ).not.toThrow()
+    expect(useSessionStore.getState().byId["missing-sess"]).toBeUndefined()
+  })
+
+  it("does not delete the slot — byId entry still exists after softReset", () => {
+    useSessionStore.setState((s) => {
+      const c = s.byId[SID]
+      return {
+        byId: {
+          ...s.byId,
+          [SID]: {
+            ...c,
+            messages: [
+              { id: "u-1", role: "user" as const, content: "hi", createdAt: "t1" },
+              {
+                id: "swarm-1",
+                role: "assistant" as const,
+                type: "swarm_status" as const,
+                content: "",
+                swarmStatus: swarmStatusFixture(),
+                createdAt: "t2",
+              },
+            ],
+            streaming: true,
+          },
+        },
+      }
+    })
+    useSessionStore.getState().softReset(SID)
+    // Slot survives, only the swarm_status message remains
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur).toBeDefined()
+    expect(cur.messages).toHaveLength(1)
+    expect(cur.messages[0].swarmStatus?.runId).toBe("run-1")
+  })
+})

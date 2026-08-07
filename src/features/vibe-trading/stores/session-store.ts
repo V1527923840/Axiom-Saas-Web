@@ -94,6 +94,21 @@ type SessionStore = {
   setHistoryLoaded: (sessionId: string, messages: ChatMessage[]) => void
   reset: () => void
   /**
+   * Session-switch reset: drop everything in the slot that pertains to the chat
+   * stream, but KEEP the goal/swarm state so we don't refetch on every chat swap.
+   *
+   * - filters `messages` → only `swarm_status` messages survive (text and user
+   *   messages are wiped, since they belong to the previous chat conversation)
+   * - clears streaming/error/activeAttemptId/pending buffers/historyLoaded
+   * - PRESERVES `goalSnapshot` (per-session goal is persistent across chat
+   *   switches — same session may have both a goal and many chats)
+   * - PRESERVES all `swarm_status` messages (run cards persist across chat
+   *   switches)
+   *
+   * No-op if the session slot doesn't exist (matches other mutators).
+   */
+  softReset: (sessionId: string) => void
+  /**
    * Goal service state — goal/swarm feature. See PerSession.goalSnapshot.
    */
   setGoalSnapshot: (sessionId: string, snapshot: GoalSnapshot) => void
@@ -402,6 +417,26 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       }
     }),
   reset: () => set({ byId: {} }),
+  softReset: (sid) =>
+    set((s) => {
+      const cur = s.byId[sid]
+      if (!cur) return s
+      return {
+        byId: {
+          ...s.byId,
+          [sid]: {
+            ...cur,
+            messages: cur.messages.filter((m) => m.type === "swarm_status"),
+            streaming: false,
+            error: null,
+            activeAttemptId: null,
+            pendingDeltas: undefined,
+            pendingSnapshot: undefined,
+            historyLoaded: false,
+          },
+        },
+      }
+    }),
   setGoalSnapshot: (sid, snapshot) =>
     set((s) => {
       const cur = s.byId[sid]
