@@ -175,27 +175,57 @@ html {
 }
 
 /*
- * antd Sender loading button (cancel button) — make it destructive.
+ * antd Sender loading button (cancel button) — make it highly visible.
  *
- * The default antd Sender shows a "stop" icon when loading=true. It uses
- * color="primary" + variant="text" (transparent background, icon colored
- * with --primary). In dark mode, --primary is near-white, so the icon ends
- * up being near-white on a transparent background over a dark input area —
- * hard to see.
+ * The default antd Sender shows a "stop" icon when loading=true. It renders
+ * an antd Button with color="primary" + variant="text" + shape="circle".
+ * Antd Button applies text color via CSS custom properties
+ * (--ant-btn-text-color / --ant-btn-color-base) on the .ant-btn-color-primary
+ * modifier, so plain `color: ... !important` often loses.
  *
- * The cancel action is semantically destructive (stops an active operation),
- * so a red color works in both light and dark mode and is universally
- * recognizable. Background is a subtle red tint to make it pop against the
- * input area.
+ * Double-class selector (.ant-sender-loading-button.ant-sender-loading-button)
+ * doubles CSS specificity to beat any antd Button selector. We both set the
+ * standard CSS color/background AND override the antd custom properties so
+ * the icon and any descendants inherit the new color. The destructive
+ * background is a solid red with a glowing ring — universally recognizable
+ * as "stop", readable in both light and dark mode.
  */
-.ant-sender-loading-button {
-  color: var(--color-destructive) !important;
-  background-color: color-mix(in oklch, var(--color-destructive) 12%, transparent) !important;
+.ant-sender-loading-button,
+.ant-sender-loading-button.ant-sender-loading-button {
+  color: white !important;
+  background-color: var(--color-destructive) !important;
+  border-color: var(--color-destructive) !important;
+  box-shadow: 0 0 0 2px
+    color-mix(in oklch, var(--color-destructive) 25%, transparent) !important;
+  --ant-btn-color-base: var(--color-destructive) !important;
+  --ant-btn-color-hover: var(--color-destructive) !important;
+  --ant-btn-color-active: var(--color-destructive) !important;
+  --ant-btn-text-color: white !important;
+  --ant-btn-text-color-hover: white !important;
+  --ant-btn-text-color-active: white !important;
+  --ant-btn-bg-color: var(--color-destructive) !important;
+  --ant-btn-bg-color-hover: var(--color-destructive) !important;
+  --ant-btn-bg-color-active: var(--color-destructive) !important;
+  --ant-btn-border-color: var(--color-destructive) !important;
+  --ant-btn-border-color-hover: var(--color-destructive) !important;
+  --ant-btn-border-color-active: var(--color-destructive) !important;
 }
 .ant-sender-loading-button:hover,
-.ant-sender-loading-button:focus-visible {
-  color: var(--color-destructive) !important;
-  background-color: color-mix(in oklch, var(--color-destructive) 22%, transparent) !important;
+.ant-sender-loading-button:focus-visible,
+.ant-sender-loading-button.ant-sender-loading-button:hover,
+.ant-sender-loading-button.ant-sender-loading-button:focus-visible {
+  color: white !important;
+  background-color: var(--color-destructive) !important;
+  border-color: var(--color-destructive) !important;
+  filter: brightness(0.9) !important;
+  --ant-btn-text-color: white !important;
+  --ant-btn-text-color-hover: white !important;
+  --ant-btn-bg-color-hover: var(--color-destructive) !important;
+  --ant-btn-border-color-hover: var(--color-destructive) !important;
+}
+.ant-sender-loading-button .ant-sender-loading-icon {
+  color: white !important;
+  fill: white !important;
 }
 
 /*
