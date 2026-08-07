@@ -28,7 +28,7 @@ describe("parseMessageSegments — closed flag", () => {
 
   it("does not add closed to main segments", () => {
     const segs = parseMessageSegments("hello world")
-    expect(segs[0]).toEqual({ type: "main", content: "hello world" })
+    expect(segs[0]).toEqual({ type: "main", content: "hello world", start: 0 })
   })
 })
 

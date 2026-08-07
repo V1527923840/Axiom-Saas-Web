@@ -17,16 +17,16 @@ export function AiMessageContent({ content }: { content: string }) {
   const segments = parseMessageSegments(content)
   return (
     <>
-      {segments.map((seg, i) => {
+      {segments.map((seg) => {
         if (seg.type === "thinking") {
-          return <ThinkingBlock key={`t-${i}`} content={seg.content} closed={seg.closed} />
+          return <ThinkingBlock key={`t-${seg.start}`} content={seg.content} closed={seg.closed} />
         }
         if (seg.type === "tool") {
-          return <ToolCallBlock key={`x-${i}`} content={seg.content} />
+          return <ToolCallBlock key={`x-${seg.start}`} content={seg.content} closed={seg.closed} />
         }
         if (!seg.content.trim()) return null
         return (
-          <div key={`m-${i}`} className="ai-md">
+          <div key={`m-${seg.start}`} className="ai-md">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{

@@ -11,9 +11,9 @@
  * - 解析是纯函数,每次渲染都跑,不需要缓存 (React 已经按 content 缓存了 Bubble 树)。
  */
 export type Segment =
-  | { type: "thinking"; content: string; closed: boolean }
-  | { type: "tool"; content: string; closed: boolean }
-  | { type: "main"; content: string }
+  | { type: "thinking"; content: string; closed: boolean; start: number }
+  | { type: "tool"; content: string; closed: boolean; start: number }
+  | { type: "main"; content: string; start: number }
 
 const THINK_OPEN = "<think>"
 const THINK_CLOSE = "</think>"
@@ -24,10 +24,11 @@ export function parseMessageSegments(content: string): Segment[] {
   const segments: Segment[] = []
   let i = 0
   let mainBuf = ""
+  let mainStart = 0
 
   const flushMain = () => {
     if (mainBuf.length > 0) {
-      segments.push({ type: "main", content: mainBuf })
+      segments.push({ type: "main", content: mainBuf, start: mainStart })
       mainBuf = ""
     }
   }
@@ -38,28 +39,33 @@ export function parseMessageSegments(content: string): Segment[] {
     // 实测 delta 是按字符级推进的,中间一帧 50ms 内就过,人眼不可见。
     if (content.startsWith(THINK_OPEN, i)) {
       flushMain()
+      const start = i
       const closeIdx = content.indexOf(THINK_CLOSE, i + THINK_OPEN.length)
       if (closeIdx === -1) {
         // 未闭合 —— 剩余整段当作思考块,等下一帧补全
-        segments.push({ type: "thinking", content: content.slice(i + THINK_OPEN.length), closed: false })
+        segments.push({ type: "thinking", content: content.slice(i + THINK_OPEN.length), closed: false, start })
         i = content.length
       } else {
-        segments.push({ type: "thinking", content: content.slice(i + THINK_OPEN.length, closeIdx), closed: true })
+        segments.push({ type: "thinking", content: content.slice(i + THINK_OPEN.length, closeIdx), closed: true, start })
         i = closeIdx + THINK_CLOSE.length
       }
       continue
     }
     if (content.startsWith(TOOL_OPEN, i)) {
       flushMain()
+      const start = i
       const closeIdx = content.indexOf(TOOL_CLOSE, i + TOOL_OPEN.length)
       if (closeIdx === -1) {
-        segments.push({ type: "tool", content: content.slice(i + TOOL_OPEN.length), closed: false })
+        segments.push({ type: "tool", content: content.slice(i + TOOL_OPEN.length), closed: false, start })
         i = content.length
       } else {
-        segments.push({ type: "tool", content: content.slice(i + TOOL_OPEN.length, closeIdx), closed: true })
+        segments.push({ type: "tool", content: content.slice(i + TOOL_OPEN.length, closeIdx), closed: true, start })
         i = closeIdx + TOOL_CLOSE.length
       }
       continue
+    }
+    if (mainBuf.length === 0) {
+      mainStart = i
     }
     mainBuf += content[i]
     i++
