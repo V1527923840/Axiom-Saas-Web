@@ -71,4 +71,19 @@ describe("findOpenToolCalls", () => {
     expect(calls[0].toolName).toBeUndefined()
     expect(calls[0].parsed).toBeUndefined()
   })
+
+  it("recovers toolName from partial JSON when value is still streaming in", () => {
+    // 上游流式场景:tool_call 已开,但 JSON 还没写完 —— JSON.parse 会抛,
+    // 走 extractToolNameFromPartialJson 兜底,返回当前已写出的 name。
+    const calls = findOpenToolCalls('<tool_call>{"name":"getQuote","sym')
+    expect(calls).toHaveLength(1)
+    expect(calls[0].toolName).toBe("getQuote")
+    expect(calls[0].parsed).toBeUndefined()
+  })
+
+  it("recovers toolName from partial JSON when key is named 'tool' instead of 'name'", () => {
+    const calls = findOpenToolCalls('<tool_call>{"tool":"lookup",')
+    expect(calls).toHaveLength(1)
+    expect(calls[0].toolName).toBe("lookup")
+  })
 })
