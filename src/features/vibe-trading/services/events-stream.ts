@@ -29,10 +29,13 @@ function authHeaders(extra: Record<string, string> = {}): Record<string, string>
 export function subscribeSession(sessionId: string): void {
   const existing = controllers.get(sessionId)
   if (existing) {
-    // 控制器存在但太久没收到事件 → 视为死链,强制重建
-    const lastEvent =
-      useSessionStore.getState().byId[sessionId]?.lastEventAt ?? 0
-    if (Date.now() - lastEvent < STALE_THRESHOLD_MS) return
+    // 控制器存在但太久没收到事件 → 仅当"我们正期望收到事件" (streaming === true) 才视为死链。
+    // lastEventAt 跟踪的是 AI 事件活跃度,空闲会话 (idle, 没有 in-flight attempt) 30s+ 没事件完全正常,
+    // 不应主动 abort + 重建一个本来就健康的 SSE 连接 (I5 bug)。
+    const slot = useSessionStore.getState().byId[sessionId]
+    const lastEvent = slot?.lastEventAt ?? 0
+    const isIdle = !(slot?.streaming ?? false)
+    if (isIdle || Date.now() - lastEvent < STALE_THRESHOLD_MS) return
     existing.abort()
     controllers.delete(sessionId)
     useSessionStore.getState().setEventsSubscribed(sessionId, false)
@@ -40,7 +43,9 @@ export function subscribeSession(sessionId: string): void {
   const ctrl = new AbortController()
   controllers.set(sessionId, ctrl)
   useSessionStore.getState().setEventsSubscribed(sessionId, true)
-  console.log("[vibe-debug] subscribeSession", sessionId)
+  if (import.meta.env.DEV) {
+    console.log("[vibe-debug] subscribeSession", sessionId)
+  }
   void runStream(sessionId, ctrl)
 }
 
@@ -77,14 +82,18 @@ async function runStream(sessionId: string, ctrl: AbortController): Promise<void
         throw new ApiRequestError(`events: ${res.status}`, res.status, "EVENTS_FAILED")
       }
 
-      console.log("[vibe-debug] SSE opened", sessionId, "status", res.status)
+      if (import.meta.env.DEV) {
+        console.log("[vibe-debug] SSE opened", sessionId, "status", res.status)
+      }
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buf = ""
       while (!ctrl.signal.aborted) {
         const { done, value } = await reader.read()
         if (done) {
-          console.log("[vibe-debug] SSE done", sessionId)
+          if (import.meta.env.DEV) {
+            console.log("[vibe-debug] SSE done", sessionId)
+          }
           break
         }
         buf += decoder.decode(value, { stream: true })
@@ -93,7 +102,9 @@ async function runStream(sessionId: string, ctrl: AbortController): Promise<void
         for (const raw of frames) {
           const ev = parseSseEvent(raw)
           if (ev) {
-            console.log("[vibe-debug] SSE ev", sessionId, ev.event, ev.data)
+            if (import.meta.env.DEV) {
+              console.log("[vibe-debug] SSE ev", sessionId, ev.event, ev.data)
+            }
             routeEvent(sessionId, ev)
           }
         }

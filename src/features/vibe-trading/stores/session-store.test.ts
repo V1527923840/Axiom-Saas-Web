@@ -84,6 +84,84 @@ describe("setHistoryLoaded — dedup by attemptId", () => {
     const synth = cur.messages.find((m) => m.attemptId === AID)
     expect(synth?.content).toBe("in flight")
   })
+
+  // I1: dedup by attemptId for non-stream- prefixed messages, AND by id collision.
+  it("removes a non-synthetic pre-existing message when history brings the same attemptId", () => {
+    // send() 路径:本地插入了 user + placeholder (optimistic, ids 是 u-/a- 前缀的临时 id)
+    // 然后 setHistoryLoaded 来了 —— placeholder (如果已有 attemptId) 不应被复制。
+    useSessionStore.setState((s) => {
+      const c = s.byId[SID]
+      return {
+        byId: {
+          ...s.byId,
+          [SID]: {
+            ...c,
+            messages: [
+              ...c.messages,
+              {
+                id: "optimistic-1",
+                role: "user",
+                content: "hi",
+                createdAt: "2026-08-07T00:00:00.000Z",
+              },
+              {
+                id: "optimistic-2",
+                role: "assistant",
+                content: "",
+                attemptId: AID, // 已通过其他途径填上了 attemptId
+                createdAt: "2026-08-07T00:00:00.000Z",
+              },
+            ],
+          },
+        },
+      }
+    })
+    useSessionStore.getState().setHistoryLoaded(SID, [
+      {
+        id: "server-msg",
+        role: "assistant",
+        content: "real",
+        attemptId: AID,
+        createdAt: "2026-08-07T00:00:00.000Z",
+      },
+    ])
+    const cur = useSessionStore.getState().byId[SID]
+    // optimistic-2 (同 attemptId) 必须被去重,user 消息保留,server 消息加入
+    const assistantMsgs = cur.messages.filter((m) => m.attemptId === AID)
+    expect(assistantMsgs).toHaveLength(1)
+    expect(assistantMsgs[0].id).toBe("server-msg")
+  })
+
+  it("removes a pre-existing message when incoming history has the same id", () => {
+    // 防御:虽然 u-${ts}/a-${ts} 乐观 id 通常与服务端 id 不撞,但若撞了按 id 去重。
+    useSessionStore.getState().appendDelta(SID, "att-x", "x")
+    // 把 stream-att-x 重命名成与 incoming 同 id 来模拟撞 id 场景
+    useSessionStore.setState((s) => {
+      const c = s.byId[SID]
+      return {
+        byId: {
+          ...s.byId,
+          [SID]: {
+            ...c,
+            messages: c.messages.map((m) =>
+              m.attemptId === "att-x" ? { ...m, id: "collide-id" } : m,
+            ),
+          },
+        },
+      }
+    })
+    useSessionStore.getState().setHistoryLoaded(SID, [
+      {
+        id: "collide-id",
+        role: "user",
+        content: "from server",
+        createdAt: "2026-08-07T00:00:00.000Z",
+      },
+    ])
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.messages.filter((m) => m.id === "collide-id")).toHaveLength(1)
+    expect(cur.messages[0].content).toBe("from server")
+  })
 })
 
 // C1: race between appendDelta(unknown aid) (creates synthetic) and send() stamping placeholder
@@ -176,5 +254,35 @@ describe("setAttemptContent — no stale pendingSnapshot gate (C2)", () => {
     // appendDelta 仍然能扩内容
     useSessionStore.getState().appendDelta(SID, AID, " more")
     expect(useSessionStore.getState().byId[SID].messages[0].content).toBe("full more")
+  })
+})
+
+// I4: markAttemptError must surface errors that arrive for an aid present in messages,
+// even when activeAttemptId is null (refresh scenario).
+describe("markAttemptError — error surfaces even without activeAttemptId (I4)", () => {
+  it("sets error when synthetic with aid exists in messages, activeAttemptId === null", () => {
+    // refresh 后接续:slot.activeAttemptId 还没填,但 stream-<aid> synthetic 已存在
+    useSessionStore.getState().appendDelta(SID, AID, "streamed partial")
+    useSessionStore.setState((s) => {
+      const c = s.byId[SID]
+      return {
+        byId: {
+          ...s.byId,
+          [SID]: { ...c, activeAttemptId: null, streaming: false },
+        },
+      }
+    })
+    useSessionStore.getState().markAttemptError(SID, AID, "upstream exploded")
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.error).toBe("upstream exploded")
+    expect(cur.streaming).toBe(false)
+  })
+
+  it("ignores errors for unknown aid when activeAttemptId is null too", () => {
+    // aid 不在 messages 里 + activeAttemptId 是 null → 忽略 (防御性测试)。
+    useSessionStore.getState().markAttemptError(SID, "stranger-a", "boom")
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.error).toBeNull()
+    expect(cur.streaming).toBe(false)
   })
 })

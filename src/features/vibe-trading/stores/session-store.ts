@@ -229,10 +229,15 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const cur = s.byId[sid]
       if (!cur) return s
-      // 只处理当前 active attempt 的 error,过时的 attempt_id (e.g. 上一次 cancel 后的滞后事件) 忽略。
-      // 否则会把旧 attempt 的错误显示到当前正在流式的新 attempt 上,造成"events 还在流但 UI 报 Stream Error"。
-      const isCurrent = cur.activeAttemptId === aid
-      if (!isCurrent) return s
+      // 错误归属判定 —— 不能只看 activeAttemptId:
+      // - activeAttemptId === aid:本地 send() 启的 attempt,正常情况
+      // - activeAttemptId === null 但 cur.messages 里有 stream-<aid> synthetic:
+      //   refresh 后接续旧 attempt 的情况,slot.activeAttemptId 还没填,但 synthetic 已存在,
+      //   此时必须接收错误,否则用户看到 events 还在流但 UI 永远不报错 (I4 bug)
+      // - 都没有:过时的 attempt_id (e.g. 上一次 cancel 后的滞后事件),忽略。
+      const matchesActive = cur.activeAttemptId === aid
+      const matchesMessage = cur.messages.some((m) => m.attemptId === aid)
+      if (!matchesActive && !matchesMessage) return s
       return {
         byId: {
           ...s.byId,
@@ -240,7 +245,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             ...cur,
             error: message,
             streaming: false,
-            activeAttemptId: null,
+            activeAttemptId: matchesActive ? null : cur.activeAttemptId,
           }),
         },
       }
@@ -257,16 +262,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const cur = s.byId[sid]
       if (!cur) return s
-      // history 加载:每条 incoming 消息权威。如果 incoming 带有 attemptId 且与 cur 里
-      // 某条 synthetic stream-<aid> 同 attemptId,则移除那条 synthetic(避免 React 同时
-      // 渲染两条气泡)。synthetic 的 attemptId 仍保留在 history message 上,
-      // 后续 SSE delta 继续路由过去。
+      // history 加载:每条 incoming 消息权威。cur 里所有"可被 incoming 替代"的条目都需要去重:
+      // 1. attemptId 匹配 (synthetic stream-<aid> 或任何已有 attemptId 的条目) —— SSE 期间可能
+      //    已经创建了 stream-<aid> 合成消息,history 拉回来时同 attemptId 的条目权威。
+      // 2. id 匹配 —— 防御同 id 重复渲染 (虽然 u-${ts}/a-${ts} 乐观 id 与服务端 id 通常不撞,
+      //    但保留这条防御更稳)。
+      // 乐观插入但还没 attemptId 的 user / placeholder (u-${ts} / a-${ts}) 与服务端 id 不撞,
+      // 不会被这条去重吞掉,会作为后续 delta 的真实目标保留。
       const incomingAttemptIds = new Set(
         messages.filter((m) => m.attemptId).map((m) => m.attemptId as string),
       )
-      const cleanedCur = cur.messages.filter(
-        (m) => !(m.id.startsWith("stream-") && m.attemptId && incomingAttemptIds.has(m.attemptId)),
-      )
+      const incomingIds = new Set(messages.map((m) => m.id))
+      const cleanedCur = cur.messages.filter((m) => {
+        if (m.attemptId && incomingAttemptIds.has(m.attemptId)) return false
+        if (incomingIds.has(m.id)) return false
+        return true
+      })
       return {
         byId: {
           ...s.byId,
