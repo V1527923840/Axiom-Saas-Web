@@ -5,6 +5,7 @@ import type { SenderRef } from "@ant-design/x/es/sender/interface"
 import { Bot, Lightbulb, Sparkles, TrendingUp } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { useGoal } from "../hooks/use-goal"
+import { useSwarmStatus } from "../hooks/use-swarm-status"
 import { useChatStream } from "../hooks/use-chat-stream"
 import type { GoalSnapshot, GoalCriterion } from "../lib/vibe-types"
 import { findOpenToolCalls } from "../lib/parse-message"
@@ -57,6 +58,12 @@ export function ChatDialog({
     edit: editGoal,
     cancel: cancelGoal,
   } = useGoal(sessionId)
+  // Hydrate SwarmStatusCard from running/pending runs on session mount.
+  // The hook is mounted for its side effect (it populates the store via
+  // upsertSwarmStatus); the returned `statuses` are read by the existing
+  // bubbleItems pipeline which already maps m.type === "swarm_status" to
+  // <SwarmStatusCard/>. We don't need to read the result here.
+  useSwarmStatus(sessionId)
   // Goal-attempt lifecycle 比 chat streaming 范围更大。一个 goal 可能由多个
   // sub-attempt 组成 (think → tool → respond),中间 attempt.completed 会让
   // streaming 暂时回到 false,但 goal.status === "active" 期间整个 AI 仍在

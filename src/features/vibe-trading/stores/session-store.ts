@@ -68,6 +68,16 @@ export type PerSession = {
    * 覆盖掉本地"无目标"决定。
    */
   goalLoaded: boolean
+  /**
+   * 标记 swarm runs 是否已经从服务端拉过一次。
+   * - false:slot 是新创建的/spread from softReset,useSwarmStatus 的 effect
+   *   应当跑一次 GET /swarm/runs 来填 running/pending run 的 SwarmStatusCard。
+   * - true:已加载 (不论有没有活跃 run),避免反复拉。
+   *
+   * 同 goalLoaded / historyLoaded:失败路径也要置 true,否则会因为 dependency
+   * 不变而无限重拉。
+   */
+  swarmLoaded: boolean
 }
 
 type SessionStore = {
@@ -156,6 +166,7 @@ const empty = (): PerSession => ({
   lastEventAt: 0,
   goalSnapshot: null,
   goalLoaded: false,
+  swarmLoaded: false,
 })
 
 const touchEvent = (cur: PerSession): PerSession => ({
