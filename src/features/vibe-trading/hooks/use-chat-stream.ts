@@ -71,10 +71,22 @@ export function useChatStream(
   }, [sessionId, ensure, setHistoryLoaded])
 
   const send = useCallback(
-    async (content: string) => {
+    async (content: string, attachment?: { filename: string; file_path: string } | null) => {
       if (!sessionId) return
       const cur = useSessionStore.getState().byId[sessionId]
       if (!cur || cur.streaming) return   // per-session 串行保护
+
+      // attachment 前缀注入：把上传文件信息写在 user prompt 前面，
+      // 这样 SSE stream 下来的下游 agent / LLM 能看到附件上下文。
+      // 注意：user 在 chat UI 上看到的仍是 trimmed 的原始输入，
+      // 注入只发生在发给后端的 content 上。
+      // attachment 前缀注入：把上传文件信息写在 user prompt 前面，
+      // 这样 SSE stream 下来的下游 agent / LLM 能看到附件上下文。
+      // 注意：user 在 chat UI 自己的气泡里看到的是原始 trimmed 输入（userMsg.content），
+      // finalContent 只用于 POST /messages。
+      const finalContent = attachment
+        ? `[Uploaded file: ${attachment.filename}, path: ${attachment.file_path}]\n\n${content}`
+        : content
 
       const userMsg: ChatMessage = {
         id: `u-${Date.now()}`,
@@ -107,7 +119,7 @@ export function useChatStream(
       const currentSessionTitle = typeof title === "string" ? title : null
 
       try {
-        const { attemptId } = await submitMessage(sessionId, content)
+        const { attemptId } = await submitMessage(sessionId, finalContent)
 
         // 把 attemptId 写回占位;同时回放 POST 期间积压在 pendingDeltas / pendingSnapshot 里的早批数据。
         // 优先级:pendingSnapshot(全量快照,来自上游 content 帧) > pendingDeltas(累积 delta) > 占位原 content。

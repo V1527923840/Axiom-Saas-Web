@@ -6,8 +6,11 @@ import { useEffect, useRef, useState } from "react"
 import { useChatStream } from "../hooks/use-chat-stream"
 import { findOpenToolCalls } from "../lib/parse-message"
 import { STALE_THRESHOLD_MS } from "../services/events-stream"
+import { vibeApi } from "../services/vibe-api"
 import { useSessionStore } from "../stores/session-store"
+import { AttachmentChip } from "./attachment-chip"
 import { AiMessageContent } from "./ai-message-content"
+import { MoreMenu } from "./more-menu"
 import { ToolCallIndicator } from "./tool-call-indicator"
 
 const SUGGESTIONS = [
@@ -34,6 +37,43 @@ export function ChatDialog({
     useChatStream(sessionId, title)
   const debugSlice = useSessionStore((s) => (sessionId ? s.byId[sessionId] : undefined))
   const [input, setInput] = useState("")
+  const [attachment, setAttachment] = useState<
+    { filename: string; file_path: string } | null
+  >(null)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    // 立刻清空 value,允许同名文件重复上传
+    e.target.value = ""
+    if (file.size > 50 * 1024 * 1024) {
+      alert("文件过大(上限 50MB)")
+      return
+    }
+    const ext = (file.name.toLowerCase().split(".").pop() ?? "")
+    const blocked = [
+      "exe", "msi", "bat", "cmd", "com", "scr", "app", "dmg", "so",
+      "dll", "dylib", "py", "sh", "bash", "zsh", "fish", "ps1",
+      "zip", "rar", "7z", "tar", "gz",
+    ]
+    if (blocked.includes(ext)) {
+      alert("该文件类型不允许上传")
+      return
+    }
+    setUploading(true)
+    try {
+      const result = await vibeApi.uploadFile(file)
+      setAttachment({ filename: result.filename, file_path: result.file_path })
+    } catch (err) {
+      alert(`上传失败: ${err instanceof Error ? err.message : "未知错误"}`)
+    } finally {
+      setUploading(false)
+    }
+  }
 
   const handleSend = () => {
     const trimmed = input.trim()
@@ -41,14 +81,18 @@ export function ChatDialog({
     if (sessionId) {
       // 有会话:正常提交。streaming 由 store 内部拒绝(per-session 串行保护)。
       if (streaming) return
-      void send(trimmed)
+      void send(trimmed, attachment)
     } else if (onCreateAndSend) {
       // 无会话:让上层建一个新会话并把内容作为 pendingMessage 自动发出。
+      // 新会话创建时 attachment 状态会被丢弃(因为 pendingMessage 触发新会话后
+      // setAttachment(null) 紧随其后执行);如果未来需要在新会话里也带附件,
+      // 由 onCreateAndSend 的实现来决策。
       void onCreateAndSend(trimmed)
     } else {
       return
     }
     setInput("")
+    setAttachment(null)
   }
 
   // pendingMessage 自动发送（保留 v1 行为）
@@ -163,22 +207,50 @@ export function ChatDialog({
         </div>
       )}
 
-      <div className="w-full shrink-0 border-t p-3">
-        <Sender
-          value={input}
-          onChange={setInput}
-          onSubmit={handleSend}
-          onCancel={cancel}
-          loading={streaming}
-          submitType="enter"
-          placeholder={
-            sessionId
-              ? "输入消息,Enter 发送,Shift+Enter 换行…"
-              : "输入消息,自动创建会话…"
-          }
-          autoFocus
-          className="w-full"
-        />
+      <div className="w-full shrink-0 border-t p-3 space-y-2">
+        {attachment && (
+          <AttachmentChip
+            attachment={attachment}
+            onClear={() => setAttachment(null)}
+          />
+        )}
+        {uploading && (
+          <div className="text-xs text-muted-foreground">上传中…</div>
+        )}
+        <div className="flex gap-2 items-end">
+          <MoreMenu
+            disabled={streaming || uploading}
+            onPickFile={() => fileInputRef.current?.click()}
+            onCreateGoal={() => {
+              /* wired in Task 11 */
+            }}
+            onStartSwarm={() => {
+              /* wired in Task 14 */
+            }}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,.docx,.xlsx,.xls,.pptx,.csv,.tsv,.txt,.md,.log,.json,.yaml,.yml,.toml,.html,.xml,.rst,.png,.jpg,.jpeg,.gif,.bmp,.webp,.tiff"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          <Sender
+            value={input}
+            onChange={setInput}
+            onSubmit={handleSend}
+            onCancel={cancel}
+            loading={streaming}
+            submitType="enter"
+            placeholder={
+              sessionId
+                ? "输入消息,Enter 发送,Shift+Enter 换行…"
+                : "输入消息,自动创建会话…"
+            }
+            autoFocus
+            className="w-full"
+          />
+        </div>
       </div>
     </div>
   )
