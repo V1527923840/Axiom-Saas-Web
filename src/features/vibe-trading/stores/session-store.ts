@@ -86,11 +86,27 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         return { byId: { ...s.byId, [sid]: touchEvent({ ...cur, messages }) } }
       }
       // 没有匹配:很可能是 POST /messages 还没返回 attemptId,而 /events 已经把
-      // 该 attempt 的首批 delta 推过来了。把 delta 按 attemptId 暂存,
-      // send() 拿到 attemptId 回填占位时会一次性回放。
+      // 该 attempt 的首批 delta 推过来了。先创建一个 synthetic 消息使 UI 能即时渲染,
+      // 后续 delta 通过 hasMatch 分支自然 append 到该消息上。
       const pendingDeltas = { ...(cur.pendingDeltas ?? {}) }
       pendingDeltas[aid] = (pendingDeltas[aid] ?? "") + delta
-      return { byId: { ...s.byId, [sid]: touchEvent({ ...cur, pendingDeltas }) } }
+      const synthetic: ChatMessage = {
+        id: `stream-${aid}`,
+        role: "assistant",
+        attemptId: aid,
+        content: delta,
+        createdAt: new Date().toISOString(),
+      }
+      return {
+        byId: {
+          ...s.byId,
+          [sid]: touchEvent({
+            ...cur,
+            messages: [...cur.messages, synthetic],
+            pendingDeltas,
+          }),
+        },
+      }
     }),
   setAttemptContent: (sid, aid, fullText) =>
     set((s) => {
@@ -123,14 +139,22 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           },
         }
       }
-      // 没有匹配 → 按 attemptId 暂存,send() 回填时直接覆盖 placeholder.content
+      // 没有匹配 → 创建一个 synthetic 消息用 fullText 兜底,后续该 aid 的 delta 仍可通过 hasMatch 路径更新
       const pendingSnapshot = { ...(cur.pendingSnapshot ?? {}) }
       pendingSnapshot[aid] = fullText
+      const synthetic: ChatMessage = {
+        id: `stream-${aid}`,
+        role: "assistant",
+        attemptId: aid,
+        content: fullText,
+        createdAt: new Date().toISOString(),
+      }
       return {
         byId: {
           ...s.byId,
           [sid]: touchEvent({
             ...cur,
+            messages: [...cur.messages, synthetic],
             pendingSnapshot,
             pendingDeltas:
               restDeltas && Object.keys(restDeltas).length > 0
