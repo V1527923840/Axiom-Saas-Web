@@ -16,6 +16,7 @@ import { AiMessageContent } from "./ai-message-content"
 import { GoalChip } from "./goal-chip"
 import { GoalPanel } from "./goal-panel"
 import { MoreMenu } from "./more-menu"
+import { SwarmChip } from "./swarm-chip"
 import { SwarmStatusCard } from "./swarm-status-card"
 import { ToolCallIndicator } from "./tool-call-indicator"
 
@@ -51,6 +52,9 @@ export function ChatDialog({
   const [input, setInput] = useState("")
   const [attachment, setAttachment] = useState<
     { filename: string; file_path: string } | null
+  >(null)
+  const [swarmPreset, setSwarmPreset] = useState<
+    { name: string; title: string } | null
   >(null)
   const [uploading, setUploading] = useState(false)
   const [goalDetailsOpen, setGoalDetailsOpen] = useState(false)
@@ -123,7 +127,7 @@ export function ChatDialog({
     if (sessionId) {
       // 有会话:正常提交。streaming 由 store 内部拒绝(per-session 串行保护)。
       if (streaming) return
-      void send(trimmed, attachment)
+      void send(trimmed, attachment, swarmPreset)
     } else if (onCreateAndSend) {
       // 无会话:让上层建一个新会话并把内容作为 pendingMessage 自动发出。
       // 新会话创建时 attachment 状态会被丢弃(因为 pendingMessage 触发新会话后
@@ -135,6 +139,7 @@ export function ChatDialog({
     }
     setInput("")
     setAttachment(null)
+    setSwarmPreset(null)
   }
 
   // 继续现有目标:汇总未完成的 required criteria,作为一条 message 发出。
@@ -324,6 +329,12 @@ export function ChatDialog({
             onClear={() => setAttachment(null)}
           />
         )}
+        {swarmPreset && (
+          <SwarmChip
+            title={swarmPreset.title}
+            onClear={() => setSwarmPreset(null)}
+          />
+        )}
         {uploading && (
           <div className="text-xs text-muted-foreground">上传中…</div>
         )}
@@ -336,7 +347,8 @@ export function ChatDialog({
               inputRef.current?.focus()
             }}
             onStartSwarm={() => {
-              /* wired in Task 14 */
+              setSwarmPreset({ name: "auto", title: "Agent Swarm" })
+              inputRef.current?.focus()
             }}
           />
           <input

@@ -71,22 +71,27 @@ export function useChatStream(
   }, [sessionId, ensure, setHistoryLoaded])
 
   const send = useCallback(
-    async (content: string, attachment?: { filename: string; file_path: string } | null) => {
+    async (
+      content: string,
+      attachment?: { filename: string; file_path: string } | null,
+      swarmPreset?: { name: string; title: string } | null,
+    ) => {
       if (!sessionId) return
       const cur = useSessionStore.getState().byId[sessionId]
       if (!cur || cur.streaming) return   // per-session 串行保护
 
-      // attachment 前缀注入：把上传文件信息写在 user prompt 前面，
-      // 这样 SSE stream 下来的下游 agent / LLM 能看到附件上下文。
-      // 注意：user 在 chat UI 上看到的仍是 trimmed 的原始输入，
-      // 注入只发生在发给后端的 content 上。
-      // attachment 前缀注入：把上传文件信息写在 user prompt 前面，
-      // 这样 SSE stream 下来的下游 agent / LLM 能看到附件上下文。
+      // swarm + attachment 前缀注入：把 swarm 模式 / 上传文件信息写在 user prompt 前面，
+      // 这样 SSE stream 下来的下游 agent / LLM 能看到这些上下文。
       // 注意：user 在 chat UI 自己的气泡里看到的是原始 trimmed 输入（userMsg.content），
       // finalContent 只用于 POST /messages。
-      const finalContent = attachment
-        ? `[Uploaded file: ${attachment.filename}, path: ${attachment.file_path}]\n\n${content}`
-        : content
+      // 顺序：swarm prefix 先（更外层），attachment prefix 后（更靠近原始内容）。
+      let finalContent = content
+      if (swarmPreset) {
+        finalContent = `[Swarm Team Mode] Use the swarm tool to assemble the best specialist team for this task. Auto-select the most appropriate preset.\n\n${finalContent}`
+      }
+      if (attachment) {
+        finalContent = `[Uploaded file: ${attachment.filename}, path: ${attachment.file_path}]\n\n${finalContent}`
+      }
 
       const userMsg: ChatMessage = {
         id: `u-${Date.now()}`,
