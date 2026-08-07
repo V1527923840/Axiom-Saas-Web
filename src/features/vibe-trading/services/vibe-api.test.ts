@@ -102,11 +102,14 @@ describe("vibeApi.goal", () => {
     expect(got).toBeNull()
   })
 
-  it("createGoal POSTs objective as JSON body and returns snapshot", async () => {
-    const fetchSpy = mockFetchOnce(GOAL_SNAPSHOT)
+  it("createGoal POSTs objective as JSON body and unwraps { data: snapshot }", async () => {
+    const fetchSpy = mockFetchOnce({ data: GOAL_SNAPSHOT })
 
     const got = await vibeApi.createGoal("s-1", { objective: "find alpha" })
 
+    // Server wraps the vibe pass-through response via TransformResponseInterceptor,
+    // so we must unwrap `.data` — otherwise GoalChip would render `snapshot.goal`
+    // as undefined and throw on `.ui_summary` access.
     expect(got).toEqual(GOAL_SNAPSHOT)
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
     expect(url).toBe(U("/v1/ai-agent/sessions/s-1/goal"))
@@ -116,9 +119,9 @@ describe("vibeApi.goal", () => {
     expect(headers["Content-Type"]).toBe("application/json")
   })
 
-  it("updateGoal PATCHes with expected_goal_id", async () => {
+  it("updateGoal PATCHes with expected_goal_id and unwraps { data }", async () => {
     const responseBody = { goal: GOAL_SNAPSHOT.goal, snapshot: GOAL_SNAPSHOT }
-    const fetchSpy = mockFetchOnce(responseBody)
+    const fetchSpy = mockFetchOnce({ data: responseBody })
 
     const got = await vibeApi.updateGoal("s-1", {
       goal_id: "g-1",
@@ -139,18 +142,20 @@ describe("vibeApi.goal", () => {
     )
   })
 
-  it("addGoalEvidence POSTs to /goal/evidence", async () => {
-    const fetchSpy = mockFetchOnce({
+  it("addGoalEvidence POSTs to /goal/evidence and unwraps { data }", async () => {
+    const responseBody = {
       evidence: { evidence_id: "e-1" },
       snapshot: GOAL_SNAPSHOT,
-    })
+    }
+    const fetchSpy = mockFetchOnce({ data: responseBody })
 
-    await vibeApi.addGoalEvidence("s-1", {
+    const got = await vibeApi.addGoalEvidence("s-1", {
       goal_id: "g-1",
       expected_goal_id: "g-1",
       text: "new finding",
     })
 
+    expect(got).toEqual(responseBody)
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
     expect(url).toBe(U("/v1/ai-agent/sessions/s-1/goal/evidence"))
     expect(init.method).toBe("POST")
@@ -163,18 +168,20 @@ describe("vibeApi.goal", () => {
     )
   })
 
-  it("updateGoalStatus PATCHes /goal/status with status body", async () => {
-    const fetchSpy = mockFetchOnce({
+  it("updateGoalStatus PATCHes /goal/status with status body and unwraps { data }", async () => {
+    const responseBody = {
       goal: GOAL_SNAPSHOT.goal,
       snapshot: GOAL_SNAPSHOT,
-    })
+    }
+    const fetchSpy = mockFetchOnce({ data: responseBody })
 
-    await vibeApi.updateGoalStatus("s-1", {
+    const got = await vibeApi.updateGoalStatus("s-1", {
       goal_id: "g-1",
       expected_goal_id: "g-1",
       status: "cancelled",
     })
 
+    expect(got).toEqual(responseBody)
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
     expect(url).toBe(U("/v1/ai-agent/sessions/s-1/goal/status"))
     expect(init.method).toBe("PATCH")

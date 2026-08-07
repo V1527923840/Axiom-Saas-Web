@@ -74,14 +74,17 @@ export const vibeApi = {
       time_budget_seconds?: number
     },
   ): Promise<GoalSnapshot> {
-    return request<GoalSnapshot>(
+    // 服务器 controller 是 vibe 的 pass-through,NestJS 的 TransformResponseInterceptor
+    // 把响应包成 { data: <vibe 返回> }。这里把 .data 解包,否则调用方拿到的
+    // 是 { data: GoalSnapshot },UI 渲染时访问 snapshot.goal.* 会因 undefined 抛错。
+    return request<{ data: GoalSnapshot }>(
       `/v1/ai-agent/sessions/${encodeURIComponent(sid)}/goal`,
       {
         method: "POST",
         body: JSON.stringify(body),
         headers: { "Content-Type": "application/json" },
       },
-    )
+    ).then((r) => r.data)
   },
 
   updateGoal(
@@ -93,28 +96,30 @@ export const vibeApi = {
       ui_summary?: string
     },
   ): Promise<{ goal: unknown; snapshot: GoalSnapshot }> {
-    return request(
+    return request<{ data: { goal: unknown; snapshot: GoalSnapshot } }>(
       `/v1/ai-agent/sessions/${encodeURIComponent(sid)}/goal`,
       {
         method: "PATCH",
         body: JSON.stringify(body),
         headers: { "Content-Type": "application/json" },
       },
-    )
+    ).then((r) => r.data)
   },
 
   addGoalEvidence(
     sid: string,
     body: Record<string, unknown>,
   ): Promise<{ evidence: unknown; snapshot: GoalSnapshot }> {
-    return request(
+    return request<{
+      data: { evidence: unknown; snapshot: GoalSnapshot }
+    }>(
       `/v1/ai-agent/sessions/${encodeURIComponent(sid)}/goal/evidence`,
       {
         method: "POST",
         body: JSON.stringify(body),
         headers: { "Content-Type": "application/json" },
       },
-    )
+    ).then((r) => r.data)
   },
 
   updateGoalStatus(
@@ -127,14 +132,14 @@ export const vibeApi = {
       recap?: string
     },
   ): Promise<{ goal: unknown; snapshot: GoalSnapshot }> {
-    return request(
+    return request<{ data: { goal: unknown; snapshot: GoalSnapshot } }>(
       `/v1/ai-agent/sessions/${encodeURIComponent(sid)}/goal/status`,
       {
         method: "PATCH",
         body: JSON.stringify(body),
         headers: { "Content-Type": "application/json" },
       },
-    )
+    ).then((r) => r.data)
   },
 
   listSwarmPresets(): Promise<SwarmPreset[]> {
