@@ -9,6 +9,8 @@ export function ThinkingBlock({ content, closed }: { content: string; closed: bo
   // 用户一旦点过 toggle 开关,prop 不再覆盖用户选择(由 userInteractedRef 守门)
   const [open, setOpen] = useState(!closed)
   const userInteractedRef = useRef(false)
+  const preRef = useRef<HTMLPreElement>(null)
+  const lastLenRef = useRef(0)
 
   useEffect(() => {
     if (closed && !userInteractedRef.current) {
@@ -17,6 +19,17 @@ export function ThinkingBlock({ content, closed }: { content: string; closed: bo
   }, [closed])
 
   const trimmed = content.trim()
+
+  // 内容增长时滚到底。第一版不做"用户在顶部就不抢"判断 —— 用户反馈后再加。
+  useEffect(() => {
+    if (!open || !preRef.current) return
+    const el = preRef.current
+    if (trimmed.length > lastLenRef.current) {
+      el.scrollTop = el.scrollHeight
+      lastLenRef.current = trimmed.length
+    }
+  }, [trimmed, open])
+
   if (!trimmed) return null
 
   const handleToggle = () => {
@@ -41,7 +54,10 @@ export function ThinkingBlock({ content, closed }: { content: string; closed: bo
         <span className="opacity-60">{open ? "收起" : "展开"}</span>
       </button>
       {open && (
-        <pre className="mx-3 mb-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-transparent px-1 py-1 text-xs leading-relaxed">
+        <pre
+          ref={preRef}
+          className="mx-3 mb-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded bg-transparent px-1 py-1 text-xs leading-relaxed"
+        >
           {trimmed}
         </pre>
       )}
