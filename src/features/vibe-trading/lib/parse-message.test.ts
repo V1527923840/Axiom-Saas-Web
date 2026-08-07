@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { parseMessageSegments } from "./parse-message"
+import { parseMessageSegments, findOpenToolCalls } from "./parse-message"
 
 describe("parseMessageSegments — closed flag", () => {
   it("marks a fully-closed think segment as closed=true", () => {
@@ -29,5 +29,46 @@ describe("parseMessageSegments — closed flag", () => {
   it("does not add closed to main segments", () => {
     const segs = parseMessageSegments("hello world")
     expect(segs[0]).toEqual({ type: "main", content: "hello world" })
+  })
+})
+
+describe("findOpenToolCalls", () => {
+  it("returns empty for content with no tool_call", () => {
+    expect(findOpenToolCalls("plain text only")).toEqual([])
+  })
+
+  it("returns empty when tool_call is fully closed", () => {
+    expect(findOpenToolCalls('<tool_call>{"name":"x"}</tool_call>')).toEqual([])
+  })
+
+  it("returns one open call with parsed name and params", () => {
+    const calls = findOpenToolCalls('<tool_call>{"name":"getQuote","symbol":"AAPL"}')
+    expect(calls).toHaveLength(1)
+    expect(calls[0].raw).toBe('{"name":"getQuote","symbol":"AAPL"}')
+    expect(calls[0].toolName).toBe("getQuote")
+    expect(calls[0].parsed).toEqual({ name: "getQuote", symbol: "AAPL" })
+  })
+
+  it("returns multiple open calls in order", () => {
+    const content =
+      '<tool_call>{"name":"first"}<tool_call>{"name":"second"'
+    const calls = findOpenToolCalls(content)
+    expect(calls).toHaveLength(2)
+    expect(calls[0].toolName).toBe("first")
+    expect(calls[1].toolName).toBe("second")
+  })
+
+  it("skips closed tool_call and only returns the open one", () => {
+    const content = '<tool_call>{"name":"done"}</tool_call><tool_call>{"name":"running"'
+    const calls = findOpenToolCalls(content)
+    expect(calls).toHaveLength(1)
+    expect(calls[0].toolName).toBe("running")
+  })
+
+  it("leaves toolName undefined when JSON is malformed", () => {
+    const calls = findOpenToolCalls('<tool_call>{not valid')
+    expect(calls).toHaveLength(1)
+    expect(calls[0].toolName).toBeUndefined()
+    expect(calls[0].parsed).toBeUndefined()
   })
 })

@@ -80,3 +80,71 @@ export function tryParseToolJson(raw: string): { ok: true; data: unknown } | { o
     return { ok: false }
   }
 }
+
+export type OpenToolCall = {
+  index: number
+  raw: string
+  parsed?: unknown
+  toolName?: string
+}
+
+/**
+ * Scan AI message content for any unclosed <tool_call>… segments.
+ * Returns them in the order they appear. Closed calls are skipped.
+ *
+ * "open" means we saw `<tool_call>` but no matching `</tool_call>` yet
+ * (still streaming in). Reuses the same constant tags as parseMessageSegments
+ * to stay in lock-step.
+ */
+/**
+ * Extract toolName from a partial JSON object string (stream-friendly).
+ * Looks for the first "name" or "tool" key whose value is a quoted string.
+ * Returns undefined if neither is found.
+ */
+function extractToolNameFromPartialJson(raw: string): string | undefined {
+  const nameMatch = raw.match(/"name"\s*:\s*"([^"]*)"/)
+  if (nameMatch) return nameMatch[1]
+  const toolMatch = raw.match(/"tool"\s*:\s*"([^"]*)"/)
+  if (toolMatch) return toolMatch[1]
+  return undefined
+}
+
+export function findOpenToolCalls(content: string): OpenToolCall[] {
+  const out: OpenToolCall[] = []
+  let i = 0
+  let segIdx = 0
+  while (i < content.length) {
+    if (!content.startsWith(TOOL_OPEN, i)) {
+      i++
+      continue
+    }
+    const closeIdx = content.indexOf(TOOL_CLOSE, i + TOOL_OPEN.length)
+    if (closeIdx === -1) {
+      // 开块:内容延伸到下一个 <​tool_call> (含) 或字符串末尾
+      const nextOpenIdx = content.indexOf(TOOL_OPEN, i + TOOL_OPEN.length)
+      const endIdx = nextOpenIdx === -1 ? content.length : nextOpenIdx
+      const raw = content.slice(i + TOOL_OPEN.length, endIdx)
+      let parsed: unknown
+      let toolName: string | undefined
+      try {
+        parsed = JSON.parse(raw)
+        if (parsed && typeof parsed === "object") {
+          const obj = parsed as Record<string, unknown>
+          if (typeof obj.name === "string") toolName = obj.name
+          else if (typeof obj.tool === "string") toolName = obj.tool
+        }
+      } catch {
+        // 流式场景下 JSON 还没写完,用正则从片段里抠 name/tool
+        toolName = extractToolNameFromPartialJson(raw)
+      }
+      out.push({ index: segIdx, raw, parsed, toolName })
+      segIdx++
+      i = endIdx
+    } else {
+      // 已闭合,不计入
+      i = closeIdx + TOOL_CLOSE.length
+      segIdx++
+    }
+  }
+  return out
+}
