@@ -108,14 +108,23 @@ export function useChatStream(
       try {
         const { attemptId } = await submitMessage(sessionId, content)
 
-        // 把 attemptId 写回占位;同时回放 POST 期间积压在 pendingDeltas 里的早批 delta。
+        // 把 attemptId 写回占位;同时回放 POST 期间积压在 pendingDeltas / pendingSnapshot 里的早批数据。
+        // 优先级:pendingSnapshot(全量快照,来自上游 content 帧) > pendingDeltas(累积 delta) > 占位原 content。
+        // 同时清掉上一次 attempt 残留的 error 状态,防止 cancel 旧 attempt 的滞后 attempt.error 事件污染当前会话。
         useSessionStore.setState((s) => {
           const c = s.byId[sessionId]
           if (!c) return s
+          const snapshot = c.pendingSnapshot?.[attemptId]
           const buffered = c.pendingDeltas?.[attemptId] ?? ""
-          const restPending = c.pendingDeltas
+          const initialContent = snapshot ?? (buffered || "")
+          const restDeltas = c.pendingDeltas
             ? Object.fromEntries(
                 Object.entries(c.pendingDeltas).filter(([k]) => k !== attemptId),
+              )
+            : undefined
+          const restSnapshots = c.pendingSnapshot
+            ? Object.fromEntries(
+                Object.entries(c.pendingSnapshot).filter(([k]) => k !== attemptId),
               )
             : undefined
           return {
@@ -125,13 +134,18 @@ export function useChatStream(
                 ...c,
                 messages: c.messages.map((m) =>
                   m.id === placeholder.id
-                    ? { ...m, attemptId, content: buffered || m.content }
+                    ? { ...m, attemptId, content: initialContent || m.content }
                     : m,
                 ),
                 activeAttemptId: attemptId,
+                error: null,
                 pendingDeltas:
-                  restPending && Object.keys(restPending).length > 0
-                    ? restPending
+                  restDeltas && Object.keys(restDeltas).length > 0
+                    ? restDeltas
+                    : undefined,
+                pendingSnapshot:
+                  restSnapshots && Object.keys(restSnapshots).length > 0
+                    ? restSnapshots
                     : undefined,
               },
             },
