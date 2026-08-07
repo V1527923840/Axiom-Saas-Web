@@ -4,6 +4,17 @@ import { useSessionStore } from "../stores/session-store"
 
 const controllers = new Map<string, AbortController>()
 
+// ===== TEMP DEBUG: 全局事件计数器,供 debug 面板展示 =====
+export const sseDebug = {
+  routeCount: 0,
+  textDeltaCount: 0,
+  lastEventName: "" as string,
+  lastAttemptId: "" as string,
+}
+
+/** 超过这个时长没收到事件就认为控制器可能已死,触发强制重连。 */
+export const STALE_THRESHOLD_MS = 30_000
+
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const token =
     typeof window !== "undefined" ? localStorage.getItem("auth_token") : null
@@ -16,10 +27,20 @@ function authHeaders(extra: Record<string, string> = {}): Record<string, string>
  * 断线指数退避重连（1s → 30s 上限）。
  */
 export function subscribeSession(sessionId: string): void {
-  if (controllers.has(sessionId)) return
+  const existing = controllers.get(sessionId)
+  if (existing) {
+    // 控制器存在但太久没收到事件 → 视为死链,强制重建
+    const lastEvent =
+      useSessionStore.getState().byId[sessionId]?.lastEventAt ?? 0
+    if (Date.now() - lastEvent < STALE_THRESHOLD_MS) return
+    existing.abort()
+    controllers.delete(sessionId)
+    useSessionStore.getState().setEventsSubscribed(sessionId, false)
+  }
   const ctrl = new AbortController()
   controllers.set(sessionId, ctrl)
   useSessionStore.getState().setEventsSubscribed(sessionId, true)
+  console.log("[vibe-debug] subscribeSession", sessionId)
   void runStream(sessionId, ctrl)
 }
 
@@ -56,18 +77,25 @@ async function runStream(sessionId: string, ctrl: AbortController): Promise<void
         throw new ApiRequestError(`events: ${res.status}`, res.status, "EVENTS_FAILED")
       }
 
+      console.log("[vibe-debug] SSE opened", sessionId, "status", res.status)
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buf = ""
       while (!ctrl.signal.aborted) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          console.log("[vibe-debug] SSE done", sessionId)
+          break
+        }
         buf += decoder.decode(value, { stream: true })
         const frames = buf.split("\n\n")
         buf = frames.pop() ?? ""
         for (const raw of frames) {
           const ev = parseSseEvent(raw)
-          if (ev) routeEvent(sessionId, ev)
+          if (ev) {
+            console.log("[vibe-debug] SSE ev", sessionId, ev.event, ev.data)
+            routeEvent(sessionId, ev)
+          }
         }
       }
       backoff = 1000   // 干净断开重置
@@ -84,12 +112,21 @@ function routeEvent(
   sessionId: string,
   ev: { event: string; data: Record<string, unknown> },
 ): void {
+  sseDebug.routeCount++
+  sseDebug.lastEventName = ev.event
+  sseDebug.lastAttemptId = (ev.data?.attempt_id as string) ?? ""
+  if (ev.event === "text_delta") sseDebug.textDeltaCount++
   const store = useSessionStore.getState()
   const aid = ev.data?.attempt_id as string | undefined
   switch (ev.event) {
     case "text_delta":
-      if (aid && typeof ev.data?.delta === "string") {
+      if (!aid) break
+      // 上游单 attempt 流中,可能既有 delta 增量帧也有 content 全量快照帧。
+      // 增量帧走 appendDelta 拼接;全量帧走 setAttemptContent 直接覆盖。
+      if (typeof ev.data?.delta === "string") {
         store.appendDelta(sessionId, aid, ev.data.delta)
+      } else if (typeof ev.data?.content === "string") {
+        store.setAttemptContent(sessionId, aid, ev.data.content)
       }
       break
     case "attempt.completed":
@@ -111,19 +148,39 @@ function routeEvent(
 function parseSseEvent(raw: string): { event: string; data: Record<string, unknown> } | null {
   let event = "message"
   const dataLines: string[] = []
+  // 与后端 vibe-client.service.ts 的 parseSseFrame 保持一致:
+  // 用 indexOf(":") 切 field/value,而不是 startsWith,避免行内有额外字符。
   for (const line of raw.split("\n")) {
-    if (line.startsWith(":")) continue
-    if (line.startsWith("event:")) event = line.slice(6).trim()
-    else if (line.startsWith("data:")) dataLines.push(line.slice(5).replace(/^ /, ""))
+    if (!line || line.startsWith(":")) continue
+    const colon = line.indexOf(":")
+    const field = colon === -1 ? line : line.slice(0, colon)
+    let value = colon === -1 ? "" : line.slice(colon + 1)
+    if (value.startsWith(" ")) value = value.slice(1)
+    if (field === "event") event = value.trim()
+    else if (field === "data") dataLines.push(value)
   }
   if (dataLines.length === 0) return null
   const text = dataLines.join("\n")
+  let parsed: unknown
   try {
-    const parsed = JSON.parse(text)
-    return { event, data: parsed && typeof parsed === "object" ? parsed : { value: parsed } }
-  } catch {
+    parsed = JSON.parse(text)
+  } catch (e) {
+    // 之前静默吞掉 → 排查 SSE 不渲染问题时根本看不到原因。dev 环境打 console.warn。
+    if (import.meta.env.DEV) {
+      console.warn("[SSE] JSON parse failed:", text, e)
+    }
     return null
   }
+  const obj = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : { value: parsed }
+  // 上游 vibe SSE 不发 `event:` 字段,所有帧默认归到 "message"。
+  // 这里按 data 形状推断真实事件类型,匹配 routeEvent 的 switch 分支。
+  if (event === "message") {
+    if (typeof obj.delta === "string" && obj.attempt_id) event = "text_delta"
+    else if (typeof obj.content === "string" && obj.attempt_id) event = "text_delta"
+    else if (obj.status === "completed" && obj.attempt_id) event = "attempt.completed"
+    else if (obj.status === "error" && obj.attempt_id) event = "attempt.error"
+  }
+  return { event, data: obj }
 }
 
 function sleep(ms: number): Promise<void> {
