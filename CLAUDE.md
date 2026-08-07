@@ -18,6 +18,8 @@
 - **图标**: Lucide React
 - **动画**: Tailwind CSS Animate, Framer Motion 兼容
 
+> 注：`vibe-trading` feature 模块是例外,使用 `@ant-design/x` 的 `Bubble.List` + `Sender` + `Welcome` 等组件(局部 ConfigProvider 桥接 CSS 变量),不与全局 shadcn/ui 主题冲突。其他模块一律使用 shadcn/ui。
+
 ### 表单与数据
 - **表单**: React Hook Form 7.69 + Zod 4.3 (验证)
 - **表格**: TanStack Table v8
@@ -357,6 +359,7 @@ npm run preview
 | parse-tasks | `/parse/tasks`, `/parse/tasks/:taskId` | 解析任务管理 | 菜单权限 |
 | versions | `/versions` | 版本管理 | 菜单权限 |
 | settings | `/settings/*` | 用户设置 | 已登录 |
+| vibe-trading | (无独立路由,vibe-trading feature 页面内嵌) | AI 智能体对话;包含 attachment 上传、研究目标(goal)、智能体蜂群(swarm)三个子功能 | 已登录 |
 
 **权限说明：**
 - `公开` - 无需登录即可访问
