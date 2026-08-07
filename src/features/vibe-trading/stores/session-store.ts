@@ -15,6 +15,12 @@ export type PerSession = {
   activeAttemptId: string | null
   eventsSubscribed: boolean
   historyLoaded: boolean
+  /**
+   * 缓冲早到的 text_delta:Race — POST /messages 返回 attemptId 之前,
+   * /events 已经把第一批 delta 推过来了,此时 placeholder.attemptId 还没设上,
+   * 匹配失败会丢。改为把这种 delta 按 attemptId 暂存,等 attemptId 写入占位时一次性回放。
+   */
+  pendingDeltas?: Record<string, string>
 }
 
 type SessionStore = {
@@ -50,10 +56,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const cur = s.byId[sid]
       if (!cur) return s
-      const messages = cur.messages.map((m) =>
-        m.attemptId === aid ? { ...m, content: m.content + delta } : m,
-      )
-      return { byId: { ...s.byId, [sid]: { ...cur, messages } } }
+      const hasMatch = cur.messages.some((m) => m.attemptId === aid)
+      if (hasMatch) {
+        const messages = cur.messages.map((m) =>
+          m.attemptId === aid ? { ...m, content: m.content + delta } : m,
+        )
+        return { byId: { ...s.byId, [sid]: { ...cur, messages } } }
+      }
+      // 没有匹配:很可能是 POST /messages 还没返回 attemptId,而 /events 已经把
+      // 该 attempt 的首批 delta 推过来了。把 delta 按 attemptId 暂存,
+      // send() 拿到 attemptId 回填占位时会一次性回放。
+      const pendingDeltas = { ...(cur.pendingDeltas ?? {}) }
+      pendingDeltas[aid] = (pendingDeltas[aid] ?? "") + delta
+      return { byId: { ...s.byId, [sid]: { ...cur, pendingDeltas } } }
     }),
   markAttemptComplete: (sid, aid, fullText) =>
     set((s) => {

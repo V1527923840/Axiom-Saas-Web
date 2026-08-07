@@ -108,19 +108,31 @@ export function useChatStream(
       try {
         const { attemptId } = await submitMessage(sessionId, content)
 
-        // 把 attemptId 写回占位
+        // 把 attemptId 写回占位;同时回放 POST 期间积压在 pendingDeltas 里的早批 delta。
         useSessionStore.setState((s) => {
           const c = s.byId[sessionId]
           if (!c) return s
+          const buffered = c.pendingDeltas?.[attemptId] ?? ""
+          const restPending = c.pendingDeltas
+            ? Object.fromEntries(
+                Object.entries(c.pendingDeltas).filter(([k]) => k !== attemptId),
+              )
+            : undefined
           return {
             byId: {
               ...s.byId,
               [sessionId]: {
                 ...c,
                 messages: c.messages.map((m) =>
-                  m.id === placeholder.id ? { ...m, attemptId } : m,
+                  m.id === placeholder.id
+                    ? { ...m, attemptId, content: buffered || m.content }
+                    : m,
                 ),
                 activeAttemptId: attemptId,
+                pendingDeltas:
+                  restPending && Object.keys(restPending).length > 0
+                    ? restPending
+                    : undefined,
               },
             },
           }
