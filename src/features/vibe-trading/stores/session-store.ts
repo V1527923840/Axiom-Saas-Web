@@ -275,12 +275,23 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const cur = s.byId[sid]
       if (!cur) return s
+      // 区分 in-progress (status 未定义) vs done (status 有值)。
+      // in-progress 写 OPEN 块 → parser 标 closed:false → findOpenToolCalls
+      // 才能返回它,ToolCallIndicator 才会在输入框上方显示;done 写 CLOSED 块,
+      // 让 inline ToolCallBlock 渲染 checkmark,且不再计入上方指示器。
+      const isDone = status !== undefined
       const toolData: Record<string, unknown> = { name: toolName }
-      if (status !== undefined) toolData.status = status
-      if (elapsedMs !== undefined) toolData.elapsed_ms = elapsedMs
-      else if (elapsedS !== undefined) toolData.elapsed_s = elapsedS
-      if (preview !== undefined) toolData.preview = preview
-      const block = `${TOOL_OPEN}${JSON.stringify(toolData)}${TOOL_CLOSE}`
+      if (isDone) {
+        toolData.status = status
+        if (elapsedMs !== undefined) toolData.elapsed_ms = elapsedMs
+        else if (elapsedS !== undefined) toolData.elapsed_s = elapsedS
+        if (preview !== undefined) toolData.preview = preview
+      } else if (elapsedS !== undefined) {
+        toolData.elapsed_s = elapsedS
+      }
+      const block = isDone
+        ? `${TOOL_OPEN}${JSON.stringify(toolData)}${TOOL_CLOSE}`
+        : `${TOOL_OPEN}${JSON.stringify(toolData)}`
 
       const matched = cur.messages.find((m) => m.attemptId === aid)
       if (matched) {

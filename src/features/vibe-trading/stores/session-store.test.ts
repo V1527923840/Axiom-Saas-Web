@@ -289,45 +289,49 @@ describe("markAttemptError — error surfaces even without activeAttemptId (I4)"
 })
 
 // upstream vibe service emits tool calls as separate events, not inline <tool_call> tags.
-// The frontend synthesizes a closed <tool_call> block into the assistant message content so
-// ToolCallBlock renders. See events-stream.ts routeEvent "tool_event" case.
-describe("appendToolCall — synthesize closed <tool_call> block from upstream tool event", () => {
-  it("appends a <tool_call> block to an existing assistant message matching attemptId", () => {
+// The frontend synthesizes a <tool_call> block into the assistant message content so
+// ToolCallBlock (inline) and ToolCallIndicator (above input) can render.
+//
+// Block state distinguishes in-progress vs done:
+// - in-progress (status undefined) → OPEN block (no closing tag) → parser marks
+//   closed:false → ToolCallIndicator above input shows; inline ToolCallBlock spins.
+// - done (status defined)            → CLOSED block                  → parser marks
+//   closed:true  → ToolCallIndicator hides; inline ToolCallBlock shows check.
+// See events-stream.ts routeEvent "tool_event" case.
+describe("appendToolCall — synthesize <tool_call> block from upstream tool event", () => {
+  it("appends an OPEN <tool_call> block to an existing assistant message (in-progress)", () => {
     // 1) ensure a session + assistant message with matching attemptId
     useSessionStore.getState().appendDelta(SID, AID, "thinking out loud ")
     const before = useSessionStore.getState().byId[SID].messages[0].content
     expect(before).toBe("thinking out loud ")
 
-    // 2) call appendToolCall (in-progress: only tool name + elapsed_s)
+    // 2) call appendToolCall (in-progress: only tool name + elapsed_s, no status)
     useSessionStore.getState().appendToolCall(SID, AID, "get_market_data", 12)
 
-    // 3) the message content now has a closed <tool_call> block appended
+    // 3) the message content now has an OPEN <tool_call> block appended (no closing tag)
     const cur = useSessionStore.getState().byId[SID]
     expect(cur.messages).toHaveLength(1)
     const appended = cur.messages[0].content
     expect(appended.startsWith("thinking out loud ")).toBe(true)
     expect(appended).toContain(TOOL_OPEN)
-    expect(appended).toContain(TOOL_CLOSE)
-    // closed block: TOOL_CLOSE comes after TOOL_OPEN
-    expect(appended.indexOf(TOOL_CLOSE)).toBeGreaterThan(appended.indexOf(TOOL_OPEN))
-    // block content is valid JSON with name + elapsed_s
-    const blockJson = appended.slice(
-      appended.indexOf(TOOL_OPEN) + TOOL_OPEN.length,
-      appended.indexOf(TOOL_CLOSE),
-    )
+    // OPEN block: NO closing tag
+    expect(appended).not.toContain(TOOL_CLOSE)
+    // block content (everything after TOOL_OPEN) is valid JSON with name + elapsed_s
+    const blockJson = appended.slice(appended.indexOf(TOOL_OPEN) + TOOL_OPEN.length)
     const parsed = JSON.parse(blockJson)
     expect(parsed.name).toBe("get_market_data")
     expect(parsed.elapsed_s).toBe(12)
+    expect(parsed.status).toBeUndefined()
   })
 
-  it("creates a synthetic stream-<aid> message when no match exists", () => {
+  it("creates a synthetic stream-<aid> message with OPEN block when no match exists (in-progress)", () => {
     // 1) session exists but no messages yet
     expect(useSessionStore.getState().byId[SID].messages).toHaveLength(0)
 
-    // 2) call appendToolCall — should synthesize stream-<aid>
+    // 2) call appendToolCall — should synthesize stream-<aid> with OPEN block
     useSessionStore.getState().appendToolCall(SID, AID, "web_search")
 
-    // 3) a new assistant message with id="stream-<aid>" exists and contains the closed block
+    // 3) a new assistant message with id="stream-<aid>" exists and contains the OPEN block
     const cur = useSessionStore.getState().byId[SID]
     expect(cur.messages).toHaveLength(1)
     const synth = cur.messages[0]
@@ -335,11 +339,8 @@ describe("appendToolCall — synthesize closed <tool_call> block from upstream t
     expect(synth.role).toBe("assistant")
     expect(synth.attemptId).toBe(AID)
     expect(synth.content).toContain(TOOL_OPEN)
-    expect(synth.content).toContain(TOOL_CLOSE)
-    const blockJson = synth.content.slice(
-      synth.content.indexOf(TOOL_OPEN) + TOOL_OPEN.length,
-      synth.content.indexOf(TOOL_CLOSE),
-    )
+    expect(synth.content).not.toContain(TOOL_CLOSE)
+    const blockJson = synth.content.slice(synth.content.indexOf(TOOL_OPEN) + TOOL_OPEN.length)
     expect(JSON.parse(blockJson)).toEqual({ name: "web_search" })
   })
 
@@ -354,6 +355,9 @@ describe("appendToolCall — synthesize closed <tool_call> block from upstream t
       "ok",
     )
     const cur = useSessionStore.getState().byId[SID]
+    // CLOSED block: has TOOL_CLOSE
+    expect(cur.messages[0].content).toContain(TOOL_OPEN)
+    expect(cur.messages[0].content).toContain(TOOL_CLOSE)
     const blockJson = cur.messages[0].content.slice(
       cur.messages[0].content.indexOf(TOOL_OPEN) + TOOL_OPEN.length,
       cur.messages[0].content.indexOf(TOOL_CLOSE),
@@ -374,5 +378,62 @@ describe("appendToolCall — synthesize closed <tool_call> block from upstream t
       useSessionStore.getState().appendToolCall("missing-sess", AID, "any_tool"),
     ).not.toThrow()
     expect(useSessionStore.getState().byId["missing-sess"]).toBeUndefined()
+  })
+
+  it("emits OPEN block for in-progress (no status)", () => {
+    // status undefined → OPEN
+    useSessionStore.getState().appendToolCall(SID, AID, "get_quote", 5)
+    const content = useSessionStore.getState().byId[SID].messages[0].content
+    expect(content).toContain(TOOL_OPEN)
+    expect(content).not.toContain(TOOL_CLOSE)
+  })
+
+  it("emits CLOSED block for done (status: 'ok')", () => {
+    // status="ok" → CLOSED
+    useSessionStore.getState().appendToolCall(
+      SID,
+      AID,
+      "get_quote",
+      undefined,
+      1234,
+      undefined,
+      "ok",
+    )
+    const content = useSessionStore.getState().byId[SID].messages[0].content
+    expect(content).toContain(TOOL_OPEN)
+    expect(content).toContain(TOOL_CLOSE)
+    // closing tag comes after opening tag
+    expect(content.indexOf(TOOL_CLOSE)).toBeGreaterThan(content.indexOf(TOOL_OPEN))
+  })
+
+  it("in-progress then done appends two blocks (open + closed) in order", () => {
+    // in-progress → done flow: appendToolCall is called twice on the same attemptId.
+    // Result content should contain exactly one OPEN region and one CLOSED region,
+    // and findOpenToolCalls should only return the still-open one (the in-progress).
+    useSessionStore.getState().appendToolCall(SID, AID, "first_tool", 3)
+    useSessionStore.getState().appendToolCall(
+      SID,
+      AID,
+      "first_tool",
+      undefined,
+      3000,
+      "ok preview",
+      "ok",
+    )
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.messages).toHaveLength(1)
+    const content = cur.messages[0].content
+    // First call appended an OPEN block at the start
+    expect(content.startsWith(TOOL_OPEN)).toBe(true)
+    // Second call appended a CLOSED block after the OPEN block
+    const firstOpen = content.indexOf(TOOL_OPEN)
+    const close = content.indexOf(TOOL_CLOSE)
+    const secondOpen = content.indexOf(TOOL_OPEN, firstOpen + TOOL_OPEN.length)
+    expect(firstOpen).toBe(0)
+    expect(secondOpen).toBeGreaterThan(firstOpen)
+    expect(close).toBeGreaterThan(secondOpen)
+    // No closing after first open, but closing after second open
+    const sliceBetweenOpens = content.slice(firstOpen + TOOL_OPEN.length, secondOpen)
+    expect(sliceBetweenOpens).not.toContain(TOOL_CLOSE)
   })
 })
