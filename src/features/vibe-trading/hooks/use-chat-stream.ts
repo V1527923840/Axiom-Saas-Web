@@ -8,6 +8,7 @@ import {
 import {
   type ChatMessage,
   type PerSession,
+  stampAttemptIdOnMessages,
   useSessionStore,
 } from "../stores/session-store"
 import { subscribeSession } from "../services/events-stream"
@@ -111,12 +112,16 @@ export function useChatStream(
         // 把 attemptId 写回占位;同时回放 POST 期间积压在 pendingDeltas / pendingSnapshot 里的早批数据。
         // 优先级:pendingSnapshot(全量快照,来自上游 content 帧) > pendingDeltas(累积 delta) > 占位原 content。
         // 同时清掉上一次 attempt 残留的 error 状态,防止 cancel 旧 attempt 的滞后 attempt.error 事件污染当前会话。
+        //
+        // Race 防御:POST /messages 还没返回 attemptId 时,/events 已经把首批 delta 推过来了,
+        // appendDelta 的 no-match 分支会创建一条 stream-<aid> synthetic。stampAttemptIdOnMessages
+        // 检测到 synthetic 存在时:丢弃 placeholder,并把 attemptId 写到 synthetic 上
+        // (synthetic.content 已经包含 streamed delta,不需要再叠加 buffered/snapshot)。
         useSessionStore.setState((s) => {
           const c = s.byId[sessionId]
           if (!c) return s
           const snapshot = c.pendingSnapshot?.[attemptId]
           const buffered = c.pendingDeltas?.[attemptId] ?? ""
-          const initialContent = snapshot ?? (buffered || "")
           const restDeltas = c.pendingDeltas
             ? Object.fromEntries(
                 Object.entries(c.pendingDeltas).filter(([k]) => k !== attemptId),
@@ -127,16 +132,19 @@ export function useChatStream(
                 Object.entries(c.pendingSnapshot).filter(([k]) => k !== attemptId),
               )
             : undefined
+          const messages = stampAttemptIdOnMessages(
+            c.messages,
+            placeholder.id,
+            attemptId,
+            snapshot,
+            buffered,
+          )
           return {
             byId: {
               ...s.byId,
               [sessionId]: {
                 ...c,
-                messages: c.messages.map((m) =>
-                  m.id === placeholder.id
-                    ? { ...m, attemptId, content: initialContent || m.content }
-                    : m,
-                ),
+                messages,
                 activeAttemptId: attemptId,
                 error: null,
                 pendingDeltas:

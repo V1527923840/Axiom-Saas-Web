@@ -63,6 +63,37 @@ const touchEvent = (cur: PerSession): PerSession => ({
   lastEventAt: Date.now(),
 })
 
+/**
+ * 把 attemptId 写回占位消息 —— send() 在拿到 submitMessage 返回值后调用。
+ *
+ * 处理两种状态:
+ * 1. messages 里已经有 stream-<aid> synthetic (POST 还没返回,/events 已推了首批 delta):
+ *    synthetic 是权威版本,丢弃 placeholder,把 attemptId 写回 synthetic (synthetic.content
+ *    已含流式内容,不再叠加 buffered/snapshot)。
+ * 2. 没有 synthetic:在 placeholder 上写 attemptId + 用 snapshot/buffered 作为初始 content。
+ *
+ * 纯函数 —— 抽出来便于在 store 里直接单测,use-chat-stream 的 send() 也调它。
+ */
+export function stampAttemptIdOnMessages(
+  messages: ChatMessage[],
+  placeholderId: string,
+  attemptId: string,
+  snapshot: string | undefined,
+  buffered: string,
+): ChatMessage[] {
+  const synthetic = messages.find((m) => m.attemptId === attemptId)
+  if (synthetic) {
+    return messages
+      .filter((m) => m.id !== placeholderId)
+      .map((m) => (m.attemptId === attemptId ? { ...m, attemptId } : m))
+  }
+  return messages.map((m) =>
+    m.id === placeholderId
+      ? { ...m, attemptId, content: snapshot ?? (buffered || m.content) }
+      : m,
+  )
+}
+
 export const useSessionStore = create<SessionStore>((set, get) => ({
   byId: {},
   ensure: (id) => {
@@ -113,11 +144,20 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       const cur = s.byId[sid]
       if (!cur) return s
       // 清理该 aid 在 pendingDeltas / pendingSnapshot 中的残留:
-      // 1. 匹配消息路径下,已有 delta 全部作废,被 fullText 覆盖
-      // 2. 暂存路径下,snapshot 直接替换 buffered delta
+      // 1. 匹配消息路径下,已有 delta 全部作废,被 fullText 覆盖;同时必须清掉 pendingSnapshot,
+      //    否则 appendDelta 在 hasMatch=true 时会被 pendingSnapshot 守卫拦截,导致后续 delta 永久丢失
+      //    —— 这是 C2 bug 的根因。
+      // 2. 暂存路径下,synthetic 消息用 fullText 兜底,不再写 pendingSnapshot:
+      //    synthetic 已经承载了 fullText,后续 delta 通过 hasMatch 分支追加即可;
+      //    写 pendingSnapshot 会反过来拦截后续的 delta。
       const restDeltas = cur.pendingDeltas
         ? Object.fromEntries(
             Object.entries(cur.pendingDeltas).filter(([k]) => k !== aid),
+          )
+        : undefined
+      const restSnapshots = cur.pendingSnapshot
+        ? Object.fromEntries(
+            Object.entries(cur.pendingSnapshot).filter(([k]) => k !== aid),
           )
         : undefined
       const hasMatch = cur.messages.some((m) => m.attemptId === aid)
@@ -135,13 +175,16 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
                 restDeltas && Object.keys(restDeltas).length > 0
                   ? restDeltas
                   : undefined,
+              pendingSnapshot:
+                restSnapshots && Object.keys(restSnapshots).length > 0
+                  ? restSnapshots
+                  : undefined,
             }),
           },
         }
       }
-      // 没有匹配 → 创建一个 synthetic 消息用 fullText 兜底,后续该 aid 的 delta 仍可通过 hasMatch 路径更新
-      const pendingSnapshot = { ...(cur.pendingSnapshot ?? {}) }
-      pendingSnapshot[aid] = fullText
+      // 没有匹配 → 创建一个 synthetic 消息用 fullText 兜底,后续该 aid 的 delta 仍可通过 hasMatch 路径更新。
+      // 注意:此处不写 pendingSnapshot —— synthetic 已经持有 fullText,写入会让 appendDelta 永久拒绝后续 delta。
       const synthetic: ChatMessage = {
         id: `stream-${aid}`,
         role: "assistant",
@@ -155,10 +198,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           [sid]: touchEvent({
             ...cur,
             messages: [...cur.messages, synthetic],
-            pendingSnapshot,
             pendingDeltas:
               restDeltas && Object.keys(restDeltas).length > 0
                 ? restDeltas
+                : undefined,
+            pendingSnapshot:
+              restSnapshots && Object.keys(restSnapshots).length > 0
+                ? restSnapshots
                 : undefined,
           }),
         },
