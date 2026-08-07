@@ -12,6 +12,7 @@ import { STALE_THRESHOLD_MS } from "../services/events-stream"
 import { vibeApi } from "../services/vibe-api"
 import { useSessionStore } from "../stores/session-store"
 import { AttachmentChip } from "./attachment-chip"
+import { GoalComposerChip } from "./goal-composer-chip"
 import { AiMessageContent } from "./ai-message-content"
 import { GoalChip } from "./goal-chip"
 import { GoalPanel } from "./goal-panel"
@@ -355,16 +356,7 @@ export function ChatDialog({
           </div>
         )}
         {goalComposerActive && (
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs text-primary">
-            <span>目标设定模式:输入目标内容后按 Enter 创建</span>
-            <button
-              type="button"
-              onClick={() => setGoalComposerActive(false)}
-              className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
-            >
-              取消
-            </button>
-          </div>
+          <GoalComposerChip onClear={() => setGoalComposerActive(false)} />
         )}
         {attachment && (
           <AttachmentChip

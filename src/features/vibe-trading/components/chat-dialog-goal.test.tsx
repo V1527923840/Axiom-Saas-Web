@@ -155,7 +155,7 @@ describe("ChatDialog goal composer with no session", () => {
       root.render(<ChatDialog sessionId={null} />)
     })
     clickNewGoal()
-    expect(container.textContent).toContain("目标设定模式")
+    expect(container.textContent).toContain("目标模式")
   })
 
   it("calls onCreateSessionOnly instead of alerting when submitting without a session", () => {
