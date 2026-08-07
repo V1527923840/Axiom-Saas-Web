@@ -1,15 +1,20 @@
 "use client"
 
 import { Bubble, Prompts, Sender, Welcome } from "@ant-design/x"
+import type { SenderRef } from "@ant-design/x/es/sender/interface"
 import { Bot, Lightbulb, Sparkles, TrendingUp } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import { useGoal } from "../hooks/use-goal"
 import { useChatStream } from "../hooks/use-chat-stream"
+import type { GoalSnapshot, GoalCriterion } from "../lib/vibe-types"
 import { findOpenToolCalls } from "../lib/parse-message"
 import { STALE_THRESHOLD_MS } from "../services/events-stream"
 import { vibeApi } from "../services/vibe-api"
 import { useSessionStore } from "../stores/session-store"
 import { AttachmentChip } from "./attachment-chip"
 import { AiMessageContent } from "./ai-message-content"
+import { GoalChip } from "./goal-chip"
+import { GoalPanel } from "./goal-panel"
 import { MoreMenu } from "./more-menu"
 import { ToolCallIndicator } from "./tool-call-indicator"
 
@@ -36,12 +41,21 @@ export function ChatDialog({
   const { messages, streaming, error, send, cancel } =
     useChatStream(sessionId, title)
   const debugSlice = useSessionStore((s) => (sessionId ? s.byId[sessionId] : undefined))
+  const {
+    snapshot: goalSnapshot,
+    create: createGoalAction,
+    edit: editGoal,
+    cancel: cancelGoal,
+  } = useGoal(sessionId)
   const [input, setInput] = useState("")
   const [attachment, setAttachment] = useState<
     { filename: string; file_path: string } | null
   >(null)
   const [uploading, setUploading] = useState(false)
+  const [goalDetailsOpen, setGoalDetailsOpen] = useState(false)
+  const [goalComposerActive, setGoalComposerActive] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<SenderRef>(null)
 
   const handleFileChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -78,6 +92,33 @@ export function ChatDialog({
   const handleSend = () => {
     const trimmed = input.trim()
     if (!trimmed) return
+    // Goal composer:用户先点 MoreMenu > "新建研究目标",输入框聚焦;此时
+    // 输入即被解释为 goal objective,不再当作普通 message。
+    if (goalComposerActive) {
+      void (async () => {
+        try {
+          // 必须有 sessionId 才能 POST /goal;无会话路径下让用户先发一条普通
+          // 消息建好会话,再触发目标创建。简化起见:无会话时直接退出 composer
+          // 并提示用户先发消息。
+          if (!sessionId) {
+            alert("请先发送一条消息创建会话,再创建研究目标。")
+            setGoalComposerActive(false)
+            return
+          }
+          await createGoalAction(trimmed)
+          setGoalComposerActive(false)
+          setGoalDetailsOpen(true)
+          // 紧接着发一条 kickoff prompt,让 SSE 流起研究任务。
+          const kickoff = `Start working on this research goal now.\nGoal: ${trimmed}`
+          setInput("")
+          setAttachment(null)
+          void send(kickoff)
+        } catch (err) {
+          alert(`创建目标失败: ${err instanceof Error ? err.message : "未知"}`)
+        }
+      })()
+      return
+    }
     if (sessionId) {
       // 有会话:正常提交。streaming 由 store 内部拒绝(per-session 串行保护)。
       if (streaming) return
@@ -93,6 +134,24 @@ export function ChatDialog({
     }
     setInput("")
     setAttachment(null)
+  }
+
+  // 继续现有目标:汇总未完成的 required criteria,作为一条 message 发出。
+  const handleContinueGoal = () => {
+    if (!sessionId || !goalSnapshot || streaming) return
+    const openCriteria = goalSnapshot.criteria
+      .filter((c) => !criterionCovered(goalSnapshot, c) && c.required)
+      .map((c) => `- ${c.text}`)
+      .join("\n")
+    const prompt = [
+      "Continue the active research goal.",
+      "",
+      `Goal: ${goalSnapshot.goal.objective}`,
+      openCriteria
+        ? `Open criteria:\n${openCriteria}`
+        : "All criteria appear covered.",
+    ].join("\n")
+    void send(prompt)
   }
 
   // pendingMessage 自动发送（保留 v1 行为）
@@ -208,6 +267,40 @@ export function ChatDialog({
       )}
 
       <div className="w-full shrink-0 border-t p-3 space-y-2">
+        {goalSnapshot && (
+          <div className="grid gap-2">
+            <GoalChip
+              snapshot={goalSnapshot}
+              open={goalDetailsOpen}
+              onClick={() => setGoalDetailsOpen((o) => !o)}
+            />
+            {goalDetailsOpen && (
+              <GoalPanel
+                snapshot={goalSnapshot}
+                onContinue={handleContinueGoal}
+                onSaveEdit={(objective) => {
+                  void editGoal(objective)
+                }}
+                onCancel={() => {
+                  void cancelGoal()
+                }}
+                continueDisabled={streaming}
+              />
+            )}
+          </div>
+        )}
+        {goalComposerActive && (
+          <div className="flex items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs text-primary">
+            <span>目标设定模式:输入目标内容后按 Enter 创建</span>
+            <button
+              type="button"
+              onClick={() => setGoalComposerActive(false)}
+              className="rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              取消
+            </button>
+          </div>
+        )}
         {attachment && (
           <AttachmentChip
             attachment={attachment}
@@ -222,7 +315,8 @@ export function ChatDialog({
             disabled={streaming || uploading}
             onPickFile={() => fileInputRef.current?.click()}
             onCreateGoal={() => {
-              /* wired in Task 11 */
+              setGoalComposerActive(true)
+              inputRef.current?.focus()
             }}
             onStartSwarm={() => {
               /* wired in Task 14 */
@@ -236,6 +330,7 @@ export function ChatDialog({
             className="hidden"
           />
           <Sender
+            ref={inputRef}
             value={input}
             onChange={setInput}
             onSubmit={handleSend}
@@ -243,9 +338,11 @@ export function ChatDialog({
             loading={streaming}
             submitType="enter"
             placeholder={
-              sessionId
-                ? "输入消息,Enter 发送,Shift+Enter 换行…"
-                : "输入消息,自动创建会话…"
+              goalComposerActive
+                ? "输入研究目标,Enter 创建…"
+                : sessionId
+                  ? "输入消息,Enter 发送,Shift+Enter 换行…"
+                  : "输入消息,自动创建会话…"
             }
             autoFocus
             className="w-full"
@@ -284,5 +381,14 @@ function WelcomeState() {
         />
       </div>
     </div>
+  )
+}
+
+// 与 goal-chip/goal-panel 内部相同的"已覆盖"判定 —— 抽出来在 chat-dialog 的
+// handleContinueGoal 里复用,避免在两个文件里各写一份。
+function criterionCovered(s: GoalSnapshot, c: GoalCriterion): boolean {
+  return (
+    !["", "pending", "open", "unsatisfied"].includes(c.status.toLowerCase()) ||
+    s.evidence.filter((e) => e.criterion_id === c.criterion_id).length > 0
   )
 }
