@@ -350,6 +350,8 @@ export function ChatDialog({
                 onCancel={() => {
                   void cancelGoal()
                 }}
+                onCancelTask={cancel}
+                running={streaming}
                 continueDisabled={streaming}
               />
             )}

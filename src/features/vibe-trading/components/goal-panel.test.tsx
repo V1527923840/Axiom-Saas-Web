@@ -160,4 +160,105 @@ describe("GoalPanel", () => {
     })
     expect(onCancel).toHaveBeenCalledTimes(1)
   })
+
+  // ─── 任务运行中的 UI 状态 (running state) ──────────────────────────────────
+  //
+  // 当 goal 触发的研究任务正在跑 (streaming=true) 时,GoalPanel 应当展示:
+  //   - "运行中" 状态徽章 (带 spinner),让用户一眼看到有任务正在执行
+  //   - "取消任务" 按钮 → 调 onCancelTask,只取消当前进行中的 attempt,
+  //     而不是彻底取消 goal (那是 "取消目标" 的语义)
+  //   - "继续" 按钮在这个状态下要么不存在,要么 disabled —— 任务正在跑时
+  //     不应该再叠一个新的 attempt
+  // 没传 running/没用这个特性时,继续走原有 继续 / 编辑 / 取消目标 路径。
+
+  it("renders the idle action row (继续 / 编辑 / 取消目标) when not running", () => {
+    act(() => {
+      root.render(
+        <GoalPanel
+          snapshot={makeSnapshot()}
+          onContinue={vi.fn()}
+          onSaveEdit={vi.fn()}
+          onCancel={vi.fn()}
+          onCancelTask={vi.fn()}
+        />,
+      )
+    })
+    const labels = Array.from(container.querySelectorAll("button"))
+      .map((b) => (b.textContent ?? "").trim())
+    expect(labels.some((l) => l.includes("继续"))).toBe(true)
+    expect(labels.some((l) => l.includes("编辑"))).toBe(true)
+    expect(labels.some((l) => l.includes("取消目标"))).toBe(true)
+    // 没传 running 时,运行中徽章和取消任务按钮都不该出现
+    expect(container.textContent).not.toContain("运行中")
+    expect(labels.some((l) => l.includes("取消任务"))).toBe(false)
+  })
+
+  it("replaces 继续 with 运行中 badge + 取消任务 button when running", () => {
+    act(() => {
+      root.render(
+        <GoalPanel
+          snapshot={makeSnapshot()}
+          onContinue={vi.fn()}
+          onSaveEdit={vi.fn()}
+          onCancel={vi.fn()}
+          onCancelTask={vi.fn()}
+          running
+        />,
+      )
+    })
+    const labels = Array.from(container.querySelectorAll("button"))
+      .map((b) => (b.textContent ?? "").trim())
+    // 运行中徽章 + 取消任务 替代 继续
+    expect(container.textContent).toContain("运行中")
+    expect(labels.some((l) => l.includes("取消任务"))).toBe(true)
+    expect(labels.some((l) => l.includes("继续"))).toBe(false)
+    // 编辑和取消目标在 running 状态下保持可见
+    expect(labels.some((l) => l.includes("编辑"))).toBe(true)
+    expect(labels.some((l) => l.includes("取消目标"))).toBe(true)
+  })
+
+  it("clicking 取消任务 invokes onCancelTask (not onCancel)", () => {
+    const onCancel = vi.fn()
+    const onCancelTask = vi.fn()
+    act(() => {
+      root.render(
+        <GoalPanel
+          snapshot={makeSnapshot()}
+          onContinue={vi.fn()}
+          onSaveEdit={vi.fn()}
+          onCancel={onCancel}
+          onCancelTask={onCancelTask}
+          running
+        />,
+      )
+    })
+    const btn = Array.from(container.querySelectorAll("button")).find((b) =>
+      (b.textContent ?? "").includes("取消任务"),
+    ) as HTMLButtonElement | undefined
+    expect(btn).toBeDefined()
+    act(() => {
+      btn!.click()
+    })
+    expect(onCancelTask).toHaveBeenCalledTimes(1)
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it("disables 继续 when continueDisabled is true (任务进行中不能再点继续)", () => {
+    act(() => {
+      root.render(
+        <GoalPanel
+          snapshot={makeSnapshot()}
+          onContinue={vi.fn()}
+          onSaveEdit={vi.fn()}
+          onCancel={vi.fn()}
+          continueDisabled
+        />,
+      )
+    })
+    const btn = Array.from(container.querySelectorAll("button")).find((b) =>
+      (b.textContent ?? "").includes("继续"),
+    ) as HTMLButtonElement | undefined
+    expect(btn).toBeDefined()
+    expect(btn!.disabled).toBe(true)
+  })
 })

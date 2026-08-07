@@ -1,5 +1,5 @@
 "use client"
-import { Play, Pencil, X, Check } from "lucide-react"
+import { Loader2, Play, Pencil, X, Check } from "lucide-react"
 import { useState } from "react"
 import type { GoalSnapshot } from "../lib/vibe-types"
 
@@ -8,12 +8,27 @@ export function GoalPanel({
   onContinue,
   onSaveEdit,
   onCancel,
+  onCancelTask,
+  running,
   continueDisabled,
 }: {
   snapshot: GoalSnapshot
   onContinue: () => void
   onSaveEdit: (objective: string) => Promise<void> | void
   onCancel: () => Promise<void> | void
+  /**
+   * 取消当前正在跑的 attempt。只有在 running=true 时父组件才需要传,
+   * 不传则隐藏 "取消任务" 按钮。语义上区别于 onCancel:onCancel 把整个
+   * goal 标记为 cancelled (status=cancelled),onCancelTask 只打断当前 SSE 流,
+   * goal 状态保持 active,后续可继续。
+   */
+  onCancelTask?: () => void
+  /**
+   * 是否有正在跑的 attempt (goal kickoff / 继续 时正在 stream)。
+   * - true:用 "运行中" 状态徽章 + "取消任务" 按钮替代 "继续" 按钮
+   * - false/undefined:走原 继续 / 编辑 / 取消目标 路径
+   */
+  running?: boolean
   continueDisabled?: boolean
 }) {
   const [editing, setEditing] = useState(false)
@@ -99,13 +114,50 @@ export function GoalPanel({
         </div>
       )}
       <div className="flex flex-wrap justify-end gap-2 border-t pt-2">
-        <button type="button" onClick={onContinue} disabled={continueDisabled} className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-40">
-          <Play className="h-3 w-3" />继续
-        </button>
-        <button type="button" onClick={() => setEditing(true)} disabled={editing} className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-40">
+        {running ? (
+          <>
+            <span
+              data-testid="goal-running"
+              className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary"
+              role="status"
+              aria-live="polite"
+            >
+              <Loader2 className="h-3 w-3 animate-spin" />
+              运行中
+            </span>
+            {onCancelTask && (
+              <button
+                type="button"
+                onClick={onCancelTask}
+                className="inline-flex items-center gap-1 rounded-lg border border-destructive/40 px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/10"
+              >
+                <X className="h-3 w-3" />取消任务
+              </button>
+            )}
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={onContinue}
+            disabled={continueDisabled}
+            className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-40"
+          >
+            <Play className="h-3 w-3" />继续
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          disabled={editing}
+          className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-40"
+        >
           <Pencil className="h-3 w-3" />编辑
         </button>
-        <button type="button" onClick={onCancel} className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-destructive/40 hover:text-destructive">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-medium text-muted-foreground hover:border-destructive/40 hover:text-destructive"
+        >
           <X className="h-3 w-3" />取消目标
         </button>
       </div>
