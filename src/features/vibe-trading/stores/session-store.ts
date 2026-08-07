@@ -15,18 +15,32 @@ export type PerSession = {
   activeAttemptId: string | null
   eventsSubscribed: boolean
   historyLoaded: boolean
+  /** 最近一次收到 SSE 事件的 epoch ms。0 表示从未收到。 */
+  lastEventAt: number
   /**
    * 缓冲早到的 text_delta:Race — POST /messages 返回 attemptId 之前,
    * /events 已经把第一批 delta 推过来了,此时 placeholder.attemptId 还没设上,
    * 匹配失败会丢。改为把这种 delta 按 attemptId 暂存,等 attemptId 写入占位时一次性回放。
    */
   pendingDeltas?: Record<string, string>
+  /**
+   * 缓冲早到的全量快照 content:上游在 text_delta 之后还会推一帧
+   * `{"content":"<完整文本>", "attempt_id":"..."}` 用于重连恢复/对齐。
+   * 同上 Race,先按 attemptId 暂存,attemptId 回填占位时直接覆盖 delta。
+   */
+  pendingSnapshot?: Record<string, string>
 }
 
 type SessionStore = {
   byId: Record<string, PerSession>
   ensure: (sessionId: string) => PerSession
   appendDelta: (sessionId: string, attemptId: string, delta: string) => void
+  /**
+   * 用全量 content 覆盖匹配 attemptId 的消息;用于上游 text_delta 之后
+   * 推送的 `{"content":"...", "attempt_id":"..."}` 同步帧。
+   * 若无匹配,按 attemptId 暂存到 pendingSnapshot,由 send() 回填。
+   */
+  setAttemptContent: (sessionId: string, attemptId: string, fullText: string) => void
   markAttemptComplete: (sessionId: string, attemptId: string, fullText?: string) => void
   markAttemptError: (sessionId: string, attemptId: string, message: string) => void
   setEventsSubscribed: (sessionId: string, subscribed: boolean) => void
@@ -41,6 +55,12 @@ const empty = (): PerSession => ({
   activeAttemptId: null,
   eventsSubscribed: false,
   historyLoaded: false,
+  lastEventAt: 0,
+})
+
+const touchEvent = (cur: PerSession): PerSession => ({
+  ...cur,
+  lastEventAt: Date.now(),
 })
 
 export const useSessionStore = create<SessionStore>((set, get) => ({
@@ -56,19 +76,69 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const cur = s.byId[sid]
       if (!cur) return s
+      // 全量快照已存在 → 后续 delta 全部丢弃,避免和快照内容叠加
+      if (cur.pendingSnapshot?.[aid] !== undefined) return s
       const hasMatch = cur.messages.some((m) => m.attemptId === aid)
       if (hasMatch) {
         const messages = cur.messages.map((m) =>
           m.attemptId === aid ? { ...m, content: m.content + delta } : m,
         )
-        return { byId: { ...s.byId, [sid]: { ...cur, messages } } }
+        return { byId: { ...s.byId, [sid]: touchEvent({ ...cur, messages }) } }
       }
       // 没有匹配:很可能是 POST /messages 还没返回 attemptId,而 /events 已经把
       // 该 attempt 的首批 delta 推过来了。把 delta 按 attemptId 暂存,
       // send() 拿到 attemptId 回填占位时会一次性回放。
       const pendingDeltas = { ...(cur.pendingDeltas ?? {}) }
       pendingDeltas[aid] = (pendingDeltas[aid] ?? "") + delta
-      return { byId: { ...s.byId, [sid]: { ...cur, pendingDeltas } } }
+      return { byId: { ...s.byId, [sid]: touchEvent({ ...cur, pendingDeltas }) } }
+    }),
+  setAttemptContent: (sid, aid, fullText) =>
+    set((s) => {
+      const cur = s.byId[sid]
+      if (!cur) return s
+      // 清理该 aid 在 pendingDeltas / pendingSnapshot 中的残留:
+      // 1. 匹配消息路径下,已有 delta 全部作废,被 fullText 覆盖
+      // 2. 暂存路径下,snapshot 直接替换 buffered delta
+      const restDeltas = cur.pendingDeltas
+        ? Object.fromEntries(
+            Object.entries(cur.pendingDeltas).filter(([k]) => k !== aid),
+          )
+        : undefined
+      const hasMatch = cur.messages.some((m) => m.attemptId === aid)
+      if (hasMatch) {
+        const messages = cur.messages.map((m) =>
+          m.attemptId === aid ? { ...m, content: fullText } : m,
+        )
+        return {
+          byId: {
+            ...s.byId,
+            [sid]: touchEvent({
+              ...cur,
+              messages,
+              pendingDeltas:
+                restDeltas && Object.keys(restDeltas).length > 0
+                  ? restDeltas
+                  : undefined,
+            }),
+          },
+        }
+      }
+      // 没有匹配 → 按 attemptId 暂存,send() 回填时直接覆盖 placeholder.content
+      const pendingSnapshot = { ...(cur.pendingSnapshot ?? {}) }
+      pendingSnapshot[aid] = fullText
+      return {
+        byId: {
+          ...s.byId,
+          [sid]: touchEvent({
+            ...cur,
+            pendingSnapshot,
+            pendingDeltas:
+              restDeltas && Object.keys(restDeltas).length > 0
+                ? restDeltas
+                : undefined,
+          }),
+        },
+      }
     }),
   markAttemptComplete: (sid, aid, fullText) =>
     set((s) => {
@@ -81,7 +151,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       return {
         byId: {
           ...s.byId,
-          [sid]: { ...cur, messages, streaming: stillStreaming, activeAttemptId: null },
+          [sid]: touchEvent({ ...cur, messages, streaming: stillStreaming, activeAttemptId: null }),
         },
       }
     }),
@@ -89,15 +159,19 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const cur = s.byId[sid]
       if (!cur) return s
+      // 只处理当前 active attempt 的 error,过时的 attempt_id (e.g. 上一次 cancel 后的滞后事件) 忽略。
+      // 否则会把旧 attempt 的错误显示到当前正在流式的新 attempt 上,造成"events 还在流但 UI 报 Stream Error"。
+      const isCurrent = cur.activeAttemptId === aid
+      if (!isCurrent) return s
       return {
         byId: {
           ...s.byId,
-          [sid]: {
+          [sid]: touchEvent({
             ...cur,
             error: message,
-            streaming: cur.activeAttemptId === aid ? false : cur.streaming,
+            streaming: false,
             activeAttemptId: null,
-          },
+          }),
         },
       }
     }),
