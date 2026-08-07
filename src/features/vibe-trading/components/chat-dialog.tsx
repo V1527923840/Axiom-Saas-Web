@@ -4,6 +4,9 @@ import { Bubble, Prompts, Sender, Welcome } from "@ant-design/x"
 import { Bot, Lightbulb, Sparkles, TrendingUp } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { useChatStream } from "../hooks/use-chat-stream"
+import { findOpenToolCalls } from "../lib/parse-message"
+import { AiMessageContent } from "./ai-message-content"
+import { ToolCallIndicator } from "./tool-call-indicator"
 
 const SUGGESTIONS = [
   { key: "market-brief", icon: <TrendingUp className="h-4 w-4" />, label: "今日市场概览", description: "拉一下美股 / A 股 / 港股的当日行情速览" },
@@ -55,11 +58,27 @@ export function ChatDialog({
     onPendingMessageConsumed?.()
   }, [pendingMessage, sessionId, send, onPendingMessageConsumed])
 
+  // 找出当前正在流的 assistant message 上未闭合的 <tool_call>
+  const streamingAssistant = [...messages]
+    .reverse()
+    .find((m) => m.role === "assistant" && streaming && m.attemptId)
+  const openToolCalls = streamingAssistant
+    ? findOpenToolCalls(streamingAssistant.content)
+    : []
+
   const bubbleItems = messages.map((m) => ({
     key: m.id,
     role: (m.role === "user" ? "user" : "ai") as "user" | "ai",
     content: m.content,
-    loading: false,   // 占位消息的 loading 动效不再用 per-msg；流式已结束的 bubble 不再闪
+    // 流式增量由 appendDelta 触发 React 重渲染,这里关掉 Bubble 自带的 typing 动画避免双重打字机。
+    // streaming=true 让 Bubble.List 跳过 typing 渲染走纯 React 树。
+    streaming: m.role === "assistant" && Boolean(m.attemptId) && streaming,
+    loading: false,
+    // AI 走自定义渲染(解析 thinking/tool/markdown);用户消息保持纯文本。
+    contentRender:
+      m.role === "assistant"
+        ? (content: string) => <AiMessageContent content={content} />
+        : undefined,
   }))
 
   // 只要有消息就显示对话,空消息一律走欢迎态。
@@ -87,6 +106,14 @@ export function ChatDialog({
 
       {error && (
         <div className="text-destructive px-3 py-1 text-sm">错误: {error}</div>
+      )}
+
+      {openToolCalls.length > 0 && (
+        <div className="flex flex-col gap-1 border-t px-3 py-2">
+          {openToolCalls.map((c) => (
+            <ToolCallIndicator key={c.index} call={c} />
+          ))}
+        </div>
       )}
 
       <div className="w-full shrink-0 border-t p-3">
