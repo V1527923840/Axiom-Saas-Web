@@ -114,7 +114,7 @@ export const SwarmStatusCard = memo(function SwarmStatusCard({ status }: Props) 
           </div>
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <Clock className="h-3 w-3" />
-            <span>{`${done}/${total || 0} agents`}</span>
+            <span>{`${done}/${total || 0} 智能体`}</span>
           </div>
         </div>
 
@@ -145,7 +145,7 @@ export const SwarmStatusCard = memo(function SwarmStatusCard({ status }: Props) 
         <div className="mt-3 overflow-x-auto">
           <div className="min-w-[620px]">
             <div className="grid grid-cols-[10rem_7rem_9rem_5rem_4rem_minmax(0,1fr)] gap-2 border-b pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-              <span>agent</span>
+              <span>智能体</span>
               <span>状态</span>
               <span>工具</span>
               <span className="text-right">耗时</span>

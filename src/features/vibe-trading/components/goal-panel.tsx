@@ -61,11 +61,11 @@ export function GoalPanel({
       )}
       <div className="grid grid-cols-2 gap-2">
         <div className="rounded-lg border bg-muted/20 p-2.5">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">criteria</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">达成标准</div>
           <div className="mt-1 font-mono text-base font-semibold text-foreground">{met}/{total}</div>
         </div>
         <div className="rounded-lg border bg-muted/20 p-2.5">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">evidence</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">证据</div>
           <div className="mt-1 font-mono text-base font-semibold text-foreground">{evidenceCount}</div>
         </div>
       </div>

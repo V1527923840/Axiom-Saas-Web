@@ -73,6 +73,26 @@ describe("SwarmStatusCard", () => {
       root.render(<SwarmStatusCard status={status} />)
     })
     expect(container.textContent).toContain("3/6")
+    // Header count label is Chinese per swarm agent.png reference.
+    expect(container.textContent).toContain("智能体")
+  })
+
+  it("renders Chinese column headers (智能体 | 状态 | 工具 | 耗时 | 迭代 | 输出)", () => {
+    const status = makeStatus({
+      agents: [makeAgent({ agentId: "a1", status: "running" })],
+    })
+    act(() => {
+      root.render(<SwarmStatusCard status={status} />)
+    })
+    const text = container.textContent ?? ""
+    // The reference image labels the first column 智能体; current rendered
+    // output should match.
+    expect(text).toContain("智能体")
+    expect(text).toContain("状态")
+    expect(text).toContain("工具")
+    expect(text).toContain("耗时")
+    expect(text).toContain("迭代")
+    expect(text).toContain("输出")
   })
 
   it("shows the running label when status is running", () => {
