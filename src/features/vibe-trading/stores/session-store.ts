@@ -56,6 +56,18 @@ export type PerSession = {
    * on session switch / soft reset. Null = no goal loaded yet (default).
    */
   goalSnapshot: GoalSnapshot | null
+  /**
+   * 标记 goal 是否已经从服务端拉过一次(或确认没有)。
+   * - false:slot 是新创建的/spread from softReset,useGoal 的 effect 应该跑一次
+   *   GET /goal 来填 snapshot。
+   * - true:setGoalSnapshot / clearGoalSnapshot / 失败的 fetch 都把它置 true,
+   *   避免每次挂载或 sessionId 变化都重新拉。
+   *
+   * 跟 historyLoaded 是同类信号:每次 fetch 不论结果是 GoalSnapshot 还是 null
+   * 都置 true,这样 cancel 后回到会话不会再被 server 上的 cancelled goal 状态
+   * 覆盖掉本地"无目标"决定。
+   */
+  goalLoaded: boolean
 }
 
 type SessionStore = {
@@ -143,6 +155,7 @@ const empty = (): PerSession => ({
   historyLoaded: false,
   lastEventAt: 0,
   goalSnapshot: null,
+  goalLoaded: false,
 })
 
 const touchEvent = (cur: PerSession): PerSession => ({
@@ -441,10 +454,13 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const cur = s.byId[sid]
       if (!cur) return s
+      // 任何写 snapshot 的路径(create / refresh / 编辑 / 取消结果)都该标记已加载,
+      // 否则下次进入同一 session 还会再发一次 GET /goal,既浪费也可能在 cancel 后
+      // 把"本地无目标"决定覆盖成 server 上的 cancelled goal 状态。
       return {
         byId: {
           ...s.byId,
-          [sid]: touchEvent({ ...cur, goalSnapshot: snapshot }),
+          [sid]: touchEvent({ ...cur, goalSnapshot: snapshot, goalLoaded: true }),
         },
       }
     }),
@@ -452,10 +468,11 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const cur = s.byId[sid]
       if (!cur) return s
+      // 同上:清空也要视作"已经向 server 确认过该 session 没有目标",避免无限重拉。
       return {
         byId: {
           ...s.byId,
-          [sid]: touchEvent({ ...cur, goalSnapshot: null }),
+          [sid]: touchEvent({ ...cur, goalSnapshot: null, goalLoaded: true }),
         },
       }
     }),
