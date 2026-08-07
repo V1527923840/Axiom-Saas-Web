@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { stampAttemptIdOnMessages, useSessionStore } from "./session-store"
 import { TOOL_OPEN, TOOL_CLOSE } from "../lib/parse-message"
+import type { GoalSnapshot, SwarmRunStatus, SwarmAgentStatus } from "../lib/vibe-types"
 
 const SID = "sess-1"
 const AID = "att-1"
@@ -641,5 +642,150 @@ describe("cancel flow — cancelledAt stamp on currently-streaming message", () 
     const cur = useSessionStore.getState().byId[SID]
     // the timestamp is updated (lastIdx matched); either way, cancelledAt is defined.
     expect(cur.messages[0].cancelledAt).toBeDefined()
+  })
+})
+
+// --- goalSnapshot + swarm_status message support ----------------------------------------
+//
+// The per-session slot now carries a `goalSnapshot` (GoalSnapshot | null) and the chat
+// history can contain a synthetic `swarm_status` message (ChatMessage with
+// `type === "swarm_status"`, keyed by SwarmRunStatus.runId). These tests cover the
+// five new mutators + the ensure() factory default.
+//
+// Critical invariant: a `swarm_status` message has no `attemptId`, so appendDelta's
+// matching (`m.attemptId === aid`) must NEVER match it. That's verified below.
+
+const goalSnapshotFixture = (): GoalSnapshot => ({
+  goal: {
+    goal_id: "g-1",
+    session_id: SID,
+    status: "active",
+    objective: "research AAPL",
+    ui_summary: "Research AAPL",
+    source: "user",
+    protocol: "p",
+    risk_tier: "research_general",
+    tokens_used: 0,
+    turns_used: 0,
+    time_used_seconds: 0,
+    budget_wrapup_sent: false,
+    created_at: "2026-08-07T00:00:00.000Z",
+    updated_at: "2026-08-07T00:00:00.000Z",
+  },
+  claims: [],
+  criteria: [],
+  evidence: [],
+  evidence_count: 0,
+})
+
+const swarmStatusFixture = (overrides?: Partial<SwarmRunStatus>): SwarmRunStatus => ({
+  runId: "run-1",
+  preset: "deep_research",
+  status: "running",
+  currentLayer: 1,
+  totalLayers: 3,
+  startedAt: 1_700_000_000_000,
+  agents: [] as SwarmAgentStatus[],
+  ...overrides,
+})
+
+describe("goal + swarm — per-slot state and message upsert", () => {
+  it("ensure() creates a new per-session slot with goalSnapshot === null", () => {
+    // Reset and create a brand new session (not the global SID one in beforeEach).
+    useSessionStore.getState().reset()
+    const fresh = useSessionStore.getState().ensure("sess-fresh")
+    expect(fresh.goalSnapshot).toBeNull()
+    expect(fresh.messages).toEqual([])
+  })
+
+  it("setGoalSnapshot writes the snapshot into the per-session slot", () => {
+    const snap = goalSnapshotFixture()
+    useSessionStore.getState().setGoalSnapshot(SID, snap)
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.goalSnapshot).toEqual(snap)
+  })
+
+  it("clearGoalSnapshot resets the snapshot back to null", () => {
+    useSessionStore.getState().setGoalSnapshot(SID, goalSnapshotFixture())
+    useSessionStore.getState().clearGoalSnapshot(SID)
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.goalSnapshot).toBeNull()
+  })
+
+  it("upsertSwarmStatus inserts a new swarm_status message when none exists", () => {
+    const status = swarmStatusFixture()
+    useSessionStore.getState().upsertSwarmStatus(SID, status)
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.messages).toHaveLength(1)
+    const m = cur.messages[0]
+    expect(m.type).toBe("swarm_status")
+    expect(m.swarmStatus).toEqual(status)
+    expect(m.role).toBe("assistant")
+    expect(m.id).toBe(`swarm-${status.runId}`)
+    // swarm_status messages must NOT have an attemptId — that's how they avoid colliding
+    // with appendDelta / setAttemptContent / markAttemptComplete / appendToolCall.
+    expect(m.attemptId).toBeUndefined()
+  })
+
+  it("upsertSwarmStatus updates an existing message in place (no duplicate)", () => {
+    const initial = swarmStatusFixture()
+    useSessionStore.getState().upsertSwarmStatus(SID, initial)
+    const updated = swarmStatusFixture({ currentLayer: 2, status: "running" })
+    useSessionStore.getState().upsertSwarmStatus(SID, updated)
+    const cur = useSessionStore.getState().byId[SID]
+    // Still exactly one message — the upsert matched on runId.
+    expect(cur.messages).toHaveLength(1)
+    expect(cur.messages[0].swarmStatus).toEqual(updated)
+    // id stays the same (keyed by runId).
+    expect(cur.messages[0].id).toBe(`swarm-${initial.runId}`)
+  })
+
+  it("updateSwarmStatus applies an updater function to the matched runId", () => {
+    useSessionStore.getState().upsertSwarmStatus(SID, swarmStatusFixture())
+    useSessionStore.getState().updateSwarmStatus(SID, "run-1", (cur) => ({
+      ...cur,
+      currentLayer: 3,
+      status: "completed",
+      completedAt: 1_700_000_999_000,
+    }))
+    const m = useSessionStore.getState().byId[SID].messages[0]
+    expect(m.swarmStatus?.currentLayer).toBe(3)
+    expect(m.swarmStatus?.status).toBe("completed")
+    expect(m.swarmStatus?.completedAt).toBe(1_700_000_999_000)
+  })
+
+  it("removeSwarmStatus deletes the message keyed by runId", () => {
+    useSessionStore.getState().upsertSwarmStatus(SID, swarmStatusFixture({ runId: "run-A" }))
+    useSessionStore.getState().upsertSwarmStatus(
+      SID,
+      swarmStatusFixture({ runId: "run-B", preset: "compete" }),
+    )
+    expect(useSessionStore.getState().byId[SID].messages).toHaveLength(2)
+    useSessionStore.getState().removeSwarmStatus(SID, "run-A")
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.messages).toHaveLength(1)
+    expect(cur.messages[0].swarmStatus?.runId).toBe("run-B")
+  })
+
+  it("swarm_status message does NOT collide with appendDelta's attemptId matching", () => {
+    // Invariant: a `swarm_status` message has no `attemptId`, so the streaming
+    // mutators (appendDelta / setAttemptContent / markAttemptComplete / appendToolCall)
+    // must ignore it. Otherwise a delta for an attempt would get appended into the
+    // swarm_status card's content string, and history-loaded dedup might also
+    // misbehave.
+    useSessionStore.getState().upsertSwarmStatus(SID, swarmStatusFixture({ runId: "run-X" }))
+    // Now stream a delta with an attemptId that would have matched if swarm_status
+    // messages were mis-classified as attempt-bearing.
+    useSessionStore.getState().appendDelta(SID, AID, "hello ")
+    const cur = useSessionStore.getState().byId[SID]
+    // The swarm_status card must still be untouched.
+    const swarm = cur.messages.find((m) => m.type === "swarm_status")
+    expect(swarm).toBeDefined()
+    expect(swarm?.content).toBe("") // swarm_status always has content === ""
+    // A NEW assistant message with attemptId === AID was created (the synthetic).
+    const synth = cur.messages.find((m) => m.attemptId === AID)
+    expect(synth).toBeDefined()
+    expect(synth?.content).toBe("hello ")
+    expect(synth?.id).toBe(`stream-${AID}`)
   })
 })

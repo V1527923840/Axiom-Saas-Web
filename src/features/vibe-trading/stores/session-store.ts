@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { TOOL_OPEN, TOOL_CLOSE } from "../lib/parse-message"
+import type { GoalSnapshot, SwarmRunStatus } from "../lib/vibe-types"
 
 export type ChatMessage = {
   id: string
@@ -11,6 +12,21 @@ export type ChatMessage = {
    *  "Execution failed: cancelled by user" copy from upstream. */
   cancelledAt?: string
   createdAt: string
+  /**
+   * Message discriminator. Undefined = legacy text message (default for existing
+   * messages). "swarm_status" = synthetic message rendered by SwarmStatusCard.
+   * "text" is the explicit label for text-bearing assistant/user messages; kept
+   * optional so old messages without this field still type-check.
+   */
+  type?: "text" | "swarm_status"
+  /**
+   * Swarm run status payload — only set when `type === "swarm_status"`.
+   * Keyed by SwarmRunStatus.runId at the store level (see upsertSwarmStatus).
+   * NOT mixed with attemptId: a swarm_status message never has attemptId, so
+   * the streaming mutators (appendDelta / setAttemptContent / appendToolCall /
+   * markAttemptComplete) safely ignore it.
+   */
+  swarmStatus?: SwarmRunStatus
 }
 
 export type PerSession = {
@@ -34,6 +50,12 @@ export type PerSession = {
    * 同上 Race,先按 attemptId 暂存,attemptId 回填占位时直接覆盖 delta。
    */
   pendingSnapshot?: Record<string, string>
+  /**
+   * Per-session goal state from the goal service. Set by setGoalSnapshot when
+   * the snapshot is loaded (initial load + refresh); cleared by clearGoalSnapshot
+   * on session switch / soft reset. Null = no goal loaded yet (default).
+   */
+  goalSnapshot: GoalSnapshot | null
 }
 
 type SessionStore = {
@@ -71,6 +93,30 @@ type SessionStore = {
   setEventsSubscribed: (sessionId: string, subscribed: boolean) => void
   setHistoryLoaded: (sessionId: string, messages: ChatMessage[]) => void
   reset: () => void
+  /**
+   * Goal service state — goal/swarm feature. See PerSession.goalSnapshot.
+   */
+  setGoalSnapshot: (sessionId: string, snapshot: GoalSnapshot) => void
+  clearGoalSnapshot: (sessionId: string) => void
+  /**
+   * Insert a swarm_status message keyed by SwarmRunStatus.runId, OR update the
+   * matching message's swarmStatus field in place if a message with the same
+   * runId already exists. This is the canonical mutator for SSE swarm_status
+   * events: each new event either creates a new run card or refreshes the
+   * existing one.
+   */
+  upsertSwarmStatus: (sessionId: string, status: SwarmRunStatus) => void
+  /**
+   * Apply a functional updater to the swarm_status message keyed by runId.
+   * No-op if no matching message exists.
+   */
+  updateSwarmStatus: (
+    sessionId: string,
+    runId: string,
+    updater: (cur: SwarmRunStatus) => SwarmRunStatus,
+  ) => void
+  /** Delete the swarm_status message keyed by runId. No-op if not found. */
+  removeSwarmStatus: (sessionId: string, runId: string) => void
 }
 
 const empty = (): PerSession => ({
@@ -81,6 +127,7 @@ const empty = (): PerSession => ({
   eventsSubscribed: false,
   historyLoaded: false,
   lastEventAt: 0,
+  goalSnapshot: null,
 })
 
 const touchEvent = (cur: PerSession): PerSession => ({
@@ -355,4 +402,84 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       }
     }),
   reset: () => set({ byId: {} }),
+  setGoalSnapshot: (sid, snapshot) =>
+    set((s) => {
+      const cur = s.byId[sid]
+      if (!cur) return s
+      return {
+        byId: {
+          ...s.byId,
+          [sid]: touchEvent({ ...cur, goalSnapshot: snapshot }),
+        },
+      }
+    }),
+  clearGoalSnapshot: (sid) =>
+    set((s) => {
+      const cur = s.byId[sid]
+      if (!cur) return s
+      return {
+        byId: {
+          ...s.byId,
+          [sid]: touchEvent({ ...cur, goalSnapshot: null }),
+        },
+      }
+    }),
+  upsertSwarmStatus: (sid, status) =>
+    set((s) => {
+      const cur = s.byId[sid]
+      if (!cur) return s
+      // Keyed by runId, NOT attemptId — see ChatMessage.swarmStatus doc.
+      // A text-bearing message with attemptId === status.runId would not match
+      // here (m.type !== "swarm_status"); conversely a swarm_status message has
+      // no attemptId, so appendDelta's `m.attemptId === aid` check skips it.
+      const idx = cur.messages.findIndex(
+        (m) => m.type === "swarm_status" && m.swarmStatus?.runId === status.runId,
+      )
+      if (idx >= 0) {
+        const messages = cur.messages.map((m, i) =>
+          i === idx ? { ...m, swarmStatus: status } : m,
+        )
+        return {
+          byId: { ...s.byId, [sid]: touchEvent({ ...cur, messages }) },
+        }
+      }
+      const message: ChatMessage = {
+        id: `swarm-${status.runId}`,
+        role: "assistant",
+        type: "swarm_status",
+        swarmStatus: status,
+        content: "",
+        createdAt: new Date().toISOString(),
+      }
+      return {
+        byId: {
+          ...s.byId,
+          [sid]: touchEvent({ ...cur, messages: [...cur.messages, message] }),
+        },
+      }
+    }),
+  updateSwarmStatus: (sid, runId, updater) =>
+    set((s) => {
+      const cur = s.byId[sid]
+      if (!cur) return s
+      const messages = cur.messages.map((m) =>
+        m.type === "swarm_status" && m.swarmStatus?.runId === runId && m.swarmStatus
+          ? { ...m, swarmStatus: updater(m.swarmStatus) }
+          : m,
+      )
+      return {
+        byId: { ...s.byId, [sid]: touchEvent({ ...cur, messages }) },
+      }
+    }),
+  removeSwarmStatus: (sid, runId) =>
+    set((s) => {
+      const cur = s.byId[sid]
+      if (!cur) return s
+      const messages = cur.messages.filter(
+        (m) => !(m.type === "swarm_status" && m.swarmStatus?.runId === runId),
+      )
+      return {
+        byId: { ...s.byId, [sid]: touchEvent({ ...cur, messages }) },
+      }
+    }),
 }))
