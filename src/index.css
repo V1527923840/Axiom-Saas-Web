@@ -173,3 +173,27 @@ html {
 .animate-logo-scroll:hover {
   animation-play-state: paused;
 }
+
+/*
+ * antd Sender loading button (cancel button) — make it destructive.
+ *
+ * The default antd Sender shows a "stop" icon when loading=true. It uses
+ * color="primary" + variant="text" (transparent background, icon colored
+ * with --primary). In dark mode, --primary is near-white, so the icon ends
+ * up being near-white on a transparent background over a dark input area —
+ * hard to see.
+ *
+ * The cancel action is semantically destructive (stops an active operation),
+ * so a red color works in both light and dark mode and is universally
+ * recognizable. Background is a subtle red tint to make it pop against the
+ * input area.
+ */
+.ant-sender-loading-button {
+  color: var(--color-destructive) !important;
+  background-color: color-mix(in oklch, var(--color-destructive) 12%, transparent) !important;
+}
+.ant-sender-loading-button:hover,
+.ant-sender-loading-button:focus-visible {
+  color: var(--color-destructive) !important;
+  background-color: color-mix(in oklch, var(--color-destructive) 22%, transparent) !important;
+}
