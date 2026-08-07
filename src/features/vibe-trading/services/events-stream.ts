@@ -152,6 +152,20 @@ function routeEvent(
         store.markAttemptError(sessionId, aid, msg)
       }
       break
+    case "tool_event":
+      // 上游把 tool 调用发成独立事件(非 inline 标签),由 store 合成为 <tool_call> 块。
+      if (aid && typeof ev.data?.tool === "string") {
+        store.appendToolCall(
+          sessionId,
+          aid,
+          ev.data.tool,
+          typeof ev.data.elapsed_s === "number" ? ev.data.elapsed_s : undefined,
+          typeof ev.data.elapsed_ms === "number" ? ev.data.elapsed_ms : undefined,
+          typeof ev.data.preview === "string" ? ev.data.preview : undefined,
+          typeof ev.data.status === "string" ? ev.data.status : undefined,
+        )
+      }
+      break
     // ignored: message.received, attempt.created, attempt.started, thinking_done
   }
 }
@@ -190,6 +204,10 @@ function parseSseEvent(raw: string): { event: string; data: Record<string, unkno
     else if (typeof obj.content === "string" && obj.attempt_id) event = "text_delta"
     else if (obj.status === "completed" && obj.attempt_id) event = "attempt.completed"
     else if (obj.status === "error" && obj.attempt_id) event = "attempt.error"
+    // 上游 vibe service 把 tool 调用作为独立事件发出(非 inline <tool_call> 标签)。
+    // 形状: {"tool":"name","elapsed_s":12,"attempt_id":"..."}  (in progress)
+    // 或:   {"tool":"name","status":"ok","elapsed_ms":9828,"preview":"...","attempt_id":"..."}
+    else if (typeof obj.tool === "string" && obj.attempt_id) event = "tool_event"
   }
   return { event, data: obj }
 }

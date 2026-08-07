@@ -17,8 +17,8 @@ export type Segment =
 
 const THINK_OPEN = "<think>"
 const THINK_CLOSE = "</think>"
-const TOOL_OPEN = "<tool_call>"
-const TOOL_CLOSE = "</tool_call>"
+export const TOOL_OPEN = "<tool_call>"
+export const TOOL_CLOSE = "</tool_call>"
 
 export function parseMessageSegments(content: string): Segment[] {
   const segments: Segment[] = []

@@ -1,4 +1,5 @@
 import { create } from "zustand"
+import { TOOL_OPEN, TOOL_CLOSE } from "../lib/parse-message"
 
 export type ChatMessage = {
   id: string
@@ -43,6 +44,26 @@ type SessionStore = {
   setAttemptContent: (sessionId: string, attemptId: string, fullText: string) => void
   markAttemptComplete: (sessionId: string, attemptId: string, fullText?: string) => void
   markAttemptError: (sessionId: string, attemptId: string, message: string) => void
+  /**
+   * 把上游 vibe service 的 tool 事件(独立 SSE 事件,非 inline <tool_call> 标签)
+   * 合成成 message content 里的 <tool_call>{...}</tool_call> 块,使 ToolCallBlock 能渲染。
+   *
+   * 上游事件形状:
+   *   in-progress: {"tool":"get_market_data","elapsed_s":12,"attempt_id":"..."}
+   *   done:        {"tool":"get_market_data","status":"ok","elapsed_ms":9828,"preview":"...","attempt_id":"..."}
+   *
+   * 如果 message 已存在(流式期间已通过 appendDelta 创建 stream-<aid>),append block;
+   * 否则创建 synthetic stream-<aid> 消息并把 block 作为初始 content。
+   */
+  appendToolCall: (
+    sessionId: string,
+    attemptId: string,
+    toolName: string,
+    elapsedS?: number,
+    elapsedMs?: number,
+    preview?: string,
+    status?: string,
+  ) => void
   setEventsSubscribed: (sessionId: string, subscribed: boolean) => void
   setHistoryLoaded: (sessionId: string, messages: ChatMessage[]) => void
   reset: () => void
@@ -247,6 +268,39 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             streaming: false,
             activeAttemptId: matchesActive ? null : cur.activeAttemptId,
           }),
+        },
+      }
+    }),
+  appendToolCall: (sid, aid, toolName, elapsedS, elapsedMs, preview, status) =>
+    set((s) => {
+      const cur = s.byId[sid]
+      if (!cur) return s
+      const toolData: Record<string, unknown> = { name: toolName }
+      if (status !== undefined) toolData.status = status
+      if (elapsedMs !== undefined) toolData.elapsed_ms = elapsedMs
+      else if (elapsedS !== undefined) toolData.elapsed_s = elapsedS
+      if (preview !== undefined) toolData.preview = preview
+      const block = `${TOOL_OPEN}${JSON.stringify(toolData)}${TOOL_CLOSE}`
+
+      const matched = cur.messages.find((m) => m.attemptId === aid)
+      if (matched) {
+        const messages = cur.messages.map((m) =>
+          m.attemptId === aid ? { ...m, content: m.content + block } : m,
+        )
+        return { byId: { ...s.byId, [sid]: touchEvent({ ...cur, messages }) } }
+      }
+      // 没有匹配 → 创建 synthetic stream-<aid> 并把 block 作为初始 content。
+      const synthetic: ChatMessage = {
+        id: `stream-${aid}`,
+        role: "assistant",
+        attemptId: aid,
+        content: block,
+        createdAt: new Date().toISOString(),
+      }
+      return {
+        byId: {
+          ...s.byId,
+          [sid]: touchEvent({ ...cur, messages: [...cur.messages, synthetic] }),
         },
       }
     }),

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { stampAttemptIdOnMessages, useSessionStore } from "./session-store"
+import { TOOL_OPEN, TOOL_CLOSE } from "../lib/parse-message"
 
 const SID = "sess-1"
 const AID = "att-1"
@@ -284,5 +285,94 @@ describe("markAttemptError — error surfaces even without activeAttemptId (I4)"
     const cur = useSessionStore.getState().byId[SID]
     expect(cur.error).toBeNull()
     expect(cur.streaming).toBe(false)
+  })
+})
+
+// upstream vibe service emits tool calls as separate events, not inline <tool_call> tags.
+// The frontend synthesizes a closed <tool_call> block into the assistant message content so
+// ToolCallBlock renders. See events-stream.ts routeEvent "tool_event" case.
+describe("appendToolCall — synthesize closed <tool_call> block from upstream tool event", () => {
+  it("appends a <tool_call> block to an existing assistant message matching attemptId", () => {
+    // 1) ensure a session + assistant message with matching attemptId
+    useSessionStore.getState().appendDelta(SID, AID, "thinking out loud ")
+    const before = useSessionStore.getState().byId[SID].messages[0].content
+    expect(before).toBe("thinking out loud ")
+
+    // 2) call appendToolCall (in-progress: only tool name + elapsed_s)
+    useSessionStore.getState().appendToolCall(SID, AID, "get_market_data", 12)
+
+    // 3) the message content now has a closed <tool_call> block appended
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.messages).toHaveLength(1)
+    const appended = cur.messages[0].content
+    expect(appended.startsWith("thinking out loud ")).toBe(true)
+    expect(appended).toContain(TOOL_OPEN)
+    expect(appended).toContain(TOOL_CLOSE)
+    // closed block: TOOL_CLOSE comes after TOOL_OPEN
+    expect(appended.indexOf(TOOL_CLOSE)).toBeGreaterThan(appended.indexOf(TOOL_OPEN))
+    // block content is valid JSON with name + elapsed_s
+    const blockJson = appended.slice(
+      appended.indexOf(TOOL_OPEN) + TOOL_OPEN.length,
+      appended.indexOf(TOOL_CLOSE),
+    )
+    const parsed = JSON.parse(blockJson)
+    expect(parsed.name).toBe("get_market_data")
+    expect(parsed.elapsed_s).toBe(12)
+  })
+
+  it("creates a synthetic stream-<aid> message when no match exists", () => {
+    // 1) session exists but no messages yet
+    expect(useSessionStore.getState().byId[SID].messages).toHaveLength(0)
+
+    // 2) call appendToolCall — should synthesize stream-<aid>
+    useSessionStore.getState().appendToolCall(SID, AID, "web_search")
+
+    // 3) a new assistant message with id="stream-<aid>" exists and contains the closed block
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.messages).toHaveLength(1)
+    const synth = cur.messages[0]
+    expect(synth.id).toBe(`stream-${AID}`)
+    expect(synth.role).toBe("assistant")
+    expect(synth.attemptId).toBe(AID)
+    expect(synth.content).toContain(TOOL_OPEN)
+    expect(synth.content).toContain(TOOL_CLOSE)
+    const blockJson = synth.content.slice(
+      synth.content.indexOf(TOOL_OPEN) + TOOL_OPEN.length,
+      synth.content.indexOf(TOOL_CLOSE),
+    )
+    expect(JSON.parse(blockJson)).toEqual({ name: "web_search" })
+  })
+
+  it("includes status, elapsed_ms, and preview fields when provided (done event)", () => {
+    useSessionStore.getState().appendToolCall(
+      SID,
+      AID,
+      "get_market_data",
+      undefined, // no elapsed_s — tool may complete without an in-progress frame
+      9828, // elapsed_ms
+      '{"ticker":"AAPL","price":187.42}', // preview
+      "ok",
+    )
+    const cur = useSessionStore.getState().byId[SID]
+    const blockJson = cur.messages[0].content.slice(
+      cur.messages[0].content.indexOf(TOOL_OPEN) + TOOL_OPEN.length,
+      cur.messages[0].content.indexOf(TOOL_CLOSE),
+    )
+    const parsed = JSON.parse(blockJson)
+    expect(parsed).toEqual({
+      name: "get_market_data",
+      status: "ok",
+      elapsed_ms: 9828,
+      preview: '{"ticker":"AAPL","price":187.42}',
+    })
+  })
+
+  it("is a no-op when the session does not exist", () => {
+    // session not ensured — store should silently ignore
+    useSessionStore.getState().reset()
+    expect(() =>
+      useSessionStore.getState().appendToolCall("missing-sess", AID, "any_tool"),
+    ).not.toThrow()
+    expect(useSessionStore.getState().byId["missing-sess"]).toBeUndefined()
   })
 })
