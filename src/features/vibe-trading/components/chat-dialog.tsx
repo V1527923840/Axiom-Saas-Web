@@ -111,7 +111,7 @@ export function ChatDialog({
               {debugSlice.lastEventAt
                 ? `${Math.round((Date.now() - debugSlice.lastEventAt) / 1000)}s ago`
                 : "never"}
-              {debugSlice.lastEventAt &&
+              {debugSlice.lastEventAt > 0 &&
                 Date.now() - debugSlice.lastEventAt > STALE_THRESHOLD_MS && (
                   <span className="text-destructive ml-1">STALE</span>
                 )}
@@ -170,10 +170,10 @@ export function ChatDialog({
           onSubmit={handleSend}
           onCancel={cancel}
           loading={streaming}
-          submitType="shiftEnter"
+          submitType="enter"
           placeholder={
             sessionId
-              ? "输入消息，Shift+Enter 发送…"
+              ? "输入消息,Enter 发送,Shift+Enter 换行…"
               : "输入消息,自动创建会话…"
           }
           autoFocus

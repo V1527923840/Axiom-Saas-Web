@@ -197,3 +197,16 @@ html {
   color: var(--color-destructive) !important;
   background-color: color-mix(in oklch, var(--color-destructive) 22%, transparent) !important;
 }
+
+/*
+ * Ensure Sender caret is always visible regardless of theme bridge subtleties.
+ *
+ * The Sender's internal textarea inherits a caret color from antd tokens;
+ * in dark mode the antd primary is near-white and can match the textarea
+ * background, producing an invisible cursor. Force the caret to follow the
+ * project's --foreground token (light in dark mode, dark in light mode).
+ */
+.ant-sender .ant-sender-input,
+.ant-sender textarea {
+  caret-color: var(--foreground);
+}
