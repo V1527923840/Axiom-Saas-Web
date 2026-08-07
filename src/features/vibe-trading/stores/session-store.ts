@@ -211,10 +211,20 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const cur = s.byId[sid]
       if (!cur) return s
+      // history 加载:每条 incoming 消息权威。如果 incoming 带有 attemptId 且与 cur 里
+      // 某条 synthetic stream-<aid> 同 attemptId,则移除那条 synthetic(避免 React 同时
+      // 渲染两条气泡)。synthetic 的 attemptId 仍保留在 history message 上,
+      // 后续 SSE delta 继续路由过去。
+      const incomingAttemptIds = new Set(
+        messages.filter((m) => m.attemptId).map((m) => m.attemptId as string),
+      )
+      const cleanedCur = cur.messages.filter(
+        (m) => !(m.id.startsWith("stream-") && m.attemptId && incomingAttemptIds.has(m.attemptId)),
+      )
       return {
         byId: {
           ...s.byId,
-          [sid]: { ...cur, messages, historyLoaded: true },
+          [sid]: { ...cur, messages: [...cleanedCur, ...messages], historyLoaded: true },
         },
       }
     }),

@@ -47,3 +47,41 @@ describe("setAttemptContent — synthetic message fallback", () => {
     expect(synth?.content).toBe("full body")
   })
 })
+
+describe("setHistoryLoaded — dedup by attemptId", () => {
+  it("removes synthetic stream message when history has same attemptId", () => {
+    // 1) 先有一个 synthetic 消息
+    useSessionStore.getState().appendDelta(SID, AID, "streamed partial")
+    // 2) history 加载,带了同 attemptId 的真实消息
+    useSessionStore.getState().setHistoryLoaded(SID, [
+      {
+        id: "real-1",
+        role: "assistant",
+        content: "real final",
+        attemptId: AID,
+        createdAt: "2026-08-07T00:00:00.000Z",
+      },
+    ])
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.messages).toHaveLength(1)
+    expect(cur.messages[0].id).toBe("real-1")
+    expect(cur.messages[0].content).toBe("real final")
+    expect(cur.messages[0].attemptId).toBe(AID)
+  })
+
+  it("keeps synthetic messages that have no matching history entry", () => {
+    useSessionStore.getState().appendDelta(SID, AID, "in flight")
+    useSessionStore.getState().setHistoryLoaded(SID, [
+      {
+        id: "other-1",
+        role: "user",
+        content: "hi",
+        createdAt: "2026-08-07T00:00:00.000Z",
+      },
+    ])
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.messages).toHaveLength(2)
+    const synth = cur.messages.find((m) => m.attemptId === AID)
+    expect(synth?.content).toBe("in flight")
+  })
+})
