@@ -193,17 +193,50 @@ export function useChatStream(
     if (!sessionId) return
     const cur = useSessionStore.getState().byId[sessionId]
     if (!cur?.streaming) return
-    // 立即本地标记 —— UI 立刻反映
-    useSessionStore.setState((s) => ({
-      byId: {
-        ...s.byId,
-        [sessionId]: {
-          ...(s.byId[sessionId] ?? cur),
-          streaming: false,
-          activeAttemptId: null,
+    // 立即本地标记 —— UI 立刻反映。
+    // 同时把"当前正在流的那条 assistant 消息"标记为 cancelledAt: 上游会在
+    // cancel 之后推一帧 text_delta "Execution failed: cancelled by user",
+    // 这些内容会继续 append 到消息 content 上 —— 没有 cancelledAt 标记的话,
+    // 用户看到的就是"AI 回复了一句错误信息",分不清是取消还是真出错。
+    useSessionStore.setState((s) => {
+      const c = s.byId[sessionId]
+      if (!c) return s
+      const now = new Date().toISOString()
+      // 找"当前正在流的 assistant 消息":优先按 activeAttemptId 匹配,
+      // 退一步用反向扫描找最后一条尚未 cancelled 的 assistant(应对 race /
+      // send() 还没把 attemptId 写回 placeholder 的窗口期)。
+      let lastStreamingAsstIdx = -1
+      const aid = c.activeAttemptId
+      if (aid) {
+        lastStreamingAsstIdx = c.messages.findIndex((m) => m.attemptId === aid)
+      }
+      if (lastStreamingAsstIdx === -1) {
+        for (let i = c.messages.length - 1; i >= 0; i--) {
+          const m = c.messages[i]
+          if (m.role === "assistant" && !m.cancelledAt) {
+            lastStreamingAsstIdx = i
+            break
+          }
+        }
+      }
+      const messages =
+        lastStreamingAsstIdx === -1
+          ? c.messages
+          : c.messages.map((m, i) =>
+              i === lastStreamingAsstIdx ? { ...m, cancelledAt: now } : m,
+            )
+      return {
+        byId: {
+          ...s.byId,
+          [sessionId]: {
+            ...c,
+            messages,
+            streaming: false,
+            activeAttemptId: null,
+          },
         },
-      },
-    }))
+      }
+    })
     // fire-and-forget 调后端 cancel
     void cancelSession(sessionId).catch(() => undefined)
   }, [sessionId])

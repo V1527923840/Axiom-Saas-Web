@@ -77,10 +77,13 @@ export function ChatDialog({
     // streaming=true 让 Bubble.List 跳过 typing 渲染走纯 React 树。
     streaming: m.role === "assistant" && Boolean(m.attemptId) && streaming,
     loading: false,
-    // AI 走自定义渲染(解析 thinking/tool/markdown);用户消息保持纯文本。
+    // AI 走自定义渲染(解析 thinking/tool/markdown + cancelled 角标);用户消息保持纯文本。
+    // closure 捕获 m.cancelledAt —— use-chat-stream.cancel() 在 cancel 时往当前正在流的 assistant 消息上写 cancelledAt。
     contentRender:
       m.role === "assistant"
-        ? (content: string) => <AiMessageContent content={content} />
+        ? (content: string) => (
+            <AiMessageContent content={content} cancelledAt={m.cancelledAt} />
+          )
         : undefined,
   }))
 

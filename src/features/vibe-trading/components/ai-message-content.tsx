@@ -1,3 +1,4 @@
+import { Ban } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { ThinkingBlock } from "./thinking-block"
@@ -13,10 +14,16 @@ import { parseMessageSegments } from "../lib/parse-message"
  * - 空 main 段(<=0 字符)直接跳过,不显示空 markdown 框。
  * - 流式场景下未闭合的 <think>/<tool_call> 段被解析器视为开块,UI 自然延展。
  */
-export function AiMessageContent({ content }: { content: string }) {
+export function AiMessageContent({
+  content,
+  cancelledAt,
+}: {
+  content: string
+  cancelledAt?: string
+}) {
   const segments = parseMessageSegments(content)
   return (
-    <>
+    <div>
       {segments.map((seg) => {
         if (seg.type === "thinking") {
           return <ThinkingBlock key={`t-${seg.start}`} content={seg.content} closed={seg.closed} />
@@ -83,6 +90,17 @@ export function AiMessageContent({ content }: { content: string }) {
           </div>
         )
       })}
-    </>
+      {cancelledAt && (
+        <div
+          className="text-muted-foreground mt-2 flex items-center gap-1.5 text-xs italic"
+          aria-label="cancelled by user"
+        >
+          <Ban className="h-3 w-3" aria-hidden />
+          <span>
+            已取消 · {new Date(cancelledAt).toLocaleTimeString("zh-CN")}
+          </span>
+        </div>
+      )}
+    </div>
   )
 }

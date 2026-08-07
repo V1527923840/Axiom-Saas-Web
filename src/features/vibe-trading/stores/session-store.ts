@@ -6,6 +6,10 @@ export type ChatMessage = {
   role: "user" | "assistant"
   content: string
   attemptId?: string
+  /** ISO timestamp; set when user cancels mid-stream — distinguishes user-cancelled
+   *  assistant responses from a normal message that happens to contain
+   *  "Execution failed: cancelled by user" copy from upstream. */
+  cancelledAt?: string
   createdAt: string
 }
 
