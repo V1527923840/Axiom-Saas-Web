@@ -10,7 +10,6 @@ import { useChatStream } from "../hooks/use-chat-stream"
 import type { SwarmRunStatus } from "../lib/vibe-types"
 import { criterionCovered } from "../lib/goal-criteria"
 import { findOpenToolCalls, parseAttachmentPrefix } from "../lib/parse-message"
-import { STALE_THRESHOLD_MS } from "../services/events-stream"
 import { vibeApi } from "../services/vibe-api"
 import { useSessionStore } from "../stores/session-store"
 import { AttachmentChip } from "./attachment-chip"
@@ -61,7 +60,6 @@ export function ChatDialog({
 }) {
   const { messages, streaming, error, send, cancel } =
     useChatStream(sessionId, title)
-  const debugSlice = useSessionStore((s) => (sessionId ? s.byId[sessionId] : undefined))
   const {
     snapshot: goalSnapshot,
     create: createGoalAction,
@@ -352,39 +350,6 @@ export function ChatDialog({
 
   return (
     <div className="flex h-full min-h-0 flex-1 min-w-0 flex-col">
-      {import.meta.env.DEV && sessionId && debugSlice && (
-        <details className="bg-muted/30 border-b px-3 py-1 font-mono text-[10px]">
-          <summary className="cursor-pointer">vibe-debug · {sessionId.slice(0, 8)}…</summary>
-          <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5">
-            <div>eventsSubscribed</div>
-            <div>{String(debugSlice.eventsSubscribed)}</div>
-            <div>streaming</div>
-            <div>{String(debugSlice.streaming)}</div>
-            <div>activeAttemptId</div>
-            <div>{debugSlice.activeAttemptId ?? "—"}</div>
-            <div>historyLoaded</div>
-            <div>{String(debugSlice.historyLoaded)}</div>
-            <div>lastEventAt</div>
-            <div>
-              {debugSlice.lastEventAt
-                ? `${Math.round((Date.now() - debugSlice.lastEventAt) / 1000)}s ago`
-                : "never"}
-              {debugSlice.lastEventAt > 0 &&
-                Date.now() - debugSlice.lastEventAt > STALE_THRESHOLD_MS && (
-                  <span className="text-destructive ml-1">STALE</span>
-                )}
-            </div>
-            <div>pendingDeltas</div>
-            <div>
-              {debugSlice.pendingDeltas
-                ? Object.entries(debugSlice.pendingDeltas)
-                    .map(([k, v]) => `${k.slice(0, 6)}:${v.length}`)
-                    .join(" ")
-                : "—"}
-            </div>
-          </div>
-        </details>
-      )}
       <div className="flex-1 min-h-0 overflow-hidden">
         {showWelcome ? (
           <WelcomeState />
