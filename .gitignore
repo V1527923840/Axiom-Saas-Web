@@ -39,3 +39,6 @@ dist-ssr
 cypress/videos/
 cypress/screenshots/
 cypress/downloads/
+
+# Local scratch/audit documents (never commit, see project conventions)
+.superpowers/
