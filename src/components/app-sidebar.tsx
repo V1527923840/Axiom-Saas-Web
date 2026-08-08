@@ -3,16 +3,33 @@
 import * as React from "react"
 import { Link, useLocation } from "react-router-dom"
 import {
-  LayoutDashboard,
-  Shield,
-  Settings,
-  Users,
-  CreditCard,
-  FileText,
-  Wallet,
-  Menu,
-  ChevronRight,
+  ArrowLeftRight,
   Atom,
+  BadgeCheck,
+  BookOpenText,
+  Bot,
+  ChevronRight,
+  CreditCard,
+  Database,
+  FileJson,
+  FileText,
+  Folder,
+  FolderOpen,
+  Headphones,
+  Layers,
+  LayoutDashboard,
+  Menu,
+  MessageSquare,
+  Newspaper,
+  Receipt,
+  Settings,
+  Shield,
+  ShieldCheck,
+  Star,
+  Tag,
+  Users,
+  Wallet,
+  Wrench,
   type LucideIcon,
 } from "lucide-react"
 import { SidebarNotification } from "@/components/sidebar-notification"
@@ -46,17 +63,38 @@ import { useMenusContext } from "@/contexts/menu-context"
 import { useAuth } from "@/contexts/auth-context"
 import type { MenuTreeNode } from "@/features/menus/types"
 
-// Map icon name to Lucide icon component
+// Map icon name to Lucide icon component.
+// Keep this in sync with the `icon` column values written by migrations
+// under Axiom-Saas-Server/src/database/migrations/ and the seed in
+// src/database/seeds/relational/menu/menu-seed.service.ts. Icons not in
+// this map fall back to the generic `Menu` icon.
 const iconMap: Record<string, LucideIcon> = {
-  LayoutDashboard,
-  Shield,
-  Settings,
-  Users,
-  CreditCard,
-  FileText,
-  Wallet,
-  Menu,
+  ArrowLeftRight,
   Atom,
+  BadgeCheck,
+  BookOpenText,
+  Bot,
+  CreditCard,
+  Database,
+  FileJson,
+  FileText,
+  Folder,
+  FolderOpen,
+  Headphones,
+  Layers,
+  LayoutDashboard,
+  Menu,
+  MessageSquare,
+  Newspaper,
+  Receipt,
+  Settings,
+  Shield,
+  ShieldCheck,
+  Star,
+  Tag,
+  Users,
+  Wallet,
+  Wrench,
 }
 
 function getIcon(iconName: string): LucideIcon {
