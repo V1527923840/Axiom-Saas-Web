@@ -15,7 +15,7 @@
 //
 // 与 `events-stream.ts` 风格一致:同一份 `authHeaders` 工具函数模式。
 
-import type { GoalSnapshot, SwarmPreset, UploadResult } from "../lib/vibe-types"
+import type { GoalSnapshot, UploadResult } from "../lib/vibe-types"
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ?? "/api"
@@ -48,10 +48,15 @@ export const vibeApi = {
   uploadFile(file: File): Promise<UploadResult> {
     const form = new FormData()
     form.append("file", file)
-    return request<UploadResult>("/v1/ai-agent/upload", {
+    // 服务器全局 TransformResponseInterceptor 把所有响应包成 { data: ... }
+    // (见 Axiom-Saas-Server src/utils/interceptors/transform-response.interceptor.ts),
+    // 必须 unwrap .data,否则 result.filename / result.file_path 全是 undefined,
+    // 上传到下一步 use-chat-stream.send 注入的 prefix 会变成
+    // "[Uploaded file: undefined, path: undefined]"(回归:前端没解包时)。
+    return request<{ data: UploadResult }>("/v1/ai-agent/upload", {
       method: "POST",
       body: form,
-    })
+    }).then((r) => r.data)
   },
 
   getGoal(sid: string): Promise<GoalSnapshot | null> {
@@ -106,22 +111,6 @@ export const vibeApi = {
     ).then((r) => r.data)
   },
 
-  addGoalEvidence(
-    sid: string,
-    body: Record<string, unknown>,
-  ): Promise<{ evidence: unknown; snapshot: GoalSnapshot }> {
-    return request<{
-      data: { evidence: unknown; snapshot: GoalSnapshot }
-    }>(
-      `/v1/ai-agent/sessions/${encodeURIComponent(sid)}/goal/evidence`,
-      {
-        method: "POST",
-        body: JSON.stringify(body),
-        headers: { "Content-Type": "application/json" },
-      },
-    ).then((r) => r.data)
-  },
-
   updateGoalStatus(
     sid: string,
     body: {
@@ -142,33 +131,6 @@ export const vibeApi = {
     ).then((r) => r.data)
   },
 
-  listSwarmPresets(): Promise<SwarmPreset[]> {
-    // `/swarm/presets` 在 controller 层是公开的(无 JWT,无任何 auth 装饰器),
-    // 而且它会被独立页面的初次渲染调用,可能用户还没登录。直接 raw fetch 不注入 Authorization。
-    return fetch(`${API_BASE_URL}/v1/ai-agent/swarm/presets`, {
-      method: "GET",
-    }).then(async (res) => {
-      if (!res.ok) {
-        const body = await res.text().catch(() => "")
-        throw new Error(
-          `API ${res.status}: ${body || res.statusText}`,
-        )
-      }
-      return res.json() as Promise<SwarmPreset[]>
-    })
-  },
-
-  createSwarmRun(
-    presetName: string,
-    userVars: Record<string, string>,
-  ): Promise<{ id: string; status: string; preset_name: string }> {
-    return request("/v1/ai-agent/swarm/runs", {
-      method: "POST",
-      body: JSON.stringify({ preset_name: presetName, user_vars: userVars }),
-      headers: { "Content-Type": "application/json" },
-    })
-  },
-
   listSwarmRuns(limit = 20): Promise<unknown[]> {
     return request(`/v1/ai-agent/swarm/runs?limit=${limit}`)
   },
@@ -177,20 +139,6 @@ export const vibeApi = {
     return request(
       `/v1/ai-agent/swarm/runs/${encodeURIComponent(id)}`,
       { method: "GET" },
-    )
-  },
-
-  cancelSwarmRun(id: string): Promise<{ status: string }> {
-    return request(
-      `/v1/ai-agent/swarm/runs/${encodeURIComponent(id)}/cancel`,
-      { method: "POST" },
-    )
-  },
-
-  retrySwarmRun(id: string): Promise<{ id: string; status: string; preset_name: string }> {
-    return request(
-      `/v1/ai-agent/swarm/runs/${encodeURIComponent(id)}/retry`,
-      { method: "POST" },
     )
   },
 }

@@ -18,11 +18,6 @@ interface Props {
   status: SwarmRunStatus
 }
 
-// Stub: Saas 项目暂未实现 i18n 工具名映射,直接返回原始字符串。
-function localizeToolName(name: string, fallback: string): string {
-  return name || fallback
-}
-
 function formatElapsed(seconds: number | undefined): string {
   if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return "-"
   if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`
@@ -93,8 +88,11 @@ export const SwarmStatusCard = memo(function SwarmStatusCard({ status }: Props) 
   const done = status.agents.filter((agent) =>
     ["done", "failed", "blocked", "cancelled"].includes(agent.status),
   ).length
-  // 总数使用 status.totalLayers 字段(规格要求 "3/6 agents"),当字段为 0 时回退到当前 agents 数。
-  const total = status.totalLayers > 0 ? status.totalLayers : status.agents.length
+  // 分母用 agents.length(DAG 宽度),绝不能用 totalLayers(DAG 深度)。
+  // 两者正交:6 个 agent 分 2 层是常见场景,如果拿 totalLayers=2 当分母,
+  // 完成 2 个 agent 进度条就冲到 100% 并卡住,而且头部 "3/2 智能体" 与
+  // 右下角 "第 1/2 层" 共用同一个 2 自相矛盾。
+  const total = status.agents.length
   const layerTotal = Math.max(status.totalLayers, status.currentLayer + 1, 1)
   const layerCurrent = Math.min(status.currentLayer + 1, layerTotal)
 
@@ -119,24 +117,27 @@ export const SwarmStatusCard = memo(function SwarmStatusCard({ status }: Props) 
         </div>
 
         <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
-          {/* 内联 ProgressBar:简单 <progress> + 视觉填充 div,不依赖 AxiomVibeTrading 的 chat/ProgressBar 组件。 */}
-          <div className="flex items-center gap-2 min-w-0" aria-label="Swarm agent progress">
-            <progress
-              value={total ? done : 0}
-              max={Math.max(total, 1)}
-              className="sr-only"
-              aria-label="Swarm agent progress"
-            />
-            <div className="bg-muted rounded-full overflow-hidden flex-1 h-1">
-              <div
-                className="h-full bg-primary transition-all duration-300"
-                style={{ width: `${Math.min(100, Math.max(0, (total ? (done / total) : 0) * 100))}%` }}
+          {/* 内联 ProgressBar:简单 <progress> + 视觉填充 div,不依赖 AxiomVibeTrading 的 chat/ProgressBar 组件。
+              clamp done 到 [0, total] 防止 SSE 顺序错乱时渲染 "6/2" 这种非法计数。 */}
+          {total > 0 && (
+            <div className="flex items-center gap-2 min-w-0" aria-label="Swarm agent progress">
+              <progress
+                value={Math.min(done, total)}
+                max={total}
+                className="sr-only"
+                aria-label="Swarm agent progress"
               />
+              <div className="bg-muted rounded-full overflow-hidden flex-1 h-1">
+                <div
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{ width: `${Math.min(100, Math.max(0, (done / total) * 100))}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                {Math.min(done, total)}/{total}
+              </span>
             </div>
-            <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
-              {total ? done : 0}/{Math.max(total, 1)}
-            </span>
-          </div>
+          )}
           <div className="text-right font-mono text-[11px] text-muted-foreground">
             {`第 ${layerCurrent}/${layerTotal} 层`}
           </div>
@@ -169,7 +170,7 @@ export const SwarmStatusCard = memo(function SwarmStatusCard({ status }: Props) 
                     </span>
                   </div>
                   <div className="truncate font-mono text-[11px] text-muted-foreground" title={agent.tool || ""}>
-                    {agent.tool ? localizeToolName(agent.tool, agent.tool) : "-"}
+                    {agent.tool || "-"}
                   </div>
                   <div className="text-right font-mono text-[11px] text-muted-foreground">
                     {formatElapsed(agent.elapsed_s)}

@@ -45,15 +45,6 @@ export function subscribeSession(sessionId: string): void {
   void runStream(sessionId, ctrl)
 }
 
-export function unsubscribeSession(sessionId: string): void {
-  const ctrl = controllers.get(sessionId)
-  if (ctrl) {
-    ctrl.abort()
-    controllers.delete(sessionId)
-    useSessionStore.getState().setEventsSubscribed(sessionId, false)
-  }
-}
-
 export function unsubscribeAll(): void {
   controllers.forEach((c) => c.abort())
   const ids = [...controllers.keys()]

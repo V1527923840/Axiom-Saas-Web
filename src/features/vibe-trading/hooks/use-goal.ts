@@ -28,8 +28,7 @@ export function useGoal(sessionId: string | null) {
   // 任何一种路径都会把 goalLoaded 置 true,避免反复拉。
   //
   // 错误兜底:网络/服务异常时也要置 true,否则会因为 dependency 不变而无限重拉。
-  // 错误不在 UI 上暴露(同其它 fetch 失败的处理方式一致);用户在 ChatDialog 里
-  // 可以手动用 refresh() 重新拉一次。
+  // 错误不在 UI 上暴露(同其它 fetch 失败的处理方式一致)。
   useEffect(() => {
     if (!sessionId) return
     // ensure 让 slot 存在:setGoalSnapshot / clearGoalSnapshot 都会在 slot 不
@@ -48,8 +47,7 @@ export function useGoal(sessionId: string | null) {
       })
       .catch(() => {
         if (cancelled) return
-        // 失败也要标记已加载,避免受失败的 effect 反复触发;
-        // 仍暴露 refresh() 给 UI 用来手动重试。
+        // 失败也要标记已加载,避免受失败的 effect 反复触发。
         useSessionStore.setState((s) => {
           const c = s.byId[sessionId]
           if (!c) return s
@@ -96,13 +94,5 @@ export function useGoal(sessionId: string | null) {
     useSessionStore.getState().clearGoalSnapshot(sessionId)
   }, [sessionId, snapshot])
 
-  const refresh = useCallback(async () => {
-    if (!sessionId) return null
-    const fresh = await vibeApi.getGoal(sessionId)
-    if (fresh) useSessionStore.getState().setGoalSnapshot(sessionId, fresh)
-    else useSessionStore.getState().clearGoalSnapshot(sessionId)
-    return fresh
-  }, [sessionId])
-
-  return { snapshot, create, edit, cancel, refresh }
+  return { snapshot, create, edit, cancel }
 }

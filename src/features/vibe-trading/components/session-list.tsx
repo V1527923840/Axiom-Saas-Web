@@ -1,7 +1,7 @@
 "use client"
 
 import { Conversations } from "@ant-design/x"
-import { Pencil, Plus, Trash2 } from "lucide-react"
+import { AlertCircle, Pencil, Plus, Trash2 } from "lucide-react"
 import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +15,8 @@ export function SessionList({
   onDelete,
   onRename,
   loading,
+  error,
+  onRetry,
 }: {
   sessions: AiSession[]
   currentId: string | null
@@ -23,6 +25,8 @@ export function SessionList({
   onDelete: (id: string) => void
   onRename: (id: string, newTitle: string) => Promise<void>
   loading: boolean
+  error: string | null
+  onRetry: () => void
 }) {
   const [editingId, setEditingId] = useState<string | null>(null)
 
@@ -64,6 +68,27 @@ export function SessionList({
           新建会话
         </Button>
       </div>
+      {error && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 border-b bg-destructive/10 px-3 py-2 text-xs text-destructive"
+        >
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="font-medium">会话列表加载失败</div>
+            <div className="truncate text-[11px] opacity-80" title={error}>
+              {error}
+            </div>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-1 text-[11px] underline underline-offset-2 hover:no-underline"
+            >
+              重试
+            </button>
+          </div>
+        </div>
+      )}
       <div className="flex-1 min-h-0 overflow-hidden">
         <Conversations
           items={items}

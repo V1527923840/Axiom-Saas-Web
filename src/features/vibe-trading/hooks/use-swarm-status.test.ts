@@ -18,16 +18,6 @@ vi.mock("../services/vibe-api", () => ({
   vibeApi: {
     listSwarmRuns: vi.fn(),
     getSwarmRun: vi.fn(),
-    uploadFile: vi.fn(),
-    createGoal: vi.fn(),
-    getGoal: vi.fn(),
-    updateGoal: vi.fn(),
-    addGoalEvidence: vi.fn(),
-    updateGoalStatus: vi.fn(),
-    createSwarmRun: vi.fn(),
-    cancelSwarmRun: vi.fn(),
-    retrySwarmRun: vi.fn(),
-    listSwarmPresets: vi.fn(),
   },
 }))
 
@@ -71,35 +61,24 @@ function makeDetailResponse(overrides: Record<string, unknown> = {}): Record<str
 const DETAIL = makeDetailResponse()
 
 interface Probe {
-  statuses: SwarmRunStatus[]
+  sessionId: string | null
 }
 
 function Probe({
   sessionId,
-  onReady,
 }: {
   sessionId: string | null
-  onReady: (probe: Probe) => void
 }): ReactNode {
-  const probe = useSwarmStatus(sessionId)
-  onReady(probe)
-  return createElement("pre", { "data-testid": "probe" }, JSON.stringify(probe.statuses.map((s) => s.runId)))
+  useSwarmStatus(sessionId)
+  return createElement("pre", { "data-testid": "probe", "data-sid": sessionId ?? "" })
 }
 
 let container: HTMLDivElement
 let root: Root
-let latest: Probe | null = null
 
 async function renderWithSessionAsync(sessionId: string | null): Promise<void> {
   await act(async () => {
-    root.render(
-      createElement(Probe, {
-        sessionId,
-        onReady: (p) => {
-          latest = p
-        },
-      }),
-    )
+    root.render(createElement(Probe, { sessionId }))
     // 把 effect 触发的 microtask (Promise.then) flush 掉,否则 store mutation
     // 会发生在 act 之外,React 不会触发 re-render。
     await Promise.resolve()
@@ -110,7 +89,6 @@ beforeEach(() => {
   container = document.createElement("div")
   document.body.appendChild(container)
   root = createRoot(container)
-  latest = null
   useSessionStore.getState().reset()
   useSessionStore.getState().ensure(SID)
   vi.mocked(vibeApi.listSwarmRuns).mockReset()
@@ -216,14 +194,7 @@ describe("useSwarmStatus hydration", () => {
     )
 
     await act(async () => {
-      root.render(
-        createElement(Probe, {
-          sessionId: OTHER_SID,
-          onReady: (p) => {
-            latest = p
-          },
-        }),
-      )
+      root.render(createElement(Probe, { sessionId: OTHER_SID }))
       await Promise.resolve()
     })
 

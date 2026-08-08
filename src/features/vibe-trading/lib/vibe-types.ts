@@ -97,7 +97,6 @@ export interface SwarmAgentStatus {
   startedAt?: number;
   lastText?: string;
   error?: string;
-  layer?: number;
 }
 
 export type SwarmRunPhase =
@@ -125,39 +124,6 @@ export interface SwarmPreset {
   description: string;
   agent_count: number;
   variables: { name: string; description: string; required: boolean }[];
-}
-
-export interface MandateProposal {
-  proposal_id: string;
-  intent_normalized?: string;
-  profiles: unknown[];
-  // Other fields are kept loose to mirror the wire format.
-  [k: string]: unknown;
-}
-
-export interface MandateCommitted {
-  proposal_id?: string;
-  mandate_id?: string;
-  consent_record_id?: string;
-  [k: string]: unknown;
-}
-
-export interface LiveAction {
-  audit_id?: string;
-  kind: string;
-  broker?: string;
-  intent_normalized?: string;
-  outcome?: string;
-  remote_tool?: string;
-  error?: string;
-  [k: string]: unknown;
-}
-
-export interface LiveHalted {
-  broker: string | null;
-  by?: string;
-  reason?: string;
-  tripped_at?: string;
 }
 
 export interface UploadResult {

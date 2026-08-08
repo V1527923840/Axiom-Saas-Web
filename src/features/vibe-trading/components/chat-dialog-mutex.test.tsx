@@ -7,31 +7,11 @@ import { act } from "react"
 import { useSessionStore } from "../stores/session-store"
 import { routeEvent } from "../services/events-stream"
 
-const submitMessageMock = vi.fn()
-const createGoalMock = vi.fn()
-
-vi.mock("@/services/vibe-trading", async () => {
-  const actual = await vi.importActual<Record<string, unknown>>("@/services/vibe-trading")
-  return {
-    ...actual,
-    submitMessage: (...args: unknown[]) => submitMessageMock(...args),
-  }
-})
-
 vi.mock("../services/vibe-api", () => ({
   vibeApi: {
-    uploadFile: vi.fn(),
-    createGoal: (...args: unknown[]) => createGoalMock(...args),
     getGoal: vi.fn().mockResolvedValue(null),
-    updateGoal: vi.fn(),
-    addGoalEvidence: vi.fn(),
-    updateGoalStatus: vi.fn(),
-    listSwarmPresets: vi.fn().mockResolvedValue([]),
-    createSwarmRun: vi.fn(),
     listSwarmRuns: vi.fn().mockResolvedValue([]),
     getSwarmRun: vi.fn(),
-    cancelSwarmRun: vi.fn(),
-    retrySwarmRun: vi.fn(),
   },
 }))
 
@@ -42,9 +22,7 @@ vi.mock("../hooks/use-chat-stream", () => ({
     messages: [],
     streaming: false,
     error: null,
-    send: (content: string) => {
-      submitMessageMock({ content })
-    },
+    send: vi.fn(),
     cancel: vi.fn(),
   }),
 }))
@@ -65,8 +43,6 @@ beforeEach(() => {
   container = document.createElement("div")
   document.body.appendChild(container)
   root = createRoot(container)
-  submitMessageMock.mockReset()
-  createGoalMock.mockReset()
   // 清掉上一个测试可能留下的 swarm_status / goalSnapshot / softReset 残留
   // (单例 store 跨测试共享,否则后置测试会看到前置测试塞进去的 placeholder 或
   // 真实 run,导致 mock 状态错乱)。

@@ -177,7 +177,7 @@ describe("stampAttemptIdOnMessages — race dedupe (C1)", () => {
       { id: "a-1", role: "assistant" as const, content: "", createdAt: "2026-08-07T00:00:00.000Z" },
       { id: "stream-att-1", role: "assistant" as const, content: "hello", attemptId: "att-1", createdAt: "2026-08-07T00:00:00.000Z" },
     ]
-    const out = stampAttemptIdOnMessages(messages, "a-1", "att-1", undefined, "hello")
+    const out = stampAttemptIdOnMessages(messages, "a-1", "att-1", "hello")
     // placeholder 被丢弃
     expect(out.find((m) => m.id === "a-1")).toBeUndefined()
     // synthetic 仍然存在,attemptId 保留
@@ -198,64 +198,17 @@ describe("stampAttemptIdOnMessages — race dedupe (C1)", () => {
       { id: "u-1", role: "user" as const, content: "hi", createdAt: "2026-08-07T00:00:00.000Z" },
       { id: "a-1", role: "assistant" as const, content: "", createdAt: "2026-08-07T00:00:00.000Z" },
     ]
-    const out = stampAttemptIdOnMessages(messages, "a-1", "att-1", undefined, "")
+    const out = stampAttemptIdOnMessages(messages, "a-1", "att-1", "")
     const a = out.find((m) => m.id === "a-1")
     expect(a?.attemptId).toBe("att-1")
   })
 
-  it("prefers snapshot over buffered when stamping without synthetic", () => {
+  it("writes buffered into placeholder when no synthetic exists", () => {
     const messages = [
       { id: "a-1", role: "assistant" as const, content: "", createdAt: "2026-08-07T00:00:00.000Z" },
     ]
-    const out = stampAttemptIdOnMessages(messages, "a-1", "att-1", "snapshot-text", "buffered-text")
-    expect(out[0].content).toBe("snapshot-text")
-  })
-})
-
-// C2: setAttemptContent creates synthetic for unknown aid; later appendDelta must grow it
-// (not be blocked by stale pendingSnapshot).
-describe("setAttemptContent — no stale pendingSnapshot gate (C2)", () => {
-  it("appended deltas after snapshot synthetic continue to grow the message", () => {
-    // 1) snapshot 全量帧到达,no aid 匹配 → 创建 synthetic 持有 fullText
-    useSessionStore.getState().setAttemptContent(SID, AID, "full text")
-    const afterSnap = useSessionStore.getState().byId[SID].messages
-    expect(afterSnap[0].content).toBe("full text")
-    expect(afterSnap[0].attemptId).toBe(AID)
-    // pendingSnapshot 不应再持有该 aid (否则会拦截后续 delta)
-    const snap = useSessionStore.getState().byId[SID].pendingSnapshot
-    expect(snap?.[AID]).toBeUndefined()
-
-    // 2) 后续 delta 帧到达,必须继续追加,不能被 C2 bug 拦截
-    useSessionStore.getState().appendDelta(SID, AID, " more")
-    const afterDelta = useSessionStore.getState().byId[SID].messages
-    expect(afterDelta).toHaveLength(1)
-    expect(afterDelta[0].content).toBe("full text more")
-  })
-
-  it("clears pendingSnapshot[aid] when setAttemptContent matches an existing message", () => {
-    // 模拟 refresh 后接续:slot 里 pendingSnapshot 还残留旧值,新到的 snapshot 命中消息
-    useSessionStore.getState().appendDelta(SID, AID, "first")
-    // 注入残留 pendingSnapshot (跨场景残留的边角 case)
-    useSessionStore.setState((s) => {
-      const c = s.byId[SID]
-      return {
-        byId: {
-          ...s.byId,
-          [SID]: {
-            ...c,
-            pendingSnapshot: { [AID]: "old" },
-          },
-        },
-      }
-    })
-    // setAttemptContent 命中已有消息
-    useSessionStore.getState().setAttemptContent(SID, AID, "full")
-    // pendingSnapshot[aid] 必须被清掉,否则后续 delta 会被拦截
-    const snap = useSessionStore.getState().byId[SID].pendingSnapshot
-    expect(snap?.[AID]).toBeUndefined()
-    // appendDelta 仍然能扩内容
-    useSessionStore.getState().appendDelta(SID, AID, " more")
-    expect(useSessionStore.getState().byId[SID].messages[0].content).toBe("full more")
+    const out = stampAttemptIdOnMessages(messages, "a-1", "att-1", "buffered-text")
+    expect(out[0].content).toBe("buffered-text")
   })
 })
 
@@ -831,7 +784,6 @@ describe("softReset — preserve goalSnapshot and swarm_status messages", () => 
             error: "old error",
             activeAttemptId: AID,
             pendingDeltas: { [AID]: "buffered" },
-            pendingSnapshot: { [AID]: "snap" },
             historyLoaded: true,
           },
         },
@@ -850,7 +802,6 @@ describe("softReset — preserve goalSnapshot and swarm_status messages", () => 
     expect(cur.activeAttemptId).toBeNull()
     // pending buffers cleared
     expect(cur.pendingDeltas).toBeUndefined()
-    expect(cur.pendingSnapshot).toBeUndefined()
     // historyLoaded back to false so the next load refetches
     expect(cur.historyLoaded).toBe(false)
   })

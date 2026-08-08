@@ -57,10 +57,12 @@ describe("SwarmStatusCard", () => {
     expect(container.textContent).toContain("agent-a")
   })
 
-  it("counts done agents using the total field (not status.agents.length)", () => {
+  it("counts done agents using the agents.length denominator (not totalLayers)", () => {
+    // totalLayers is the DAG depth (set by layer_started), orthogonal to agent
+    // count (set by buildSwarmStatusFromStarted from data.tasks). They must
+    // never be conflated in the agent-progress denominator.
     const status = makeStatus({
-      // 3 done agents, but `total` would be 6 — header should read "3/6 agents"
-      // (i.e. counts come from total field rather than the rendered list)
+      // 6-layer DAG (深),3 个智能体 (宽)。
       totalLayers: 6,
       currentLayer: 0,
       agents: [
@@ -72,9 +74,44 @@ describe("SwarmStatusCard", () => {
     act(() => {
       root.render(<SwarmStatusCard status={status} />)
     })
-    expect(container.textContent).toContain("3/6")
-    // Header count label is Chinese per swarm agent.png reference.
-    expect(container.textContent).toContain("智能体")
+    // Header must show "3/3 智能体" (3 done / 3 agents), not "3/6" (which
+    // would mean the bar uses totalLayers by mistake).
+    expect(container.textContent).toContain("3/3 智能体")
+    expect(container.textContent).not.toContain("3/6")
+  })
+
+  it("agent-progress denominator stays stable across layer_started events", () => {
+    // 模拟 layer_started 到达前后:totalLayers 从 0 → 1,分母必须保持稳定。
+    const status = makeStatus({
+      totalLayers: 0,
+      currentLayer: 0,
+      agents: [
+        makeAgent({ agentId: "a1", status: "done" }),
+        makeAgent({ agentId: "a2", status: "running" }),
+        makeAgent({ agentId: "a3", status: "waiting" }),
+        makeAgent({ agentId: "a4", status: "waiting" }),
+        makeAgent({ agentId: "a5", status: "waiting" }),
+        makeAgent({ agentId: "a6", status: "waiting" }),
+      ],
+    })
+    act(() => {
+      root.render(<SwarmStatusCard status={status} />)
+    })
+    const beforeText = container.textContent ?? ""
+    expect(beforeText).toMatch(/1\/6 智能体/)
+
+    // layer_started 把 totalLayers 从 0 → 1
+    act(() => {
+      root.render(
+        <SwarmStatusCard
+          status={{ ...status, totalLayers: 1, currentLayer: 0 }}
+        />,
+      )
+    })
+    const afterText = container.textContent ?? ""
+    // 分母不能从 6 塌缩成 1
+    expect(afterText).toMatch(/1\/6 智能体/)
+    expect(afterText).not.toMatch(/1\/1 智能体/)
   })
 
   it("renders Chinese column headers (智能体 | 状态 | 工具 | 耗时 | 迭代 | 输出)", () => {

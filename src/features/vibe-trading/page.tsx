@@ -23,7 +23,7 @@ export default function VibeTradingPage() {
 }
 
 function VibeTradingContent() {
-  const { sessions, loading, addSession, removeSession, updateTitle } =
+  const { sessions, loading, error, refresh, addSession, removeSession, updateTitle } =
     useAiSessions("vibe-trading")
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [pendingMessage, setPendingMessage] = useState<string | null>(null)
@@ -103,6 +103,8 @@ function VibeTradingContent() {
           sessions={sessions}
           currentId={currentId}
           loading={loading}
+          error={error}
+          onRetry={refresh}
           onSelect={setCurrentId}
           onNew={async () => {
             const s = await addSession()

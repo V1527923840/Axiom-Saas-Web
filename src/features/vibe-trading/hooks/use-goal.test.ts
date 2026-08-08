@@ -19,14 +19,6 @@ vi.mock("../services/vibe-api", () => ({
     getGoal: vi.fn(),
     updateGoal: vi.fn(),
     updateGoalStatus: vi.fn(),
-    uploadFile: vi.fn(),
-    listSwarmPresets: vi.fn(),
-    createSwarmRun: vi.fn(),
-    listSwarmRuns: vi.fn(),
-    getSwarmRun: vi.fn(),
-    cancelSwarmRun: vi.fn(),
-    retrySwarmRun: vi.fn(),
-    addGoalEvidence: vi.fn(),
   },
 }))
 
@@ -69,7 +61,6 @@ interface Probe {
   create: (objective: string) => Promise<GoalSnapshot>
   edit: (objective: string) => Promise<GoalSnapshot>
   cancel: () => Promise<void>
-  refresh: () => Promise<GoalSnapshot | null>
 }
 
 function Probe({

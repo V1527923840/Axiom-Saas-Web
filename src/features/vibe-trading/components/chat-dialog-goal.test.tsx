@@ -29,36 +29,23 @@ vi.mock("@/services/vibe-trading", async () => {
 
 vi.mock("../services/vibe-api", () => ({
   vibeApi: {
-    uploadFile: vi.fn(),
     createGoal: (...args: unknown[]) => createGoalMock(...args),
     getGoal: vi.fn().mockResolvedValue(null),
-    updateGoal: vi.fn(),
-    addGoalEvidence: vi.fn(),
-    updateGoalStatus: vi.fn(),
-    listSwarmPresets: vi.fn().mockResolvedValue([]),
-    createSwarmRun: vi.fn(),
     listSwarmRuns: vi.fn().mockResolvedValue([]),
     getSwarmRun: vi.fn(),
-    cancelSwarmRun: vi.fn(),
-    retrySwarmRun: vi.fn(),
   },
 }))
 
 vi.stubGlobal("alert", alertSpy)
-
-// Use vi.hoisted to define the use-chat-stream mock implementation lazily.
-const useChatStreamModule = vi.hoisted(() => ({
-  sendFn: (_content: string) => {
-    // Replaced in beforeEach with the actual hoisted mock.
-  },
-}))
 
 vi.mock("../hooks/use-chat-stream", () => ({
   useChatStream: () => ({
     messages: [],
     streaming: false,
     error: null,
-    send: (content: string) => useChatStreamModule.sendFn(content),
+    send: (content: string) => {
+      submitMessageMock({ content })
+    },
     cancel: vi.fn(),
   }),
 }))
@@ -87,10 +74,6 @@ beforeEach(() => {
   submitMessageMock.mockReset()
   createGoalMock.mockReset()
   alertSpy.mockReset()
-  // Wire the hoisted send to forward into submitMessageMock.
-  useChatStreamModule.sendFn = (content: string) => {
-    submitMessageMock({ content })
-  }
   createGoalMock.mockResolvedValue({
     goal: {
       goal_id: "g-1",

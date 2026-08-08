@@ -2,6 +2,7 @@
 import { Loader2, Play, Pencil, X, Check } from "lucide-react"
 import { useState } from "react"
 import type { GoalSnapshot } from "../lib/vibe-types"
+import { criterionCovered } from "../lib/goal-criteria"
 
 export function GoalPanel({
   snapshot,
@@ -35,10 +36,7 @@ export function GoalPanel({
   const [draft, setDraft] = useState(snapshot.goal.objective)
 
   const total = snapshot.criteria.length
-  const met = snapshot.criteria.filter((c) =>
-    !["", "pending", "open", "unsatisfied"].includes(c.status.toLowerCase())
-      || snapshot.evidence.filter((e) => e.criterion_id === c.criterion_id).length > 0,
-  ).length
+  const met = snapshot.criteria.filter((c) => criterionCovered(snapshot, c)).length
   const evidenceCount = snapshot.evidence_count
   const recent = [...snapshot.evidence]
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())

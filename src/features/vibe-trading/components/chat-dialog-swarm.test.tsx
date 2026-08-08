@@ -8,6 +8,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
+import { useSessionStore } from "../stores/session-store"
 
 const submitMessageMock = vi.fn()
 
@@ -18,6 +19,14 @@ vi.mock("@/services/vibe-trading", async () => {
     submitMessage: submitMessageMock,
   }
 })
+
+vi.mock("../services/vibe-api", () => ({
+  vibeApi: {
+    getGoal: vi.fn().mockResolvedValue(null),
+    listSwarmRuns: vi.fn().mockResolvedValue([]),
+    getSwarmRun: vi.fn(),
+  },
+}))
 
 vi.mock("../hooks/use-chat-stream", () => ({
   useChatStream: () => ({
@@ -64,6 +73,7 @@ beforeEach(() => {
   document.body.appendChild(container)
   root = createRoot(container)
   submitMessageMock.mockReset()
+  useSessionStore.getState().reset()
 })
 
 afterEach(() => {
@@ -161,5 +171,56 @@ describe("ChatDialog swarm prefix", () => {
     // User-visible bubble shows only the trimmed text, not the prefix.
     expect(arg.userVisible).toBe("analyze AAPL")
     expect(arg.userVisible).not.toContain("[Swarm Team Mode]")
+  })
+
+  // ─── 蜂群模式卡片在 kickoff 期间不消失 ────────────────────────────────────
+  //
+  // 回归:之前 handleSend 末尾 setSwarmPreset(null),导致 placeholder 注入
+  // effect 的 cleanup 触发,removeSwarmStatus 把 __pending_swarm__ 占位卡
+  // 片提前删掉。用户体验是:点完 send → 卡片瞬间消失 → 等 SSE swarm.started
+  // 到达才再出现,中间有一个空档让人觉得"卡片跑了"。
+  //
+  // 修复:swarmPreset 不在 send 后清空,placeholder 留在 store 里直到真实
+  // run 被 SSE upsert 替换。用户主动点 SwarmChip 的 × 才会清。
+  it("placeholder swarm_status persists after send (until SSE swarm.started replaces it)", () => {
+    act(() => {
+      root.render(<ChatDialog sessionId="s-1" />)
+    })
+    clickSwarm()
+    // Placeholder 已被注入。
+    const slotBefore = useSessionStore.getState().byId["s-1"]
+    expect(
+      slotBefore?.messages.some(
+        (m) => m.type === "swarm_status" && m.swarmStatus?.runId === "__pending_swarm__",
+      ),
+    ).toBe(true)
+
+    const input = container.querySelector(
+      'input[data-testid="sender-input"]',
+    ) as HTMLInputElement
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value",
+      )?.set
+      setter?.call(input, "analyze AAPL")
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    const submit = container.querySelector(
+      'button[data-testid="sender-submit"]',
+    ) as HTMLButtonElement
+    act(() => {
+      submit.click()
+    })
+
+    // 关键断言:send 之后 placeholder 必须还在,避免 UI 在等待 SSE 时空档。
+    const slotAfter = useSessionStore.getState().byId["s-1"]
+    expect(
+      slotAfter?.messages.some(
+        (m) => m.type === "swarm_status" && m.swarmStatus?.runId === "__pending_swarm__",
+      ),
+    ).toBe(true)
+    // swarmPreset 也没被清 —— chip 还在,后续消息也继续带 swarm 前缀。
+    expect(container.textContent).toContain("Agent Swarm")
   })
 })

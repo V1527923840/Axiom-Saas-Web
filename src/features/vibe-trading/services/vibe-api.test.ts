@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, vi } from "vitest"
 import { vibeApi } from "./vibe-api"
 import type {
   GoalSnapshot,
-  SwarmPreset,
   UploadResult,
 } from "../lib/vibe-types"
 
@@ -53,19 +52,29 @@ const GOAL_SNAPSHOT: GoalSnapshot = {
 }
 
 describe("vibeApi.uploadFile", () => {
-  it("POSTs multipart/form-data to /v1/ai-agent/upload and returns UploadResult", async () => {
+  it("POSTs multipart/form-data to /v1/ai-agent/upload and unwraps the { data } envelope", async () => {
     localStorage.setItem("auth_token", "tok-123")
     const file = new File(["hello"], "doc.pdf", { type: "application/pdf" })
-    const result: UploadResult = {
+    const inner: UploadResult = {
       status: "ok",
       file_path: "/tmp/doc.pdf",
       filename: "doc.pdf",
     }
-    const fetchSpy = mockFetchOnce(result)
+    // 关键:服务端走 TransformResponseInterceptor,响应永远是 { data: ... } 包络。
+    // 之前的回归 bug 就是这条线 —— mock 返回裸 inner 让测试通过,生产却把
+    // inner 当 envelope 用,result.filename / result.file_path 全是 undefined,
+    // 前端 use-chat-stream 注入 prefix 时变成
+    // "[Uploaded file: undefined, path: undefined]"。
+    const fetchSpy = mockFetchOnce({ data: inner })
 
     const got = await vibeApi.uploadFile(file)
 
-    expect(got).toEqual(result)
+    expect(got).toEqual(inner)
+    expect(got).not.toBeNull()
+    expect(got?.filename).toBe("doc.pdf")
+    expect(got?.file_path).toBe("/tmp/doc.pdf")
+    expect(got?.filename).not.toBeUndefined()
+    expect(got?.file_path).not.toBeUndefined()
     expect(fetchSpy).toHaveBeenCalledTimes(1)
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
     expect(url).toBe(U("/v1/ai-agent/upload"))
@@ -79,6 +88,27 @@ describe("vibeApi.uploadFile", () => {
     expect(headers["content-type"]).toBeUndefined()
     // 注入 token 头。
     expect(headers["Authorization"]).toBe("Bearer tok-123")
+  })
+
+  it("returns filename and file_path populated (regression: undefined prefix bug)", async () => {
+    // 这个测试独立于 fetch init 检查,专门钉住"返回对象的字段必须非 undefined"
+    // —— 一旦有人把 unwrap 删掉或 mock 改回裸 UploadResult,这条立刻 fail。
+    localStorage.setItem("auth_token", "tok-123")
+    const file = new File(["x"], "x.pdf", { type: "application/pdf" })
+    mockFetchOnce({
+      data: {
+        status: "ok",
+        file_path: "uploads/6e099ad6bba749c2afdef111fb56e2fb.pdf",
+        filename: "2-3 山东宏桥.pdf",
+      },
+    })
+
+    const got = await vibeApi.uploadFile(file)
+
+    // 直接字段断言,不允许 undefined(防止 mock 漂移 + unwrap 漏掉两个 bug 一起回归)。
+    expect(got).toBeDefined()
+    expect(got!.filename).toBe("2-3 山东宏桥.pdf")
+    expect(got!.file_path).toBe("uploads/6e099ad6bba749c2afdef111fb56e2fb.pdf")
   })
 })
 
@@ -142,32 +172,6 @@ describe("vibeApi.goal", () => {
     )
   })
 
-  it("addGoalEvidence POSTs to /goal/evidence and unwraps { data }", async () => {
-    const responseBody = {
-      evidence: { evidence_id: "e-1" },
-      snapshot: GOAL_SNAPSHOT,
-    }
-    const fetchSpy = mockFetchOnce({ data: responseBody })
-
-    const got = await vibeApi.addGoalEvidence("s-1", {
-      goal_id: "g-1",
-      expected_goal_id: "g-1",
-      text: "new finding",
-    })
-
-    expect(got).toEqual(responseBody)
-    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe(U("/v1/ai-agent/sessions/s-1/goal/evidence"))
-    expect(init.method).toBe("POST")
-    expect(init.body).toBe(
-      JSON.stringify({
-        goal_id: "g-1",
-        expected_goal_id: "g-1",
-        text: "new finding",
-      }),
-    )
-  })
-
   it("updateGoalStatus PATCHes /goal/status with status body and unwraps { data }", async () => {
     const responseBody = {
       goal: GOAL_SNAPSHOT.goal,
@@ -196,57 +200,6 @@ describe("vibeApi.goal", () => {
 })
 
 describe("vibeApi.swarm", () => {
-  const PRESETS: SwarmPreset[] = [
-    {
-      name: "deep_research",
-      title: "Deep Research",
-      description: "multi-agent research",
-      agent_count: 3,
-      variables: [
-        { name: "ticker", description: "stock ticker", required: true },
-      ],
-    },
-  ]
-
-  it("listSwarmPresets GETs /swarm/presets WITHOUT Authorization header", async () => {
-    localStorage.setItem("auth_token", "tok-123")
-    const fetchSpy = mockFetchOnce(PRESETS)
-
-    const got = await vibeApi.listSwarmPresets()
-
-    expect(got).toEqual(PRESETS)
-    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe(U("/v1/ai-agent/swarm/presets"))
-    // presets 路由在 controller 层是公开的(无 JWT)。前端不应该注入 Authorization。
-    const headers = (init.headers ?? {}) as Record<string, string>
-    expect(headers["Authorization"]).toBeUndefined()
-  })
-
-  it("createSwarmRun POSTs preset_name + user_vars and returns {id, status, preset_name}", async () => {
-    const fetchSpy = mockFetchOnce({
-      id: "run-1",
-      status: "pending",
-      preset_name: "deep_research",
-    })
-
-    const got = await vibeApi.createSwarmRun("deep_research", { ticker: "AAPL" })
-
-    expect(got).toEqual({
-      id: "run-1",
-      status: "pending",
-      preset_name: "deep_research",
-    })
-    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe(U("/v1/ai-agent/swarm/runs"))
-    expect(init.method).toBe("POST")
-    expect(init.body).toBe(
-      JSON.stringify({
-        preset_name: "deep_research",
-        user_vars: { ticker: "AAPL" },
-      }),
-    )
-  })
-
   it("listSwarmRuns GETs /swarm/runs?limit=20 by default", async () => {
     const fetchSpy = mockFetchOnce([{ id: "run-1" }])
 
@@ -266,30 +219,5 @@ describe("vibeApi.swarm", () => {
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
     expect(url).toBe(U("/v1/ai-agent/swarm/runs/run-1"))
     expect(init.method).toBe("GET")
-  })
-
-  it("cancelSwarmRun POSTs to /swarm/runs/:id/cancel", async () => {
-    const fetchSpy = mockFetchOnce({ status: "cancelled" })
-
-    const got = await vibeApi.cancelSwarmRun("run-1")
-
-    expect(got).toEqual({ status: "cancelled" })
-    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe(U("/v1/ai-agent/swarm/runs/run-1/cancel"))
-    expect(init.method).toBe("POST")
-  })
-
-  it("retrySwarmRun POSTs to /swarm/runs/:id/retry", async () => {
-    const fetchSpy = mockFetchOnce({
-      id: "run-1",
-      status: "pending",
-      preset_name: "deep_research",
-    })
-
-    await vibeApi.retrySwarmRun("run-1")
-
-    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe(U("/v1/ai-agent/swarm/runs/run-1/retry"))
-    expect(init.method).toBe("POST")
   })
 })

@@ -1,12 +1,8 @@
 "use client"
 import { Target, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { GoalSnapshot, GoalCriterion } from "../lib/vibe-types"
-
-function criterionCovered(s: GoalSnapshot, c: GoalCriterion): boolean {
-  return !["", "pending", "open", "unsatisfied"].includes(c.status.toLowerCase())
-      || s.evidence.filter((e) => e.criterion_id === c.criterion_id).length > 0
-}
+import type { GoalSnapshot } from "../lib/vibe-types"
+import { criterionCovered } from "../lib/goal-criteria"
 
 export function GoalChip({
   snapshot,

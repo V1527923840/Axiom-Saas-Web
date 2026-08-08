@@ -40,24 +40,14 @@ vi.mock("../hooks/use-goal", () => ({
     create: vi.fn(),
     edit: vi.fn(),
     cancel: vi.fn(),
-    refresh: vi.fn(),
   }),
 }))
 
 vi.mock("../services/vibe-api", () => ({
   vibeApi: {
-    uploadFile: vi.fn(),
-    createGoal: vi.fn(),
     getGoal: vi.fn().mockResolvedValue(null),
-    updateGoal: vi.fn(),
-    addGoalEvidence: vi.fn(),
-    updateGoalStatus: vi.fn(),
-    listSwarmPresets: vi.fn().mockResolvedValue([]),
-    createSwarmRun: vi.fn(),
     listSwarmRuns: vi.fn().mockResolvedValue([]),
     getSwarmRun: vi.fn(),
-    cancelSwarmRun: vi.fn(),
-    retrySwarmRun: vi.fn(),
   },
 }))
 

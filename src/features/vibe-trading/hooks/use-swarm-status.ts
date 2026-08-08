@@ -19,11 +19,10 @@
 // The `swarmLoaded` flag survives softReset (which uses `...cur` spread), so
 // switching sessions in-tab and back doesn't re-fetch unnecessarily.
 
-import { useEffect, useMemo } from "react"
+import { useEffect } from "react"
 import { vibeApi } from "../services/vibe-api"
 import { buildSwarmStatusFromStarted } from "../lib/swarm-status"
 import { useSessionStore } from "../stores/session-store"
-import type { SwarmRunStatus } from "../lib/vibe-types"
 
 type AnyRecord = Record<string, unknown>
 
@@ -37,47 +36,9 @@ function isActiveRun(value: unknown): boolean {
   return status === "running" || status === "pending"
 }
 
-export function useSwarmStatus(sessionId: string | null): {
-  statuses: SwarmRunStatus[]
-  refresh: () => Promise<void>
-} {
-  // 订阅稳定的 messages 数组 (Zustand 用 Object.is 比较;只有在 messages
-  // 实际变化时才触发 re-render)。statuses 派生在 useMemo 里做。
-  // 直接在 selector 里 return 一个新数组会让 React 每次 render 都拿到新
-  // 引用,触发 "Maximum update depth exceeded" 循环。
-  const messages = useSessionStore((s) =>
-    sessionId ? s.byId[sessionId]?.messages : undefined,
-  )
-  const statuses = useMemo<SwarmRunStatus[]>(() => {
-    if (!messages) return EMPTY
-    const out: SwarmRunStatus[] = []
-    for (const m of messages) {
-      if (m.type === "swarm_status" && m.swarmStatus) out.push(m.swarmStatus)
-    }
-    return out
-  }, [messages])
-
-  const refresh = useMemo(
-    () => async () => {
-      // 留作后续手动重试入口 (e.g. UI 错误后 retry),与 hydration effect 共享
-      // 同一段 fetch / upsert 逻辑。
-      if (!sessionId) return
-      useSessionStore.getState().ensure(sessionId)
-      try {
-        await hydrate(sessionId)
-      } finally {
-        useSessionStore.setState((s) => {
-          const c = s.byId[sessionId]
-          if (!c) return s
-          // 即使失败前面也置 true,跟 hydration effect 的失败兜底保持一致
-          return { byId: { ...s.byId, [sessionId]: { ...c, swarmLoaded: true } } }
-        })
-      }
-    },
-    [sessionId],
-  )
-
-  // Hydration: 在 sessionId 变化时补一次历史。
+export function useSwarmStatus(sessionId: string | null): void {
+  // Hydration: 在 sessionId 变化时补一次历史。hook 仅作为副作用入口使用,
+  // 返回值被消费方忽略 (Bubble.List 已经从 messages 里读取 swarm_status)。
   useEffect(() => {
     if (!sessionId) return
     useSessionStore.getState().ensure(sessionId)
@@ -99,11 +60,7 @@ export function useSwarmStatus(sessionId: string | null): {
       cancelled = true
     }
   }, [sessionId])
-
-  return { statuses, refresh }
 }
-
-const EMPTY: SwarmRunStatus[] = []
 
 async function hydrate(sessionId: string): Promise<void> {
   const list = (await vibeApi.listSwarmRuns(20)) as unknown[]
@@ -112,7 +69,6 @@ async function hydrate(sessionId: string): Promise<void> {
   for (const item of active) {
     const runId = asString((item as AnyRecord).run_id) ?? asString((item as AnyRecord).id)
     if (!runId) continue
-    // eslint-disable-next-line no-await-in-loop -- sequential to avoid stampede
     const detail = await vibeApi.getSwarmRun(runId)
     if (!detail || typeof detail !== "object") continue
     const status = buildSwarmStatusFromStarted(detail as AnyRecord)

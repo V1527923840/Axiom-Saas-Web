@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest"
 import {
   buildSwarmStatusFromStarted,
   applySwarmEvent,
-  buildSwarmStatusFromToolResultPreview,
 } from "./swarm-status"
 
 const STARTED_DATA = {
@@ -136,25 +135,5 @@ describe("applySwarmEvent — resilience", () => {
       baseNow + 50,
     )
     expect(next).toEqual(initial)
-  })
-})
-
-describe("buildSwarmStatusFromToolResultPreview", () => {
-  it("returns null when preview lacks run_id and preset", () => {
-    expect(buildSwarmStatusFromToolResultPreview('{"foo":1}', baseNow)).toBeNull()
-  })
-
-  it("parses run_id/preset/status from a JSON preview", () => {
-    const preview = JSON.stringify({ run_id: "run-7", preset: "deep_research", status: "running" })
-    const status = buildSwarmStatusFromToolResultPreview(preview, baseNow)
-    expect(status).toMatchObject({
-      runId: "run-7",
-      preset: "deep_research",
-      status: "running",
-      currentLayer: 0,
-      totalLayers: 0,
-      agents: [],
-    })
-    expect(status?.startedAt).toBe(baseNow)
   })
 })

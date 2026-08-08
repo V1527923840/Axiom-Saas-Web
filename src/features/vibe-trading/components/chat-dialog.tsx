@@ -7,12 +7,14 @@ import { useEffect, useRef, useState } from "react"
 import { useGoal } from "../hooks/use-goal"
 import { useSwarmStatus } from "../hooks/use-swarm-status"
 import { useChatStream } from "../hooks/use-chat-stream"
-import type { GoalSnapshot, GoalCriterion, SwarmRunStatus } from "../lib/vibe-types"
-import { findOpenToolCalls } from "../lib/parse-message"
+import type { SwarmRunStatus } from "../lib/vibe-types"
+import { criterionCovered } from "../lib/goal-criteria"
+import { findOpenToolCalls, parseAttachmentPrefix } from "../lib/parse-message"
 import { STALE_THRESHOLD_MS } from "../services/events-stream"
 import { vibeApi } from "../services/vibe-api"
 import { useSessionStore } from "../stores/session-store"
 import { AttachmentChip } from "./attachment-chip"
+import { FileCard } from "./file-card"
 import { GoalComposerChip } from "./goal-composer-chip"
 import { AiMessageContent } from "./ai-message-content"
 import { GoalChip } from "./goal-chip"
@@ -182,7 +184,9 @@ export function ChatDialog({
     }
     setInput("")
     setAttachment(null)
-    setSwarmPreset(null)
+    // 不重置 swarmPreset:placeholder 卡片要一直可见,直到 SSE swarm.started
+    // 事件把它替换成真实 run。如果用户想退出 swarm 模式,点 SwarmChip 上的
+    // × 或者 MoreMenu 切到目标模式即可(mutex 会清 swarmPreset)。
   }
 
   // 继续现有目标:汇总未完成的 required criteria,作为一条 message 发出。
@@ -304,14 +308,40 @@ export function ChatDialog({
       // streaming=true 让 Bubble.List 跳过 typing 渲染走纯 React 树。
       streaming: m.role === "assistant" && Boolean(m.attemptId) && streaming,
       loading: false,
-      // AI 走自定义渲染(解析 thinking/tool/markdown + cancelled 角标);用户消息保持纯文本。
+      // AI 走自定义渲染(解析 thinking/tool/markdown + cancelled 角标);用户消息若有附件也走 contentRender 渲染 FileCard + 文字。
       // closure 捕获 m.cancelledAt —— use-chat-stream.cancel() 在 cancel 时往当前正在流的 assistant 消息上写 cancelledAt。
+      //
+      // user bubble 渲染策略:
+      //   1) 优先用 m.attachment 字段 —— 新消息 send 时由 use-chat-stream 写入,
+      //      这条路径上 m.content 是 trimmed 文本(没 prefix)。
+      //   2) 兜底从 m.content 里 parse `[Uploaded file: ...]\n\n` 前缀 —— 重新
+      //      进入会话时,后端把 send 时的 prefix 原样存进了 DB,getMessages 返回
+      //      的 content 已经包含 prefix,但 m.attachment 是 undefined。fallback 让
+      //      历史消息也走 FileCard 渲染,而不是显示原始 `[Uploaded file: ...]\n\n`
+      //      字符串(回归)。
+      //   3) 都没有 → 走默认纯文本渲染。
       contentRender:
         m.role === "assistant"
           ? (content: string) => (
               <AiMessageContent content={content} cancelledAt={m.cancelledAt} />
             )
-          : undefined,
+          : m.role === "user"
+            ? (content: string) => {
+                const parsedAttachment = m.attachment ?? parseAttachmentPrefix(content)?.attachment ?? null
+                const parsedRemaining = m.attachment ? content : (parseAttachmentPrefix(content)?.remaining ?? content)
+                if (parsedAttachment) {
+                  return (
+                    <div className="flex flex-col gap-2">
+                      <FileCard attachment={parsedAttachment} />
+                      {parsedRemaining && (
+                        <div className="whitespace-pre-wrap">{parsedRemaining}</div>
+                      )}
+                    </div>
+                  )
+                }
+                return <div className="whitespace-pre-wrap">{content}</div>
+              }
+            : undefined,
     }
   })
 
@@ -349,14 +379,6 @@ export function ChatDialog({
               {debugSlice.pendingDeltas
                 ? Object.entries(debugSlice.pendingDeltas)
                     .map(([k, v]) => `${k.slice(0, 6)}:${v.length}`)
-                    .join(" ")
-                : "—"}
-            </div>
-            <div>pendingSnapshot</div>
-            <div>
-              {debugSlice.pendingSnapshot
-                ? Object.keys(debugSlice.pendingSnapshot)
-                    .map((k) => k.slice(0, 6))
                     .join(" ")
                 : "—"}
             </div>
@@ -512,14 +534,5 @@ function WelcomeState() {
         />
       </div>
     </div>
-  )
-}
-
-// 与 goal-chip/goal-panel 内部相同的"已覆盖"判定 —— 抽出来在 chat-dialog 的
-// handleContinueGoal 里复用,避免在两个文件里各写一份。
-function criterionCovered(s: GoalSnapshot, c: GoalCriterion): boolean {
-  return (
-    !["", "pending", "open", "unsatisfied"].includes(c.status.toLowerCase()) ||
-    s.evidence.filter((e) => e.criterion_id === c.criterion_id).length > 0
   )
 }

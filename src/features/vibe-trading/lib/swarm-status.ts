@@ -89,7 +89,6 @@ function updateAgent(
 export function buildSwarmStatusFromStarted(data: AnyRecord, now = Date.now()): SwarmRunStatus | null {
   const runId = asString(data.run_id);
   if (!runId) return null;
-
   const agentMeta = new Map<string, { role?: string }>();
   const agentsRaw = Array.isArray(data.agents) ? data.agents : [];
   for (const item of agentsRaw) {
@@ -252,40 +251,4 @@ export function applySwarmEvent(current: SwarmRunStatus, rawEvent: unknown, now 
   }
 
   return current;
-}
-
-export function buildSwarmStatusFromToolResultPreview(preview: string, now = Date.now()): SwarmRunStatus | null {
-  if (!preview.includes("run_id") && !preview.includes("preset")) return null;
-
-  try {
-    const parsed = JSON.parse(preview) as AnyRecord;
-    const runId = asString(parsed.run_id);
-    if (!runId) return null;
-    return {
-      runId,
-      preset: asString(parsed.preset) || "swarm",
-      status: normalizeRunStatus(parsed.status),
-      currentLayer: 0,
-      totalLayers: 0,
-      startedAt: now,
-      completedAt: ["completed", "failed", "cancelled"].includes(asString(parsed.status)) ? now : undefined,
-      agents: [],
-    };
-  } catch {
-    const runId = preview.match(/"run_id"\s*:\s*"([^"]+)"/)?.[1];
-    if (!runId) return null;
-    const preset = preview.match(/"preset"\s*:\s*"([^"]+)"/)?.[1] || "swarm";
-    const rawStatus = preview.match(/"status"\s*:\s*"([^"]+)"/)?.[1] || "unknown";
-    const status = normalizeRunStatus(rawStatus);
-    return {
-      runId,
-      preset,
-      status,
-      currentLayer: 0,
-      totalLayers: 0,
-      startedAt: now,
-      completedAt: ["completed", "failed", "cancelled"].includes(status) ? now : undefined,
-      agents: [],
-    };
-  }
 }

@@ -154,3 +154,37 @@ export function findOpenToolCalls(content: string): OpenToolCall[] {
   }
   return out
 }
+
+/**
+ * 把 user message content 开头的 `[Uploaded file: <name>, path: <path>]\n\n` 前缀
+ * 解析成结构化 attachment,返回剩余的用户正文。
+ *
+ * 背景:use-chat-stream.send 在 user 消息 send 时会把 prefix 拼进 finalContent
+ * 发给后端。后端把 content 原样存进 DB。重新进入会话时,getMessages 返回的
+ * content 已经包含 prefix —— 此时 ChatMessage.attachment 字段是 undefined
+ * (新消息才有),气泡渲染 fallback 到纯文本,把 `[Uploaded file: ...]\n\n`
+ * 直接当字符串显示。
+ *
+ * 本函数让渲染层在 attachment 字段缺失时,仍能从 content 字符串里把 prefix
+ * 抠出来当 FileCard 渲染,消除重新进入会话后的"前缀乱码"显示。
+ *
+ * 返回 null 表示没有匹配到前缀 —— 调用方应当把 content 当普通文本渲染。
+ *
+ * 匹配规则:
+ * - 必须以 `[Uploaded file: ` 起头,以 `]\n\n` 结尾(2 个换行)
+ * - filename 走非贪婪匹配,在第一个 `, path: ` 处停下
+ * - path 走非贪婪匹配,在第一个 `]\n\n` 处停下 —— 假设文件名/路径里不会
+ *   出现字面 `]` 或 `path: ` 子串(对齐 vibe 上游 Agent.tsx:895 的产出格式)
+ */
+export function parseAttachmentPrefix(
+  content: string,
+): { attachment: { filename: string; file_path: string }; remaining: string } | null {
+  // 注意用 [\s\S]*? 而不是 .+? —— 多行 content 时 . 默认不匹配换行,
+  // 但 path 段理论上不应包含换行,保持非贪婪限定最小匹配即可。
+  const match = content.match(/^\[Uploaded file: ([\s\S]+?), path: ([\s\S]+?)\]\n\n/)
+  if (!match) return null
+  return {
+    attachment: { filename: match[1], file_path: match[2] },
+    remaining: content.slice(match[0].length),
+  }
+}
