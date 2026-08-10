@@ -1,5 +1,6 @@
 import { SignupForm1 } from "./components/signup-form-1"
 import { Logo } from "@/components/logo"
+import { SiteIcp } from "@/components/site-icp"
 
 export default function SignUpPage() {
   return (
@@ -13,6 +14,7 @@ export default function SignUpPage() {
         </a>
         <SignupForm1 />
       </div>
+      <SiteIcp />
     </div>
   )
 }

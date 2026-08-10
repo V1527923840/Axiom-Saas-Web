@@ -1,5 +1,6 @@
 import { LoginForm2 } from "./components/login-form-2"
 import { Logo } from "@/components/logo"
+import { SiteIcp } from "@/components/site-icp"
 
 export default function LoginPage() {
   return (
@@ -18,6 +19,7 @@ export default function LoginPage() {
             <LoginForm2 />
           </div>
         </div>
+        <SiteIcp className="mt-auto" />
       </div>
       <div className="bg-muted relative hidden lg:block">
         <img

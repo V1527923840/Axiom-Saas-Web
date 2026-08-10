@@ -1,5 +1,6 @@
 import { ForgotPasswordForm2 } from "./components/forgot-password-form-2"
 import { Logo } from "@/components/logo"
+import { SiteIcp } from "@/components/site-icp"
 
 export default function ForgotPassword2Page() {
   return (
@@ -18,6 +19,7 @@ export default function ForgotPassword2Page() {
             <ForgotPasswordForm2 />
           </div>
         </div>
+        <SiteIcp className="mt-auto" />
       </div>
       <div className="bg-muted relative hidden lg:block">
         <img

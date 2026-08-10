@@ -1,5 +1,6 @@
 import { ForgotPasswordForm1 } from "./components/forgot-password-form-1"
 import { Logo } from "@/components/logo"
+import { SiteIcp } from "@/components/site-icp"
 
 export default function ForgotPasswordPage() {
   return (
@@ -13,6 +14,7 @@ export default function ForgotPasswordPage() {
         </a>
         <ForgotPasswordForm1 />
       </div>
+      <SiteIcp />
     </div>
   )
 }
