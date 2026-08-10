@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <style>
+    .axiom-mark { fill: #0f172a; }
+    @media (prefers-color-scheme: dark) {
+      .axiom-mark { fill: #f8fafc; }
+    }
+  </style>
+  <path class="axiom-mark" fill-rule="evenodd" clip-rule="evenodd" d="M16 2.5L2.5 29.5H7.7L9.55 25.4H22.45L24.3 29.5H29.5L16 2.5ZM16 11L19.85 19.5H12.15L16 11Z"/>
+</svg>
