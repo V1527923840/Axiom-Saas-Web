@@ -6,6 +6,7 @@ import { z } from "zod"
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { siteConfig } from '@/config/site'
 import {
   Form,
   FormControl,
@@ -227,6 +228,18 @@ export function LandingFooter() {
               Cookie Policy
             </a>
           </div>
+        </div>
+
+        {/* ICP Filing */}
+        <div className="mt-4 text-center text-xs text-muted-foreground">
+          <a
+            href={siteConfig.icp.recordUrl}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="hover:text-primary"
+          >
+            {siteConfig.icp.recordNumber}
+          </a>
         </div>
       </div>
     </footer>

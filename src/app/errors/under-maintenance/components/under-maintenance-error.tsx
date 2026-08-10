@@ -1,6 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { SiteIcp } from "@/components/site-icp"
 import { useNavigate } from "react-router-dom"
 
 export function UnderMaintenanceError() {
@@ -24,6 +25,7 @@ export function UnderMaintenanceError() {
           </Button>
         </div>
       </div>
+      <SiteIcp className="mt-auto pt-8" />
     </div>
   )
 }
