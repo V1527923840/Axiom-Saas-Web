@@ -4,7 +4,6 @@ import * as React from "react"
 import { Link, useLocation } from "react-router-dom"
 import {
   ArrowLeftRight,
-  Atom,
   BadgeCheck,
   BookOpenText,
   Bot,
@@ -34,6 +33,8 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { SidebarNotification } from "@/components/sidebar-notification"
+import { Logo } from "@/components/logo"
+import { siteConfig } from "@/config/site"
 
 import { NavUser } from "@/components/nav-user"
 import {
@@ -71,7 +72,6 @@ import type { MenuTreeNode } from "@/features/menus/types"
 // this map fall back to the generic `Menu` icon.
 const iconMap: Record<string, LucideIcon> = {
   ArrowLeftRight,
-  Atom,
   BadgeCheck,
   BookOpenText,
   Bot,
@@ -255,12 +255,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <Link to="/dashboard">
+              <Link to="/dashboard" aria-label={`${siteConfig.name} home`}>
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <Atom className="size-5" />
+                  <Logo size={20} />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium text-base">AXIOM</span>
+                  <span className="truncate font-medium text-base">{siteConfig.fullName}</span>
                 </div>
               </Link>
             </SidebarMenuButton>
