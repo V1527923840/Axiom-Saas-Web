@@ -6,7 +6,7 @@ import { ProtectedRoute } from '@/components/protected-route'
 const Landing = lazy(() => import('@/app/landing/page'))
 const Dashboard = lazy(() => import('@/app/dashboard/page'))
 const Dashboard2 = lazy(() => import('@/app/dashboard-2/page'))
-const DashboardSummaries = lazy(() => import('@/app/dashboard-summaries/page'))
+const DailySummaryReports = lazy(() => import('@/app/reports/daily-summary/page'))
 const Mail = lazy(() => import('@/app/mail/page'))
 const Tasks = lazy(() => import('@/app/tasks/page'))
 const Chat = lazy(() => import('@/app/chat/page'))
@@ -110,8 +110,8 @@ export const routes: RouteConfig[] = [
     element: <ProtectedRoute><Dashboard2 /></ProtectedRoute>
   },
   {
-    path: "/dashboard/summaries",
-    element: <ProtectedRoute menuPaths={['/dashboard/summaries']}><DashboardSummaries /></ProtectedRoute>
+    path: "/reports/daily-summary",
+    element: <ProtectedRoute menuPaths={['/reports/daily-summary']}><DailySummaryReports /></ProtectedRoute>
   },
   {
     path: "/mail",
