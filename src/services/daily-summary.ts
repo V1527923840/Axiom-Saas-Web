@@ -57,7 +57,7 @@ export interface ListDailySummariesParams {
   pageSize?: number
 }
 
-const BASE = "/api/v1/daily-summary"
+const BASE = "/v1/daily-summary"
 
 export async function getLatestDailySummary(
   token: string | null,

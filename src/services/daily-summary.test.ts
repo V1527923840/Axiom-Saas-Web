@@ -16,7 +16,7 @@ beforeEach(() => {
 })
 
 describe("getLatestDailySummary", () => {
-  it("should call GET /api/v1/daily-summary/latest with frequency", async () => {
+  it("should call GET /v1/daily-summary/latest with frequency", async () => {
     mockedGet.mockResolvedValue({
       data: { reportId: "r1", frequency: "daily" },
     } as never)
@@ -24,7 +24,7 @@ describe("getLatestDailySummary", () => {
     const r = await getLatestDailySummary("tok", "daily")
 
     expect(mockedGet).toHaveBeenCalledWith(
-      "/api/v1/daily-summary/latest",
+      "/v1/daily-summary/latest",
       expect.objectContaining({ params: { frequency: "daily" }, token: "tok" }),
     )
     expect(r.data?.reportId).toBe("r1")
@@ -42,7 +42,7 @@ describe("listDailySummaries", () => {
     })
 
     expect(mockedGet).toHaveBeenCalledWith(
-      "/api/v1/daily-summary",
+      "/v1/daily-summary",
       expect.objectContaining({
         params: { frequency: "weekly", page: 1, pageSize: 10 },
         token: "tok",
@@ -80,26 +80,26 @@ describe("listDailySummaries", () => {
 })
 
 describe("getDailySummary", () => {
-  it("should call GET /api/v1/daily-summary/:id", async () => {
+  it("should call GET /v1/daily-summary/:id", async () => {
     mockedGet.mockResolvedValue({ data: { reportId: "r1" } } as never)
 
     await getDailySummary("tok", "r1")
 
     expect(mockedGet).toHaveBeenCalledWith(
-      "/api/v1/daily-summary/r1",
+      "/v1/daily-summary/r1",
       expect.objectContaining({ token: "tok" }),
     )
   })
 })
 
 describe("getDailySummarySources", () => {
-  it("should call GET /api/v1/daily-summary/:id/sources", async () => {
+  it("should call GET /v1/daily-summary/:id/sources", async () => {
     mockedGet.mockResolvedValue({ data: { posts: [], research: [] } } as never)
 
     await getDailySummarySources("tok", "r1")
 
     expect(mockedGet).toHaveBeenCalledWith(
-      "/api/v1/daily-summary/r1/sources",
+      "/v1/daily-summary/r1/sources",
       expect.objectContaining({ token: "tok" }),
     )
   })
