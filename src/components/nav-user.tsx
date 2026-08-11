@@ -8,6 +8,7 @@ import {
   CircleUser,
 } from "lucide-react"
 import { Link } from "react-router-dom"
+import { useAuth } from "@/contexts/auth-context"
 import { Logo } from "@/components/logo"
 import {
   DropdownMenu,
@@ -35,6 +36,7 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const { logout } = useAuth()
 
   return (
     <SidebarMenu>
@@ -98,11 +100,9 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild className="cursor-pointer">
-              <Link to="/auth/sign-in">
-                <LogOut />
-                Log out
-              </Link>
+            <DropdownMenuItem onSelect={logout} className="cursor-pointer">
+              <LogOut />
+              Log out
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
