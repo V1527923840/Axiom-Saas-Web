@@ -17,7 +17,7 @@ export function LatestDailyCard() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>📅 Daily</CardTitle>
+            <CardTitle>📅 今日日报</CardTitle>
             {report ? (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>{report.reportDate}</span>

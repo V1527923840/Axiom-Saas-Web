@@ -3,7 +3,7 @@ import { DashboardSummary } from './components/dashboard-summary'
 
 export default function Page() {
   return (
-    <BaseLayout title="Dashboard" description="日报 / 周报">
+    <BaseLayout title="Dashboard" description="每日概览">
       <DashboardSummary />
     </BaseLayout>
   )

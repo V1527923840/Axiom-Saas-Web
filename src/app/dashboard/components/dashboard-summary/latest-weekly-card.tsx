@@ -17,7 +17,7 @@ export function LatestWeeklyCard() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>📅 Weekly</CardTitle>
+            <CardTitle>📅 本周周报</CardTitle>
             {report ? (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>{report.weekStart ?? report.reportDate}</span>
