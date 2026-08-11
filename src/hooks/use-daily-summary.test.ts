@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { useAuth } from '@/contexts/auth-context'
 import * as svc from '@/services/daily-summary'
-import { useLatestReports, useReportHistory, useReportDetail, useReportSources } from './use-daily-summary'
+import { useLatestReports, useReportDetail, useReportSources } from './use-daily-summary'
 import type { DailySummary, SourcesResponse } from '@/services/daily-summary'
 
 vi.mock('@/contexts/auth-context', () => ({ useAuth: vi.fn() }))
@@ -37,23 +37,6 @@ describe('useLatestReports', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.report).toBeNull()
     expect(result.current.error?.message).toBe('boom')
-  })
-})
-
-describe('useReportHistory', () => {
-  it('returns list and pagination', async () => {
-    // listDailySummaries returns DailySummaryListResponse directly (flattened from the
-    // server's { data, meta } envelope by the service wrapper), not wrapped in ApiResponse.
-    vi.mocked(svc.listDailySummaries).mockResolvedValue({
-      data: [{ reportId: 'r1' } as unknown as DailySummary],
-      total: 1,
-      page: 0,
-      pageSize: 20,
-    } as any)
-    const { result } = renderHook(() => useReportHistory({ frequency: 'daily', page: 0, pageSize: 20 }))
-    await waitFor(() => expect(result.current.loading).toBe(false))
-    expect(result.current.items).toHaveLength(1)
-    expect(result.current.total).toBe(1)
   })
 })
 

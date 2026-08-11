@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -10,71 +9,51 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { IntelligenceDetailDialog } from "@/features/content/intelligence/components/IntelligenceDetailDialog"
+import { useIntelligencePostsStore } from "@/features/content/intelligence/hooks/use-intelligence-posts"
+import { ResearchAnalysisDetailDialog } from "@/features/content/research-analysis/components/ResearchAnalysisDetailDialog"
+import { useResearchAnalysisStore } from "@/features/content/research-analysis/hooks/use-research-analysis"
 import type { ContentItemMeta, SourcesResponse } from "@/services/daily-summary"
 
-function CopyButton({ id }: { id: string }) {
-  const [copied, setCopied] = useState(false)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (timer.current) clearTimeout(timer.current)
-    }
-  }, [])
-
+function GroupTable({
+  rows,
+  onView,
+}: {
+  rows: ContentItemMeta[]
+  onView: (item: ContentItemMeta) => void
+}) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">无</p>
+  }
   return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(id)
-          setCopied(true)
-          if (timer.current) clearTimeout(timer.current)
-          timer.current = setTimeout(() => setCopied(false), 1200)
-        } catch {
-          /* clipboard unavailable (insecure origin / denied) — stay silent */
-        }
-      }}
-    >
-      {copied ? "已复制" : "Copy ID"}
-    </Button>
-  )
-}
-
-function GroupTable({ title, rows }: { title: string; rows: ContentItemMeta[] }) {
-  return (
-    <div className="space-y-2">
-      <h4 className="text-sm font-medium">
-        {title} ({rows.length})
-      </h4>
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">无</p>
-      ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Publish</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell className="font-medium">{r.title}</TableCell>
-                <TableCell>{r.categoryCode}</TableCell>
-                <TableCell>{r.publishDate?.slice(0, 10) ?? "—"}</TableCell>
-                <TableCell>
-                  <CopyButton id={r.id} />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
-    </div>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>标题</TableHead>
+          <TableHead className="w-[80px]">操作</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((r) => (
+          <TableRow key={r.id}>
+            <TableCell className="font-medium max-w-[480px] truncate">
+              {r.title}
+            </TableCell>
+            <TableCell>
+              <Button
+                variant="outline"
+                size="sm"
+                className="cursor-pointer"
+                onClick={() => onView(r)}
+              >
+                查看
+              </Button>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   )
 }
 
@@ -87,6 +66,13 @@ export function SourcesTab({
   loading: boolean
   error: Error | null
 }) {
+  // Reuse the list-page detail stores so the dialog UX matches 情报精选 /
+  // 机构研报 exactly. SourcesTab never reads `posts` / `items` /
+  // pagination — it only triggers `fetchDetail(id)` and reads
+  // `selectedItem` + `detailDialogOpen` to drive the shared dialogs.
+  const intelligence = useIntelligencePostsStore()
+  const research = useResearchAnalysisStore()
+
   if (loading) return <Skeleton className="h-32 w-full" />
   if (error) {
     return (
@@ -98,10 +84,49 @@ export function SourcesTab({
   }
   if (!sources) return <p className="text-sm text-muted-foreground">无数据</p>
 
+  const { posts, research: researchRows } = sources
+
+  const handleViewPost = (item: ContentItemMeta) => {
+    // intelligence stores detail id as string; ContentItemMeta.id is
+    // already a string, so pass through.
+    void intelligence.fetchDetail(item.id)
+  }
+
+  const handleViewResearch = (item: ContentItemMeta) => {
+    // ResearchAnalysisDetail expects a numeric id; ContentItemMeta.id
+    // is a string. If the upstream service emits a non-numeric id we
+    // fall back to skipping the request — the dialog won't open but
+    // the table state stays consistent.
+    const numericId = Number(item.id)
+    if (!Number.isFinite(numericId)) return
+    void research.fetchDetail(numericId)
+  }
+
   return (
-    <div className="space-y-6">
-      <GroupTable title="Posts" rows={sources.posts ?? []} />
-      <GroupTable title="Research" rows={sources.research ?? []} />
-    </div>
+    <>
+      <Tabs defaultValue="posts" className="w-full">
+        <TabsList>
+          <TabsTrigger value="posts">帖文 ({posts.length})</TabsTrigger>
+          <TabsTrigger value="research">研报 ({researchRows.length})</TabsTrigger>
+        </TabsList>
+        <TabsContent value="posts" className="mt-4">
+          <GroupTable rows={posts} onView={handleViewPost} />
+        </TabsContent>
+        <TabsContent value="research" className="mt-4">
+          <GroupTable rows={researchRows} onView={handleViewResearch} />
+        </TabsContent>
+      </Tabs>
+
+      <IntelligenceDetailDialog
+        item={intelligence.selectedItem}
+        open={intelligence.detailDialogOpen}
+        onOpenChange={intelligence.closeDetail}
+      />
+      <ResearchAnalysisDetailDialog
+        item={research.selectedItem}
+        open={research.detailDialogOpen}
+        onOpenChange={research.closeDetail}
+      />
+    </>
   )
 }

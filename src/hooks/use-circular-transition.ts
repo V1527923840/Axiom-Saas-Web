@@ -2,11 +2,13 @@
 
 import { useRef, useCallback } from "react"
 import { useTheme } from "@/hooks/use-theme"
+// `isTransitioningRef` is intentionally NOT exposed via the return type —
+// it's only used internally to debounce `startTransition` calls while
+// a View Transitions API animation is in flight.
 
 interface CircularTransitionHook {
   startTransition: (coords: { x: number; y: number }, callback: () => void) => void
   toggleTheme: (event: React.MouseEvent) => void
-  isTransitioning: () => boolean
 }
 
 export function useCircularTransition(): CircularTransitionHook {
@@ -56,13 +58,8 @@ export function useCircularTransition(): CircularTransitionHook {
     })
   }, [theme, setTheme, startTransition])
 
-  const isTransitioning = useCallback(() => {
-    return isTransitioningRef.current
-  }, [])
-
   return {
     startTransition,
-    toggleTheme,
-    isTransitioning
+    toggleTheme
   }
 }
