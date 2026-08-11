@@ -53,8 +53,10 @@ export interface DailySummaryListResponse {
 
 export interface ListDailySummariesParams {
   frequency?: Frequency
-  /** ISO date (YYYY-MM-DD) — exact match against reportDate */
-  reportDate?: string
+  /** Inclusive lower bound of reportDate range (YYYY-MM-DD). */
+  dateFrom?: string
+  /** Inclusive upper bound of reportDate range (YYYY-MM-DD). */
+  dateTo?: string
   page?: number
   pageSize?: number
 }
@@ -87,7 +89,8 @@ export async function listDailySummaries(
   const response = await get<DailySummary[]>(BASE, {
     params: {
       ...(params.frequency ? { frequency: params.frequency } : {}),
-      ...(params.reportDate ? { reportDate: params.reportDate } : {}),
+      ...(params.dateFrom ? { dateFrom: params.dateFrom } : {}),
+      ...(params.dateTo ? { dateTo: params.dateTo } : {}),
       page,
       pageSize,
     },

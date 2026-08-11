@@ -8,6 +8,7 @@ import {
   type Frequency,
 } from "@/services/daily-summary"
 import { useAuth } from "@/contexts/auth-context"
+import { formatLocalDate } from "@/lib/utils"
 
 interface Pagination {
   page: number
@@ -15,11 +16,16 @@ interface Pagination {
   total: number
 }
 
+export interface DateRange {
+  from: Date | undefined
+  to: Date | undefined
+}
+
 interface FetchOverrides {
   page?: number
   pageSize?: number
   frequency?: Frequency
-  reportDate?: string | null
+  dateRange?: DateRange | null
 }
 
 interface SummariesState {
@@ -28,7 +34,7 @@ interface SummariesState {
   error: string | null
   pagination: Pagination
   frequency: Frequency | undefined
-  reportDate: string | null
+  dateRange: DateRange | null
   openReportId: string | null
 
   fetchSummaries: (
@@ -38,7 +44,8 @@ interface SummariesState {
   setPage: (token: string | null, page: number) => void
   setPageSize: (token: string | null, pageSize: number) => void
   setFrequency: (token: string | null, frequency: Frequency | undefined) => void
-  setReportDate: (token: string | null, reportDate: string | null) => void
+  setDateRange: (token: string | null, range: DateRange | null) => void
+  resetFilters: () => void
   openReport: (id: string) => void
   closeReport: () => void
 }
@@ -49,7 +56,7 @@ export const useSummariesStore = create<SummariesState>((set, get) => ({
   error: null,
   pagination: { page: 0, pageSize: 10, total: 0 },
   frequency: undefined,
-  reportDate: null,
+  dateRange: null,
   openReportId: null,
 
   fetchSummaries: async (token, overrides) => {
@@ -57,15 +64,18 @@ export const useSummariesStore = create<SummariesState>((set, get) => ({
     const page = overrides?.page ?? cur.pagination.page
     const pageSize = overrides?.pageSize ?? cur.pagination.pageSize
     const frequency = overrides?.frequency ?? cur.frequency
-    const reportDate =
-      overrides?.reportDate !== undefined
-        ? overrides.reportDate
-        : cur.reportDate
+    const dateRange =
+      overrides?.dateRange !== undefined
+        ? overrides.dateRange
+        : cur.dateRange
     set({ loading: true, error: null })
     try {
       const r = await listDailySummaries(token, {
         frequency,
-        reportDate: reportDate ?? undefined,
+        dateFrom: dateRange?.from
+          ? formatLocalDate(dateRange.from)
+          : undefined,
+        dateTo: dateRange?.to ? formatLocalDate(dateRange.to) : undefined,
         page,
         pageSize,
       })
@@ -74,7 +84,7 @@ export const useSummariesStore = create<SummariesState>((set, get) => ({
         pagination: { page: r.page, pageSize: r.pageSize, total: r.total },
         loading: false,
         frequency,
-        reportDate,
+        dateRange,
       })
     } catch (e) {
       set({
@@ -94,9 +104,12 @@ export const useSummariesStore = create<SummariesState>((set, get) => ({
     set({ frequency })
     void get().fetchSummaries(token, { page: 0, frequency })
   },
-  setReportDate: (token, reportDate) => {
-    set({ reportDate })
-    void get().fetchSummaries(token, { page: 0, reportDate })
+  setDateRange: (token, range) => {
+    set({ dateRange: range })
+    void get().fetchSummaries(token, { page: 0, dateRange: range })
+  },
+  resetFilters: () => {
+    set({ frequency: undefined, dateRange: null })
   },
   openReport: (id) => set({ openReportId: id }),
   closeReport: () => set({ openReportId: null }),
@@ -127,9 +140,8 @@ export function useSummariesPage() {
       store.setFrequency(token, frequency),
     [token, store],
   )
-  const setReportDate = useCallback(
-    (reportDate: string | null) =>
-      store.setReportDate(token, reportDate),
+  const setDateRange = useCallback(
+    (range: DateRange | null) => store.setDateRange(token, range),
     [token, store],
   )
   return {
@@ -138,13 +150,14 @@ export function useSummariesPage() {
     error: store.error,
     pagination: store.pagination,
     frequency: store.frequency,
-    reportDate: store.reportDate,
+    dateRange: store.dateRange,
     openReportId: store.openReportId,
     fetchSummaries,
     setPage,
     setPageSize,
     setFrequency,
-    setReportDate,
+    setDateRange,
+    resetFilters: store.resetFilters,
     openReport: store.openReport,
     closeReport: store.closeReport,
   }

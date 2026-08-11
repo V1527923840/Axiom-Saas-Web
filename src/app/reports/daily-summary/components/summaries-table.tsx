@@ -1,9 +1,17 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import { format } from "date-fns"
+import { CalendarIcon, X } from "lucide-react"
 import { DataTable } from "@/components/data-table"
-import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Calendar } from "@/components/ui/calendar"
 import { Label } from "@/components/ui/label"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import {
   Select,
   SelectContent,
@@ -23,13 +31,14 @@ export function SummariesTable() {
     error,
     pagination,
     frequency,
-    reportDate,
+    dateRange,
     openReportId,
     fetchSummaries,
     setPage,
     setPageSize,
     setFrequency,
-    setReportDate,
+    setDateRange,
+    resetFilters,
     openReport,
     closeReport,
   } = useSummariesPage()
@@ -42,28 +51,20 @@ export function SummariesTable() {
     void fetchSummaries()
   }, [fetchSummaries])
 
+  const handleReset = () => {
+    resetFilters()
+    void fetchSummaries({ page: 0 })
+  }
+
   return (
     <div className="space-y-4 px-4 py-6 lg:px-6">
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="summaries-filter-date" className="text-xs">
-            报告日期
-          </Label>
-          <Input
-            id="summaries-filter-date"
-            type="date"
-            value={reportDate ?? ""}
-            onChange={(e) => {
-              const v = e.target.value
-              setReportDate(v === "" ? null : v)
-            }}
-            className="w-[160px]"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="summaries-filter-frequency" className="text-xs">
-            报告类型
-          </Label>
+      {/* Filters — 报告类型 + 报告日期 range, matching the 情报精选 / 机构研报
+          pattern. The 标题 / 文档名称 search input from those pages is
+          intentionally omitted here: a daily-summary row has no title or
+          keyword column, so a text filter would only ever be empty. */}
+      <div className="flex flex-wrap items-end gap-4 rounded-lg bg-muted/30 p-4">
+        <div className="space-y-1">
+          <Label className="text-xs">报告类型</Label>
           <Select
             value={frequency ?? "all"}
             onValueChange={(v) => {
@@ -71,11 +72,7 @@ export function SummariesTable() {
               setFrequency(next)
             }}
           >
-            <SelectTrigger
-              id="summaries-filter-frequency"
-              size="sm"
-              className="w-[140px]"
-            >
+            <SelectTrigger size="sm" className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -85,6 +82,58 @@ export function SummariesTable() {
             </SelectContent>
           </Select>
         </div>
+
+        <div className="space-y-1">
+          <Label className="text-xs">报告日期</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-[280px] cursor-pointer justify-start text-left font-normal"
+              >
+                <CalendarIcon className="mr-2 size-4" />
+                {dateRange?.from ? (
+                  dateRange.to ? (
+                    <>
+                      {format(dateRange.from, "yyyy-MM-dd")} -{" "}
+                      {format(dateRange.to, "yyyy-MM-dd")}
+                    </>
+                  ) : (
+                    format(dateRange.from, "yyyy-MM-dd")
+                  )
+                ) : (
+                  "选择报告日期范围"
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="range"
+                selected={
+                  dateRange?.from
+                    ? {
+                        from: dateRange.from,
+                        to: dateRange.to,
+                      }
+                    : undefined
+                }
+                onSelect={(range) => {
+                  if (range?.from && range?.to) {
+                    setDateRange({ from: range.from, to: range.to })
+                  } else {
+                    setDateRange(null)
+                  }
+                }}
+                numberOfMonths={2}
+              />
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <Button variant="outline" onClick={handleReset} className="cursor-pointer">
+          <X className="mr-2 size-4" />
+          重置
+        </Button>
       </div>
 
       <DataTable

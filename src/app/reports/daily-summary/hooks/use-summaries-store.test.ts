@@ -23,7 +23,7 @@ beforeEach(() => {
     items: [],
     pagination: { page: 0, pageSize: 10, total: 0 },
     frequency: undefined,
-    reportDate: null,
+    dateRange: null,
     openReportId: null,
   })
 })
@@ -65,18 +65,22 @@ describe("useSummariesPage", () => {
     })
   })
 
-  it("setReportDate passes the date filter and re-fetches from page 0", async () => {
+  it("setDateRange passes dateFrom + dateTo and re-fetches from page 0", async () => {
     mockedList.mockResolvedValue({ data: [], total: 0, page: 0, pageSize: 10 } as never)
     const { result } = renderHook(() => useSummariesPage())
+    const from = new Date(2026, 7, 5) // local 2026-08-05
+    const to = new Date(2026, 7, 7) // local 2026-08-07
     await act(async () => {
-      result.current.setReportDate("2026-08-07")
+      result.current.setDateRange({ from, to })
     })
     expect(mockedList).toHaveBeenLastCalledWith("tok-1", {
-      reportDate: "2026-08-07",
+      dateFrom: "2026-08-05",
+      dateTo: "2026-08-07",
       page: 0,
       pageSize: 10,
     })
-    expect(result.current.reportDate).toBe("2026-08-07")
+    expect(result.current.dateRange?.from).toBe(from)
+    expect(result.current.dateRange?.to).toBe(to)
   })
 
   it("openReport + closeReport toggles openReportId", () => {

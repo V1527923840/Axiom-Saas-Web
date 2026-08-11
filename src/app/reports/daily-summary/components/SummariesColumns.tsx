@@ -2,7 +2,6 @@
 
 import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import type { DailySummary } from "@/services/daily-summary"
 
 /** `2026-08-11T03:04:05.000Z` → `2026-08-11 03:04`; tolerates a missing value. */
@@ -26,48 +25,12 @@ export const columns: ColumnDef<DailySummary>[] = [
   },
   {
     accessorKey: "frequency",
-    header: "频率",
+    header: "报告类型",
     cell: ({ row }) => (
       <span className="text-sm">
         {row.original.frequency === "weekly" ? "周报" : "日报"}
       </span>
     ),
-  },
-  {
-    accessorKey: "revision",
-    header: "版本",
-    cell: ({ row }) => (
-      <Badge variant="outline">Rev {row.original.revision}</Badge>
-    ),
-  },
-  {
-    accessorKey: "isFinal",
-    header: "状态",
-    cell: ({ row }) => {
-      const v = row.original.isFinal
-      return (
-        <Badge variant={v ? "default" : "secondary"}>
-          {v ? "终版" : "临时"}
-        </Badge>
-      )
-    },
-  },
-  {
-    accessorKey: "completenessRatio",
-    header: "完整度",
-    cell: ({ row }) => {
-      const r = row.original
-      return (
-        <div className="flex items-center gap-1">
-          <span className="text-sm">{Number(r.completenessRatio).toFixed(2)}</span>
-          {r.hasDataWarning ? (
-            <span className="text-destructive" title="数据不完整">
-              ⚠️
-            </span>
-          ) : null}
-        </div>
-      )
-    },
   },
   {
     id: "sources",

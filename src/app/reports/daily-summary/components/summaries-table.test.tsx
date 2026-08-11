@@ -15,11 +15,19 @@ vi.mock("@/app/dashboard/components/report-drawer", () => ({
 
 import { listDailySummaries } from "@/services/daily-summary"
 import { SummariesTable } from "./summaries-table"
+import { useSummariesStore } from "../hooks/use-summaries-store"
 
 const mockedList = vi.mocked(listDailySummaries)
 
 beforeEach(() => {
   mockedList.mockReset()
+  useSummariesStore.setState({
+    items: [],
+    pagination: { page: 0, pageSize: 10, total: 0 },
+    frequency: undefined,
+    dateRange: null,
+    openReportId: null,
+  })
 })
 
 const SAMPLE = [
@@ -64,9 +72,6 @@ describe("SummariesTable", () => {
     // displays the current selection ("全部" by default), so "日报" only
     // appears once — in the row's cell.
     expect(screen.getByText("日报")).toBeInTheDocument()
-    expect(screen.getByText("Rev 1")).toBeInTheDocument()
-    expect(screen.getByText("终版")).toBeInTheDocument()
-    expect(screen.getByText("0.92")).toBeInTheDocument()
     expect(screen.getByText("4 帖 / 2 研报")).toBeInTheDocument()
   })
 
@@ -78,21 +83,20 @@ describe("SummariesTable", () => {
     })
   })
 
-  it("passes reportDate filter when the date input changes", async () => {
+  it("re-fetches from page 0 with the new filter after resetFilters", async () => {
     mockedList.mockResolvedValue({ data: SAMPLE, total: 1, page: 0, pageSize: 10 } as never)
     render(<SummariesTable />)
 
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(1))
 
-    // jsdom does not implement a real <input type="date"> parser, so use
-    // fireEvent.change to set the value directly — this exercises the same
-    // onChange handler user keystrokes would invoke.
-    const dateInput = screen.getByLabelText("报告日期") as HTMLInputElement
-    fireEvent.change(dateInput, { target: { value: "2026-08-07" } })
+    // The reset button calls resetFilters() then fetchSummaries(0, {}) —
+    // verify the second call drops any stale frequency/dateRange filter
+    // and resets to page 0.
+    const resetBtn = screen.getByRole("button", { name: /重置/ })
+    fireEvent.click(resetBtn)
 
     await waitFor(() => {
       expect(mockedList).toHaveBeenLastCalledWith("tok-1", {
-        reportDate: "2026-08-07",
         page: 0,
         pageSize: 10,
       })
