@@ -64,11 +64,11 @@ export function SummariesTable() {
   }
 
   return (
-    <div className="space-y-4 px-4 py-6 lg:px-6">
+    <div className="space-y-3 px-4 py-4 lg:px-6">
       {/* Filters — 报告类型 + 报告日期 range. UI mirrors the 情报精选 /
           机构研报 pattern; the DataTable's built-in "搜索..." input is
           disabled below because there's no title column to search on. */}
-      <div className="flex flex-wrap items-end gap-4 rounded-lg bg-muted/30 p-4">
+      <div className="flex flex-wrap items-end gap-3 rounded-lg bg-muted/30 px-4 py-2">
         <div className="space-y-1">
           <Label className="text-xs">报告类型</Label>
           <Select
