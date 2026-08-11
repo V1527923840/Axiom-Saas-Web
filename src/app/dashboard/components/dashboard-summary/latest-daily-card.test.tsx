@@ -1,19 +1,33 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { LatestDailyCard } from './latest-daily-card'
 import * as hooks from '@/hooks/use-daily-summary'
 import type { DailySummary } from '@/services/daily-summary'
 
-// ReportDrawer (mounted alongside the card) pulls useReportDetail/useReportSources
-// from the same module — give them default stubs so the card test stays isolated
-// from drawer behavior. The card itself never opens the drawer in these tests.
+// SourcesDrawer (mounted alongside the card) pulls useReportSources from the
+// same module — give it a default stub so the card test stays isolated from
+// drawer behavior. The card itself never opens the drawer in these tests.
 vi.mock('@/hooks/use-daily-summary', () => ({
   useLatestReports: vi.fn(),
-  useReportDetail: vi.fn(() => ({ report: null, loading: false, error: null })),
   useReportSources: vi.fn(() => ({ sources: null, loading: false, error: null })),
 }))
 
+// Track SourcesDrawer props without rendering the real Sheet — keeps the
+// card test isolated from drawer behavior while still asserting the
+// header metadata is plumbed through.
+const sourcesDrawerSpy = vi.fn()
+vi.mock('@/app/dashboard/components/report-drawer', () => ({
+  SourcesDrawer: (props: unknown) => {
+    sourcesDrawerSpy(props)
+    return null
+  },
+}))
+
 describe('LatestDailyCard', () => {
+  beforeEach(() => {
+    sourcesDrawerSpy.mockClear()
+  })
+
   it('shows loading skeleton', () => {
     vi.mocked(hooks.useLatestReports).mockReturnValue({ report: null, loading: true, error: null, refresh: () => {} })
     render(<LatestDailyCard />)
@@ -61,6 +75,26 @@ describe('LatestDailyCard', () => {
     expect(screen.getByText('宏观海外')).toBeInTheDocument()
     expect(screen.getByText('A 股行业聚焦')).toBeInTheDocument()
     expect(screen.getByText(/查看来源 \(16\)/)).toBeInTheDocument()
+
+    // SourcesDrawer must receive the metadata from the same report the card
+    // renders, not an extra fetch.
+    const lastCall = sourcesDrawerSpy.mock.calls.at(-1)?.[0] as {
+      reportId: string | null
+      header?: { frequency: string; reportDate: string; revision: number }
+    }
+    expect(lastCall.reportId).toBe('r1')
+    expect(lastCall.header).toEqual({
+      frequency: 'daily',
+      reportDate: '2026-08-11',
+      revision: 2,
+    })
+  })
+
+  it('passes no header when the report has not loaded yet', () => {
+    vi.mocked(hooks.useLatestReports).mockReturnValue({ report: null, loading: true, error: null, refresh: () => {} })
+    render(<LatestDailyCard />)
+    const lastCall = sourcesDrawerSpy.mock.calls.at(-1)?.[0] as { header?: unknown }
+    expect(lastCall.header).toBeUndefined()
   })
 
   it('shows error alert on error', () => {

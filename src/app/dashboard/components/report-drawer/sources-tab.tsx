@@ -86,6 +86,14 @@ export function SourcesTab({
 
   const { posts, research: researchRows } = sources
 
+  if (posts.length === 0 && researchRows.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-8 text-center">
+        该报告没有关联的来源数据
+      </p>
+    )
+  }
+
   const handleViewPost = (item: ContentItemMeta) => {
     // intelligence stores detail id as string; ContentItemMeta.id is
     // already a string, so pass through.

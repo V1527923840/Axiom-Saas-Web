@@ -34,12 +34,13 @@ export function SectionsWeekly({ sections }: { sections: unknown }) {
   if (!isWeeklyShape(sections)) {
     return (
       <Alert>
-        <AlertTitle>Sections 形状不识别</AlertTitle>
+        <AlertTitle>报告内容格式异常，请联系管理员</AlertTitle>
         <AlertDescription>
-          <pre className="text-xs overflow-auto">
-            {JSON.stringify(sections, null, 2)}
-          </pre>
-          (raw)
+          {import.meta.env.DEV && (
+            <pre className="text-xs overflow-auto max-h-64">
+              {JSON.stringify(sections, null, 2)}
+            </pre>
+          )}
         </AlertDescription>
       </Alert>
     )

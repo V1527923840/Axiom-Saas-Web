@@ -19,6 +19,6 @@ describe("SectionsWeekly", () => {
 
   it("shows a fallback Alert when shape is wrong", () => {
     render(<SectionsWeekly sections={{ foo: 1 } as never} />)
-    expect(screen.getByText(/raw/i)).toBeInTheDocument()
+    expect(screen.getByText(/报告内容格式异常/)).toBeInTheDocument()
   })
 })

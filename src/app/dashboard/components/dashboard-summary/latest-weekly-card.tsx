@@ -4,7 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useLatestReports } from '@/hooks/use-daily-summary'
-import { ReportDrawer } from '@/app/dashboard/components/report-drawer'
+import { SourcesDrawer } from '@/app/dashboard/components/report-drawer'
 import { SectionsWeekly } from './sections-weekly'
 import { SourcesButton } from './sources-button'
 
@@ -60,15 +60,20 @@ export function LatestWeeklyCard() {
             <SourcesButton
               count={report.sourcePostCount + report.sourceResearchCount}
               onClick={() => setOpen(true)}
+              expanded={open}
             />
           </CardContent>
         ) : null}
       </Card>
-      <ReportDrawer
+      <SourcesDrawer
         reportId={report?.reportId ?? null}
         open={open}
         onOpenChange={setOpen}
-        initialTab="sources"
+        header={
+          report
+            ? { frequency: 'weekly', reportDate: report.reportDate, revision: report.revision }
+            : undefined
+        }
       />
     </>
   )

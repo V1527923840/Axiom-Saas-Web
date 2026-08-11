@@ -121,20 +121,30 @@ describe("ReportDrawer", () => {
 
   it("switches to the sources tab on click", () => {
     useReportDetail.mockReturnValue({ report: makeReport(), loading: false, error: null })
+    // Non-empty fixture so SourcesTab renders the Tabs (aggregate-empty
+    // branch is covered in sources-tab.test.tsx).
     useReportSources.mockReturnValue({
-      sources: { posts: [], research: [] },
+      sources: {
+        posts: [{ id: "p1", title: "post-a", categoryCode: "X", publishDate: "" }],
+        research: [{ id: "1", title: "research-a", categoryCode: "R", publishDate: "" }],
+      },
       loading: false,
       error: null,
     })
     render(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
     clickTab("来源")
-    expect(screen.getByText("Posts (0)")).toBeInTheDocument()
+    // SourcesTab exposes 中文 tab triggers with counts.
+    expect(screen.getByRole("tab", { name: /帖文 \(1\)/ })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: /研报 \(1\)/ })).toBeInTheDocument()
   })
 
   it("re-seeds the tab to initialTab when reopened for another report", () => {
     useReportDetail.mockReturnValue({ report: makeReport(), loading: false, error: null })
     useReportSources.mockReturnValue({
-      sources: { posts: [], research: [] },
+      sources: {
+        posts: [{ id: "p1", title: "post-a", categoryCode: "X", publishDate: "" }],
+        research: [{ id: "1", title: "research-a", categoryCode: "R", publishDate: "" }],
+      },
       loading: false,
       error: null,
     })

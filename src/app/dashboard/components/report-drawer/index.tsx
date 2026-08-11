@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useReportDetail, useReportSources } from "@/hooks/use-daily-summary"
 import { ReportTab } from "./report-tab"
 import { SourcesTab } from "./sources-tab"
+export { SourcesDrawer } from "./sources-drawer"
 
 type DrawerTab = "report" | "sources"
 

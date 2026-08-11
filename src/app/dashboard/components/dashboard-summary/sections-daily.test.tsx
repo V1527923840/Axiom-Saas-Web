@@ -20,6 +20,10 @@ describe("SectionsDaily", () => {
 
   it("shows a fallback Alert when shape is wrong", () => {
     render(<SectionsDaily sections={"not-an-array" as never} />)
-    expect(screen.getByText(/raw/i)).toBeInTheDocument()
+    // New copy hides the raw JSON dump behind import.meta.env.DEV, but
+    // vitest runs with DEV=true so the <pre> still renders in tests.
+    expect(screen.getByText(/报告内容格式异常/)).toBeInTheDocument()
+    // The raw JSON dump should still be present under DEV gate.
+    expect(screen.getByText(/"not-an-array"/)).toBeInTheDocument()
   })
 })
