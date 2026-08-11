@@ -114,14 +114,24 @@ export function SourcesTab({
     <>
       <Tabs defaultValue="posts" className="w-full">
         <TabsList>
-          <TabsTrigger value="posts">帖文 ({posts.length})</TabsTrigger>
-          <TabsTrigger value="research">研报 ({researchRows.length})</TabsTrigger>
+          <TabsTrigger value="posts">帖文 ({sources.postsTotal})</TabsTrigger>
+          <TabsTrigger value="research">研报 ({sources.researchTotal})</TabsTrigger>
         </TabsList>
         <TabsContent value="posts" className="mt-4">
           <GroupTable rows={posts} onView={handleViewPost} />
+          {posts.length < sources.postsTotal ? (
+            <p className="text-xs text-muted-foreground mt-2">
+              仅显示前 {posts.length} / {sources.postsTotal} 条
+            </p>
+          ) : null}
         </TabsContent>
         <TabsContent value="research" className="mt-4">
           <GroupTable rows={researchRows} onView={handleViewResearch} />
+          {researchRows.length < sources.researchTotal ? (
+            <p className="text-xs text-muted-foreground mt-2">
+              仅显示前 {researchRows.length} / {sources.researchTotal} 条
+            </p>
+          ) : null}
         </TabsContent>
       </Tabs>
 

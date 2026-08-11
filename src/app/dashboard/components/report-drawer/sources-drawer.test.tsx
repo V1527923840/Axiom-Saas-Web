@@ -17,6 +17,9 @@ const SAMPLE_SOURCES: SourcesResponse = {
   research: [
     { id: "r1", title: "研报一", categoryCode: "RESEARCH", publishDate: "2026-08-08T08:00:00.000Z" },
   ],
+  postsTotal: 1,
+  researchTotal: 1,
+  missingIds: [],
 }
 
 beforeEach(() => {

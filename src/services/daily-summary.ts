@@ -36,12 +36,17 @@ export interface ContentItemMeta {
   title: string
   categoryCode: string
   publishDate: string
-  sourceFileUrl?: string | null
 }
 
 export interface SourcesResponse {
   posts: ContentItemMeta[]
   research: ContentItemMeta[]
+  /** 去重后的帖文来源总数（不受 limit 截断）。 */
+  postsTotal: number
+  /** 去重后的研报来源总数（不受 limit 截断）。 */
+  researchTotal: number
+  /** 在源表中查不到的 id 合并去重后的列表。前端据此区分\"真缺失\"与标题恰好叫 (missing) 的行。 */
+  missingIds: string[]
 }
 
 export interface DailySummaryListResponse {
@@ -117,8 +122,13 @@ export async function getDailySummary(
 export async function getDailySummarySources(
   token: string | null,
   reportId: string,
+  params?: { limit?: number; offset?: number },
 ): Promise<ApiResponse<SourcesResponse>> {
   return get<SourcesResponse>(`${BASE}/${reportId}/sources`, {
+    params: {
+      ...(params?.limit !== undefined ? { limit: params.limit } : {}),
+      ...(params?.offset !== undefined ? { offset: params.offset } : {}),
+    },
     token: token || undefined,
   })
 }

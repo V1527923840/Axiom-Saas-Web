@@ -33,6 +33,9 @@ const sources: SourcesResponse = {
   research: [
     { id: "42", title: "研报一", categoryCode: "RESEARCH", publishDate: "2026-08-08T08:00:00.000Z" },
   ],
+  postsTotal: 2,
+  researchTotal: 1,
+  missingIds: [],
 }
 
 // Radix TabsTrigger selects on `mousedown`, not `click`, so fireEvent.click
@@ -100,6 +103,9 @@ describe("SourcesTab", () => {
         sources={{
           posts: [],
           research: [{ id: "not-a-number", title: "x", categoryCode: "R", publishDate: "" }],
+          postsTotal: 0,
+          researchTotal: 1,
+          missingIds: [],
         }}
         loading={false}
         error={null}
@@ -112,7 +118,17 @@ describe("SourcesTab", () => {
 
   it("shows an aggregate empty state when both groups are empty", () => {
     render(
-      <SourcesTab sources={{ posts: [], research: [] }} loading={false} error={null} />,
+      <SourcesTab
+        sources={{
+          posts: [],
+          research: [],
+          postsTotal: 0,
+          researchTotal: 0,
+          missingIds: [],
+        }}
+        loading={false}
+        error={null}
+      />,
     )
     // Tabs are gone in the aggregate-empty path — only the message
     // remains. The '0' badge wouldn't be visible to a user here.
@@ -126,6 +142,9 @@ describe("SourcesTab", () => {
         sources={{
           posts: [{ id: "p1", title: "a", categoryCode: "X", publishDate: "" }],
           research: [],
+          postsTotal: 1,
+          researchTotal: 0,
+          missingIds: [],
         }}
         loading={false}
         error={null}

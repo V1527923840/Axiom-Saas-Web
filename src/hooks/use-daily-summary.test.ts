@@ -57,7 +57,13 @@ describe('useReportDetail', () => {
 
 describe('useReportSources', () => {
   it('fetches sources when reportId is set', async () => {
-    const sources: SourcesResponse = { posts: [], research: [] }
+    const sources: SourcesResponse = {
+      posts: [],
+      research: [],
+      postsTotal: 0,
+      researchTotal: 0,
+      missingIds: [],
+    }
     vi.mocked(svc.getDailySummarySources).mockResolvedValue({ data: sources } as any)
     const { result } = renderHook(() => useReportSources('r1'))
     await waitFor(() => expect(result.current.sources).toEqual(sources))
