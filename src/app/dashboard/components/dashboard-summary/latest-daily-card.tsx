@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useLatestReports } from '@/hooks/use-daily-summary'
@@ -19,15 +18,9 @@ export function LatestDailyCard() {
           <div className="flex items-center justify-between">
             <CardTitle>📅 今日日报</CardTitle>
             {report ? (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>{report.reportDate}</span>
-                <Badge variant="outline">Rev {report.revision}</Badge>
-                <Badge variant={report.isFinal ? 'default' : 'secondary'}>
-                  {report.isFinal ? '✅ final' : '⚠️ draft'}
-                </Badge>
-                <span>完整性 {Number(report.completenessRatio).toFixed(2)}</span>
-                {report.hasDataWarning ? <span className="text-destructive">⚠️</span> : null}
-              </div>
+              <span className="text-xs text-muted-foreground">
+                {report.reportDate}
+              </span>
             ) : null}
           </div>
         </CardHeader>

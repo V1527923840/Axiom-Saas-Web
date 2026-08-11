@@ -53,6 +53,8 @@ export interface DailySummaryListResponse {
 
 export interface ListDailySummariesParams {
   frequency?: Frequency
+  /** ISO date (YYYY-MM-DD) — exact match against reportDate */
+  reportDate?: string
   page?: number
   pageSize?: number
 }
@@ -85,6 +87,7 @@ export async function listDailySummaries(
   const response = await get<DailySummary[]>(BASE, {
     params: {
       ...(params.frequency ? { frequency: params.frequency } : {}),
+      ...(params.reportDate ? { reportDate: params.reportDate } : {}),
       page,
       pageSize,
     },

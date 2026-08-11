@@ -19,6 +19,7 @@ interface FetchOverrides {
   page?: number
   pageSize?: number
   frequency?: Frequency
+  reportDate?: string | null
 }
 
 interface SummariesState {
@@ -27,6 +28,7 @@ interface SummariesState {
   error: string | null
   pagination: Pagination
   frequency: Frequency | undefined
+  reportDate: string | null
   openReportId: string | null
 
   fetchSummaries: (
@@ -36,6 +38,7 @@ interface SummariesState {
   setPage: (token: string | null, page: number) => void
   setPageSize: (token: string | null, pageSize: number) => void
   setFrequency: (token: string | null, frequency: Frequency | undefined) => void
+  setReportDate: (token: string | null, reportDate: string | null) => void
   openReport: (id: string) => void
   closeReport: () => void
 }
@@ -46,6 +49,7 @@ export const useSummariesStore = create<SummariesState>((set, get) => ({
   error: null,
   pagination: { page: 0, pageSize: 10, total: 0 },
   frequency: undefined,
+  reportDate: null,
   openReportId: null,
 
   fetchSummaries: async (token, overrides) => {
@@ -53,10 +57,15 @@ export const useSummariesStore = create<SummariesState>((set, get) => ({
     const page = overrides?.page ?? cur.pagination.page
     const pageSize = overrides?.pageSize ?? cur.pagination.pageSize
     const frequency = overrides?.frequency ?? cur.frequency
+    const reportDate =
+      overrides?.reportDate !== undefined
+        ? overrides.reportDate
+        : cur.reportDate
     set({ loading: true, error: null })
     try {
       const r = await listDailySummaries(token, {
         frequency,
+        reportDate: reportDate ?? undefined,
         page,
         pageSize,
       })
@@ -65,6 +74,7 @@ export const useSummariesStore = create<SummariesState>((set, get) => ({
         pagination: { page: r.page, pageSize: r.pageSize, total: r.total },
         loading: false,
         frequency,
+        reportDate,
       })
     } catch (e) {
       set({
@@ -83,6 +93,10 @@ export const useSummariesStore = create<SummariesState>((set, get) => ({
   setFrequency: (token, frequency) => {
     set({ frequency })
     void get().fetchSummaries(token, { page: 0, frequency })
+  },
+  setReportDate: (token, reportDate) => {
+    set({ reportDate })
+    void get().fetchSummaries(token, { page: 0, reportDate })
   },
   openReport: (id) => set({ openReportId: id }),
   closeReport: () => set({ openReportId: null }),
@@ -113,17 +127,24 @@ export function useSummariesPage() {
       store.setFrequency(token, frequency),
     [token, store],
   )
+  const setReportDate = useCallback(
+    (reportDate: string | null) =>
+      store.setReportDate(token, reportDate),
+    [token, store],
+  )
   return {
     items: store.items,
     loading: store.loading,
     error: store.error,
     pagination: store.pagination,
     frequency: store.frequency,
+    reportDate: store.reportDate,
     openReportId: store.openReportId,
     fetchSummaries,
     setPage,
     setPageSize,
     setFrequency,
+    setReportDate,
     openReport: store.openReport,
     closeReport: store.closeReport,
   }

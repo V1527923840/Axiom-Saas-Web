@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
-import userEvent from "@testing-library/user-event"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 
 vi.mock("@/services/daily-summary", () => ({
   listDailySummaries: vi.fn(),
@@ -61,11 +60,10 @@ describe("SummariesTable", () => {
     await waitFor(() => {
       expect(screen.getByTestId("summaries-view-button").getAttribute("data-report-id")).toBe("r-1")
     })
-    // The toggle filter button "日报" comes first in the DOM; we want the
-    // row's frequency cell, which is the second match.
-    const dailyCells = screen.getAllByText("日报")
-    expect(dailyCells.length).toBeGreaterThanOrEqual(2)
-    expect(dailyCells[1]).toBeInTheDocument()
+    // The frequency column renders "日报" for daily rows. The Select trigger
+    // displays the current selection ("全部" by default), so "日报" only
+    // appears once — in the row's cell.
+    expect(screen.getByText("日报")).toBeInTheDocument()
     expect(screen.getByText("Rev 1")).toBeInTheDocument()
     expect(screen.getByText("终版")).toBeInTheDocument()
     expect(screen.getByText("0.92")).toBeInTheDocument()
@@ -80,16 +78,21 @@ describe("SummariesTable", () => {
     })
   })
 
-  it("calls listDailySummaries with frequency when toggle group changes", async () => {
+  it("passes reportDate filter when the date input changes", async () => {
     mockedList.mockResolvedValue({ data: SAMPLE, total: 1, page: 0, pageSize: 10 } as never)
-    const user = userEvent.setup()
     render(<SummariesTable />)
 
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(1))
-    await user.click(screen.getByRole("radio", { name: "周报" }))
+
+    // jsdom does not implement a real <input type="date"> parser, so use
+    // fireEvent.change to set the value directly — this exercises the same
+    // onChange handler user keystrokes would invoke.
+    const dateInput = screen.getByLabelText("报告日期") as HTMLInputElement
+    fireEvent.change(dateInput, { target: { value: "2026-08-07" } })
+
     await waitFor(() => {
       expect(mockedList).toHaveBeenLastCalledWith("tok-1", {
-        frequency: "weekly",
+        reportDate: "2026-08-07",
         page: 0,
         pageSize: 10,
       })

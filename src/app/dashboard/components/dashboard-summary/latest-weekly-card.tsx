@@ -1,12 +1,25 @@
 import { useState } from 'react'
+import { addDays, format, parseISO } from 'date-fns'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useLatestReports } from '@/hooks/use-daily-summary'
 import { ReportDrawer } from '@/app/dashboard/components/report-drawer'
 import { SectionsWeekly } from './sections-weekly'
 import { SourcesButton } from './sources-button'
+
+/**
+ * Render the "[start - end]" range shown in the weekly card header.
+ * Weekly reports always cover a 7-day window, so the end date is
+ * `weekStart + 6 days`. Falls back to `reportDate` when the row is
+ * missing `weekStart` (defensive — current service always sets it for
+ * frequency='weekly', but the type allows null).
+ */
+function formatWeeklyRange(weekStart: string | null, reportDate: string): string {
+  const start = weekStart ?? reportDate
+  const end = format(addDays(parseISO(start), 6), 'yyyy-MM-dd')
+  return `${start} - ${end}`
+}
 
 export function LatestWeeklyCard() {
   const { report, loading, error } = useLatestReports('weekly')
@@ -19,15 +32,9 @@ export function LatestWeeklyCard() {
           <div className="flex items-center justify-between">
             <CardTitle>📅 本周周报</CardTitle>
             {report ? (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span>{report.weekStart ?? report.reportDate}</span>
-                <Badge variant="outline">Rev {report.revision}</Badge>
-                <Badge variant={report.isFinal ? 'default' : 'secondary'}>
-                  {report.isFinal ? '✅ final' : '⚠️ draft'}
-                </Badge>
-                <span>完整性 {Number(report.completenessRatio).toFixed(2)}</span>
-                {report.hasDataWarning ? <span className="text-destructive">⚠️</span> : null}
-              </div>
+              <span className="text-xs text-muted-foreground">
+                {formatWeeklyRange(report.weekStart, report.reportDate)}
+              </span>
             ) : null}
           </div>
         </CardHeader>
