@@ -2,8 +2,8 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { useAuth } from '@/contexts/auth-context'
 import * as svc from '@/services/daily-summary'
-import type { AuthContextType } from '@/contexts/auth-context'
 import { useLatestReports, useReportHistory, useReportDetail, useReportSources } from './use-daily-summary'
+import type { DailySummary, SourcesResponse } from '@/services/daily-summary'
 
 vi.mock('@/contexts/auth-context', () => ({ useAuth: vi.fn() }))
 vi.mock('@/services/daily-summary', () => ({
@@ -13,10 +13,8 @@ vi.mock('@/services/daily-summary', () => ({
   getDailySummarySources: vi.fn(),
 }))
 
-type AuthStub = Pick<AuthContextType, 'token'>
-
 beforeEach(() => {
-  vi.mocked(useAuth).mockReturnValue({ token: 'tok' } as AuthStub)
+  vi.mocked(useAuth).mockReturnValue({ token: 'tok' } as any)
   vi.mocked(svc.getLatestDailySummary).mockReset()
   vi.mocked(svc.listDailySummaries).mockReset()
   vi.mocked(svc.getDailySummary).mockReset()
@@ -25,8 +23,8 @@ beforeEach(() => {
 
 describe('useLatestReports', () => {
   it('fetches and returns the report on success', async () => {
-    const report = { reportId: 'r1', frequency: 'daily' }
-    vi.mocked(svc.getLatestDailySummary).mockResolvedValue({ data: report })
+    const report = { reportId: 'r1', frequency: 'daily' } as unknown as DailySummary
+    vi.mocked(svc.getLatestDailySummary).mockResolvedValue({ data: report } as any)
     const { result } = renderHook(() => useLatestReports('daily'))
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.report).toEqual(report)
@@ -47,11 +45,11 @@ describe('useReportHistory', () => {
     // listDailySummaries returns DailySummaryListResponse directly (flattened from the
     // server's { data, meta } envelope by the service wrapper), not wrapped in ApiResponse.
     vi.mocked(svc.listDailySummaries).mockResolvedValue({
-      data: [{ reportId: 'r1' }],
+      data: [{ reportId: 'r1' } as unknown as DailySummary],
       total: 1,
       page: 0,
       pageSize: 20,
-    })
+    } as any)
     const { result } = renderHook(() => useReportHistory({ frequency: 'daily', page: 0, pageSize: 20 }))
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.items).toHaveLength(1)
@@ -67,8 +65,8 @@ describe('useReportDetail', () => {
   })
 
   it('fetches when reportId is set', async () => {
-    const report = { reportId: 'r1' }
-    vi.mocked(svc.getDailySummary).mockResolvedValue({ data: report })
+    const report = { reportId: 'r1' } as unknown as DailySummary
+    vi.mocked(svc.getDailySummary).mockResolvedValue({ data: report } as any)
     const { result } = renderHook(() => useReportDetail('r1'))
     await waitFor(() => expect(result.current.report).toEqual(report))
   })
@@ -76,8 +74,8 @@ describe('useReportDetail', () => {
 
 describe('useReportSources', () => {
   it('fetches sources when reportId is set', async () => {
-    const sources = { posts: [], research: [] }
-    vi.mocked(svc.getDailySummarySources).mockResolvedValue({ data: sources })
+    const sources: SourcesResponse = { posts: [], research: [] }
+    vi.mocked(svc.getDailySummarySources).mockResolvedValue({ data: sources } as any)
     const { result } = renderHook(() => useReportSources('r1'))
     await waitFor(() => expect(result.current.sources).toEqual(sources))
   })
