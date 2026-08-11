@@ -83,15 +83,33 @@ describe("SummariesTable", () => {
     })
   })
 
-  it("re-fetches from page 0 with the new filter after resetFilters", async () => {
+  it("triggers a fetch from page 0 when the 搜索 button is clicked", async () => {
     mockedList.mockResolvedValue({ data: SAMPLE, total: 1, page: 0, pageSize: 10 } as never)
     render(<SummariesTable />)
 
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(1))
 
-    // The reset button calls resetFilters() then fetchSummaries(0, {}) —
-    // verify the second call drops any stale frequency/dateRange filter
-    // and resets to page 0.
+    // The filter form values (报告类型/报告日期) only mutate store state;
+    // the page-level "搜索" button is the single trigger that calls
+    // fetchSummaries({ page: 0 }) to apply the saved filters.
+    const searchBtn = screen.getByRole("button", { name: "搜索" })
+    fireEvent.click(searchBtn)
+
+    await waitFor(() => {
+      expect(mockedList).toHaveBeenLastCalledWith("tok-1", {
+        page: 0,
+        pageSize: 10,
+      })
+    })
+    expect(mockedList).toHaveBeenCalledTimes(2)
+  })
+
+  it("resets filters and re-fetches when 重置 is clicked", async () => {
+    mockedList.mockResolvedValue({ data: SAMPLE, total: 1, page: 0, pageSize: 10 } as never)
+    render(<SummariesTable />)
+
+    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(1))
+
     const resetBtn = screen.getByRole("button", { name: /重置/ })
     fireEvent.click(resetBtn)
 

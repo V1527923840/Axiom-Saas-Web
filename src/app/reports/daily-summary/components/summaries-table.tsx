@@ -51,6 +51,13 @@ export function SummariesTable() {
     void fetchSummaries()
   }, [fetchSummaries])
 
+  // "搜索" button — the single trigger that applies the latest filter
+  // values. setFrequency / setDateRange only mutate store state; the
+  // page reads the saved values back inside fetchSummaries via store.get().
+  const handleSearch = () => {
+    void fetchSummaries({ page: 0 })
+  }
+
   const handleReset = () => {
     resetFilters()
     void fetchSummaries({ page: 0 })
@@ -58,10 +65,9 @@ export function SummariesTable() {
 
   return (
     <div className="space-y-4 px-4 py-6 lg:px-6">
-      {/* Filters — 报告类型 + 报告日期 range, matching the 情报精选 / 机构研报
-          pattern. The 标题 / 文档名称 search input from those pages is
-          intentionally omitted here: a daily-summary row has no title or
-          keyword column, so a text filter would only ever be empty. */}
+      {/* Filters — 报告类型 + 报告日期 range. UI mirrors the 情报精选 /
+          机构研报 pattern; the DataTable's built-in "搜索..." input is
+          disabled below because there's no title column to search on. */}
       <div className="flex flex-wrap items-end gap-4 rounded-lg bg-muted/30 p-4">
         <div className="space-y-1">
           <Label className="text-xs">报告类型</Label>
@@ -130,7 +136,14 @@ export function SummariesTable() {
           </Popover>
         </div>
 
-        <Button variant="outline" onClick={handleReset} className="cursor-pointer">
+        <Button onClick={handleSearch} className="cursor-pointer">
+          搜索
+        </Button>
+        <Button
+          variant="outline"
+          onClick={handleReset}
+          className="cursor-pointer"
+        >
           <X className="mr-2 size-4" />
           重置
         </Button>
@@ -141,6 +154,7 @@ export function SummariesTable() {
         data={items}
         loading={loading}
         error={error}
+        showSearch={false}
         onRowClick={(row) => openReport(row.reportId)}
         // onSortingChange intentionally not passed — the daily-summary
         // list endpoint does not accept sortBy/sortOrder (verified against

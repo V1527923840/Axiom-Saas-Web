@@ -51,36 +51,61 @@ describe("useSummariesPage", () => {
     expect(result.current.pagination.total).toBe(1)
   })
 
-  it("setFrequency resets to page 0 on next fetch", async () => {
+  it("setFrequency updates store state without fetching", () => {
+    const { result } = renderHook(() => useSummariesPage())
+    act(() => result.current.setFrequency("weekly"))
+    expect(result.current.frequency).toBe("weekly")
+    expect(mockedList).not.toHaveBeenCalled()
+  })
+
+  it("setDateRange updates store state without fetching", () => {
+    const { result } = renderHook(() => useSummariesPage())
+    const from = new Date(2026, 7, 5)
+    const to = new Date(2026, 7, 7)
+    act(() => result.current.setDateRange({ from, to }))
+    expect(result.current.dateRange?.from).toBe(from)
+    expect(result.current.dateRange?.to).toBe(to)
+    expect(mockedList).not.toHaveBeenCalled()
+  })
+
+  it("fetchSummaries reads back the latest setFrequency + setDateRange state", async () => {
     mockedList.mockResolvedValue({ data: [], total: 0, page: 0, pageSize: 10 } as never)
     const { result } = renderHook(() => useSummariesPage())
-    await act(async () => {
+    act(() => {
       result.current.setFrequency("weekly")
-      await result.current.fetchSummaries({})
+      result.current.setDateRange({
+        from: new Date(2026, 7, 5),
+        to: new Date(2026, 7, 7),
+      })
+    })
+    await act(async () => {
+      // Simulate the page-level "搜索" button: just call fetchSummaries
+      // and the store picks up the saved frequency + dateRange.
+      await result.current.fetchSummaries({ page: 0 })
     })
     expect(mockedList).toHaveBeenLastCalledWith("tok-1", {
       frequency: "weekly",
-      page: 0,
-      pageSize: 10,
-    })
-  })
-
-  it("setDateRange passes dateFrom + dateTo and re-fetches from page 0", async () => {
-    mockedList.mockResolvedValue({ data: [], total: 0, page: 0, pageSize: 10 } as never)
-    const { result } = renderHook(() => useSummariesPage())
-    const from = new Date(2026, 7, 5) // local 2026-08-05
-    const to = new Date(2026, 7, 7) // local 2026-08-07
-    await act(async () => {
-      result.current.setDateRange({ from, to })
-    })
-    expect(mockedList).toHaveBeenLastCalledWith("tok-1", {
       dateFrom: "2026-08-05",
       dateTo: "2026-08-07",
       page: 0,
       pageSize: 10,
     })
-    expect(result.current.dateRange?.from).toBe(from)
-    expect(result.current.dateRange?.to).toBe(to)
+  })
+
+  it("resetFilters clears frequency + dateRange but does not fetch", () => {
+    mockedList.mockResolvedValue({ data: [], total: 0, page: 0, pageSize: 10 } as never)
+    const { result } = renderHook(() => useSummariesPage())
+    act(() => {
+      result.current.setFrequency("weekly")
+      result.current.setDateRange({
+        from: new Date(2026, 7, 5),
+        to: new Date(2026, 7, 7),
+      })
+    })
+    act(() => result.current.resetFilters())
+    expect(result.current.frequency).toBeUndefined()
+    expect(result.current.dateRange).toBeNull()
+    expect(mockedList).not.toHaveBeenCalled()
   })
 
   it("openReport + closeReport toggles openReportId", () => {

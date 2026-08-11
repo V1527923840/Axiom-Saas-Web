@@ -43,8 +43,12 @@ interface SummariesState {
   ) => Promise<void>
   setPage: (token: string | null, page: number) => void
   setPageSize: (token: string | null, pageSize: number) => void
-  setFrequency: (token: string | null, frequency: Frequency | undefined) => void
-  setDateRange: (token: string | null, range: DateRange | null) => void
+  /** Update the frequency filter in store only — does NOT trigger a fetch.
+   *  Callers must invoke fetchSummaries({ page: 0 }) explicitly (typically
+   *  from the "搜索" button) to apply the new value. */
+  setFrequency: (frequency: Frequency | undefined) => void
+  /** Update the date range filter in store only — does NOT trigger a fetch. */
+  setDateRange: (range: DateRange | null) => void
   resetFilters: () => void
   openReport: (id: string) => void
   closeReport: () => void
@@ -100,14 +104,12 @@ export const useSummariesStore = create<SummariesState>((set, get) => ({
   setPageSize: (token, pageSize) => {
     void get().fetchSummaries(token, { pageSize, page: 0 })
   },
-  setFrequency: (token, frequency) => {
-    set({ frequency })
-    void get().fetchSummaries(token, { page: 0, frequency })
-  },
-  setDateRange: (token, range) => {
-    set({ dateRange: range })
-    void get().fetchSummaries(token, { page: 0, dateRange: range })
-  },
+  // Filter setters only mutate store state — the page-level "搜索" button
+  // is the single trigger that calls fetchSummaries to apply the latest
+  // filter values. This matches the 情报精选 / 机构研报 UX (manual
+  // filter-then-search, no fetch-on-every-keystroke).
+  setFrequency: (frequency) => set({ frequency }),
+  setDateRange: (range) => set({ dateRange: range }),
   resetFilters: () => {
     set({ frequency: undefined, dateRange: null })
   },
@@ -136,13 +138,12 @@ export function useSummariesPage() {
     [token, store],
   )
   const setFrequency = useCallback(
-    (frequency: Frequency | undefined) =>
-      store.setFrequency(token, frequency),
-    [token, store],
+    (frequency: Frequency | undefined) => store.setFrequency(frequency),
+    [store],
   )
   const setDateRange = useCallback(
-    (range: DateRange | null) => store.setDateRange(token, range),
-    [token, store],
+    (range: DateRange | null) => store.setDateRange(range),
+    [store],
   )
   return {
     items: store.items,
