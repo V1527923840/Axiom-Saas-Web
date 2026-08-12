@@ -32,9 +32,6 @@ function makeReport(over: Partial<DailySummary> = {}): DailySummary {
     frequency: "daily",
     reportDate: "2026-08-10",
     weekStart: null,
-    isFinal: true,
-    isLatest: true,
-    revision: 2,
     dataWindowStart: "2026-08-09",
     dataWindowEnd: "2026-08-10",
     sections: [
@@ -86,11 +83,11 @@ describe("ReportDrawer", () => {
     expect(useReportDetail).toHaveBeenCalledWith("r1")
   })
 
-  it("shows the report title and revision once loaded", () => {
+  it("shows the report title and date once loaded", () => {
     useReportDetail.mockReturnValue({ report: makeReport(), loading: false, error: null })
     render(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
     expect(screen.getByText("日报详情")).toBeInTheDocument()
-    expect(screen.getByText("2026-08-10 · Rev 2")).toBeInTheDocument()
+    expect(screen.getByText("2026-08-10")).toBeInTheDocument()
     expect(screen.getByText("宏观海外")).toBeInTheDocument()
   })
 

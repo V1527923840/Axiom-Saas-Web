@@ -36,7 +36,7 @@ export function ReportDrawer({
 
   // Pass null while closed so SourcesTab's effect skips the fetch.
   // useReportDetail still lives here so the header can show frequency /
-  // reportDate / revision; sources pagination lives inside SourcesTab.
+  // reportDate; sources pagination lives inside SourcesTab.
   const activeId = open ? reportId : null
   const { report, loading: reportLoading, error: reportError } = useReportDetail(activeId)
 
@@ -51,7 +51,7 @@ export function ReportDrawer({
             {report?.frequency === "weekly" ? "周报详情" : "日报详情"}
           </SheetTitle>
           <SheetDescription>
-            {report ? `${report.reportDate} · Rev ${report.revision}` : "加载中…"}
+            {report ? report.reportDate : "加载中…"}
           </SheetDescription>
         </SheetHeader>
         <Tabs

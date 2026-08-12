@@ -71,7 +71,7 @@ export function LatestWeeklyCard() {
         onOpenChange={setOpen}
         header={
           report
-            ? { frequency: 'weekly', reportDate: report.reportDate, revision: report.revision }
+            ? { frequency: 'weekly', reportDate: report.reportDate }
             : undefined
         }
       />

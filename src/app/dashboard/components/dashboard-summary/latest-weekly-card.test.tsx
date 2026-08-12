@@ -45,9 +45,6 @@ describe('LatestWeeklyCard', () => {
       frequency: 'weekly',
       reportDate: '2026-08-11',
       weekStart: '2026-08-10',
-      isFinal: true,
-      isLatest: true,
-      revision: 1,
       completenessRatio: '0.88',
       hasDataWarning: false,
       sourcePostIds: [],
@@ -79,13 +76,12 @@ describe('LatestWeeklyCard', () => {
     // renders, not an extra fetch.
     const lastCall = sourcesDrawerSpy.mock.calls.at(-1)?.[0] as {
       reportId: string | null
-      header?: { frequency: string; reportDate: string; revision: number }
+      header?: { frequency: string; reportDate: string }
     }
     expect(lastCall.reportId).toBe('w1')
     expect(lastCall.header).toEqual({
       frequency: 'weekly',
       reportDate: '2026-08-11',
-      revision: 1,
     })
   })
 

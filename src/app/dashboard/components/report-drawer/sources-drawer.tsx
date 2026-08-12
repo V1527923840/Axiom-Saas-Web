@@ -13,8 +13,8 @@ import { SourcesTab } from "./sources-tab"
  * Different from <ReportDrawer> in three ways:
  *   - No tabs (the report body is already on the card above; the drawer
  *     is meant to surface the underlying posts / research only).
- *   - Skips `useReportDetail` — header metadata (frequency, date, revision)
- *     comes from the parent via the `header` prop, sourced from the same
+ *   - Skips `useReportDetail` — header metadata (frequency, date) comes
+ *     from the parent via the `header` prop, sourced from the same
  *     `useLatestReports(frequency)` call that populated the card.
  *   - Single `useReportSources` request lives inside <SourcesTab> now
  *     (it owns per-tab pagination state); we just hand down `reportId`.
@@ -31,7 +31,6 @@ export function SourcesDrawer({
   header?: {
     frequency: "daily" | "weekly"
     reportDate: string
-    revision: number
   }
 }) {
   // Pass null while closed so SourcesTab's effect skips the fetch.
@@ -42,9 +41,7 @@ export function SourcesDrawer({
       ? "周报详情"
       : "日报详情"
     : "来源详情"
-  const description = header
-    ? `${header.reportDate} · Rev ${header.revision}`
-    : "加载中…"
+  const description = header ? header.reportDate : "加载中…"
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>

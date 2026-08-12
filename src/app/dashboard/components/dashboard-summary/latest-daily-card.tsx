@@ -57,7 +57,7 @@ export function LatestDailyCard() {
         onOpenChange={setOpen}
         header={
           report
-            ? { frequency: 'daily', reportDate: report.reportDate, revision: report.revision }
+            ? { frequency: 'daily', reportDate: report.reportDate }
             : undefined
         }
       />

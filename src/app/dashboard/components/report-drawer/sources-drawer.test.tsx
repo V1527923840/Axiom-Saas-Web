@@ -47,7 +47,7 @@ describe("SourcesDrawer", () => {
         reportId="r1"
         open
         onOpenChange={() => {}}
-        header={{ frequency: "daily", reportDate: "2026-08-11", revision: 2 }}
+        header={{ frequency: "daily", reportDate: "2026-08-11" }}
       />,
     )
     await waitFor(() =>
@@ -66,11 +66,11 @@ describe("SourcesDrawer", () => {
         reportId="r1"
         open
         onOpenChange={() => {}}
-        header={{ frequency: "daily", reportDate: "2026-08-11", revision: 2 }}
+        header={{ frequency: "daily", reportDate: "2026-08-11" }}
       />,
     )
     expect(screen.getByText("日报详情")).toBeInTheDocument()
-    expect(screen.getByText("2026-08-11 · Rev 2")).toBeInTheDocument()
+    expect(screen.getByText("2026-08-11")).toBeInTheDocument()
   })
 
   it("uses '周报详情' header for weekly reports", async () => {
@@ -80,11 +80,11 @@ describe("SourcesDrawer", () => {
         reportId="r1"
         open
         onOpenChange={() => {}}
-        header={{ frequency: "weekly", reportDate: "2026-08-11", revision: 1 }}
+        header={{ frequency: "weekly", reportDate: "2026-08-11" }}
       />,
     )
     expect(screen.getByText("周报详情")).toBeInTheDocument()
-    expect(screen.getByText("2026-08-11 · Rev 1")).toBeInTheDocument()
+    expect(screen.getByText("2026-08-11")).toBeInTheDocument()
   })
 
   it("falls back to a generic header when no header metadata is provided", () => {
@@ -100,7 +100,7 @@ describe("SourcesDrawer", () => {
         reportId="r1"
         open
         onOpenChange={() => {}}
-        header={{ frequency: "daily", reportDate: "2026-08-11", revision: 2 }}
+        header={{ frequency: "daily", reportDate: "2026-08-11" }}
       />,
     )
     // Inner SourcesTab exposes 帖文 / 研报 tab triggers with counts.

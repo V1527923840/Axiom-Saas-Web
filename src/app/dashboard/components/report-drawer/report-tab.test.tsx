@@ -9,9 +9,6 @@ function makeReport(over: Partial<DailySummary> = {}): DailySummary {
     frequency: "daily",
     reportDate: "2026-08-10",
     weekStart: null,
-    isFinal: true,
-    isLatest: true,
-    revision: 1,
     dataWindowStart: "2026-08-09",
     dataWindowEnd: "2026-08-10",
     sections: [

@@ -9,9 +9,6 @@ export interface DailySummary {
   frequency: Frequency
   reportDate: string
   weekStart: string | null
-  isFinal: boolean
-  isLatest: boolean
-  revision: number
   dataWindowStart: string
   dataWindowEnd: string
   sections: unknown
