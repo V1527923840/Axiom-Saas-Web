@@ -1,14 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
-import { render, screen } from "@testing-library/react"
-import * as hooks from "@/hooks/use-daily-summary"
+import { render, screen, waitFor } from "@testing-library/react"
+import * as svc from "@/services/daily-summary"
 import type { SourcesResponse } from "@/services/daily-summary"
 import { SourcesDrawer } from "./sources-drawer"
 
-vi.mock("@/hooks/use-daily-summary", () => ({
-  useReportSources: vi.fn(),
+vi.mock("@/services/daily-summary", () => ({
+  getDailySummarySources: vi.fn(),
+}))
+vi.mock("@/contexts/auth-context", () => ({
+  useAuth: () => ({ token: "tok" }),
 }))
 
-const useReportSources = vi.mocked(hooks.useReportSources)
+const getDailySummarySources = vi.mocked(svc.getDailySummarySources)
 
 const SAMPLE_SOURCES: SourcesResponse = {
   posts: [
@@ -23,20 +26,22 @@ const SAMPLE_SOURCES: SourcesResponse = {
 }
 
 beforeEach(() => {
-  useReportSources.mockReset()
-  useReportSources.mockReturnValue({ sources: null, loading: false, error: null })
+  getDailySummarySources.mockReset()
+  // Default: pending forever so loading skeletons don't appear. Tests
+  // that need a resolved value override per-test.
+  getDailySummarySources.mockReturnValue(new Promise(() => {}))
 })
 
 describe("SourcesDrawer", () => {
-  it("passes null to useReportSources when closed (no fetch)", () => {
+  it("does not call getDailySummarySources when closed (no fetch)", () => {
     render(
       <SourcesDrawer reportId="r1" open={false} onOpenChange={() => {}} />,
     )
-    expect(useReportSources).toHaveBeenCalledWith(null)
+    expect(getDailySummarySources).not.toHaveBeenCalled()
   })
 
-  it("passes reportId to useReportSources when open", () => {
-    useReportSources.mockReturnValue({ sources: SAMPLE_SOURCES, loading: false, error: null })
+  it("passes reportId to getDailySummarySources when open", async () => {
+    getDailySummarySources.mockResolvedValue({ data: SAMPLE_SOURCES } as any)
     render(
       <SourcesDrawer
         reportId="r1"
@@ -45,11 +50,17 @@ describe("SourcesDrawer", () => {
         header={{ frequency: "daily", reportDate: "2026-08-11", revision: 2 }}
       />,
     )
-    expect(useReportSources).toHaveBeenCalledWith("r1")
+    await waitFor(() =>
+      expect(getDailySummarySources).toHaveBeenCalledWith(
+        expect.anything(),
+        "r1",
+        expect.objectContaining({ limit: 20, offset: 0 }),
+      ),
+    )
   })
 
-  it("uses '日报详情' header for daily reports", () => {
-    useReportSources.mockReturnValue({ sources: SAMPLE_SOURCES, loading: false, error: null })
+  it("uses '日报详情' header for daily reports", async () => {
+    getDailySummarySources.mockResolvedValue({ data: SAMPLE_SOURCES } as any)
     render(
       <SourcesDrawer
         reportId="r1"
@@ -62,8 +73,8 @@ describe("SourcesDrawer", () => {
     expect(screen.getByText("2026-08-11 · Rev 2")).toBeInTheDocument()
   })
 
-  it("uses '周报详情' header for weekly reports", () => {
-    useReportSources.mockReturnValue({ sources: SAMPLE_SOURCES, loading: false, error: null })
+  it("uses '周报详情' header for weekly reports", async () => {
+    getDailySummarySources.mockResolvedValue({ data: SAMPLE_SOURCES } as any)
     render(
       <SourcesDrawer
         reportId="r1"
@@ -77,14 +88,13 @@ describe("SourcesDrawer", () => {
   })
 
   it("falls back to a generic header when no header metadata is provided", () => {
-    useReportSources.mockReturnValue({ sources: null, loading: true, error: null })
     render(<SourcesDrawer reportId="r1" open onOpenChange={() => {}} />)
     expect(screen.getByText("来源详情")).toBeInTheDocument()
     expect(screen.getByText("加载中…")).toBeInTheDocument()
   })
 
-  it("renders SourcesTab with the loaded sources — only posts tab visible by default", () => {
-    useReportSources.mockReturnValue({ sources: SAMPLE_SOURCES, loading: false, error: null })
+  it("renders SourcesTab with the loaded sources — only posts tab visible by default", async () => {
+    getDailySummarySources.mockResolvedValue({ data: SAMPLE_SOURCES } as any)
     render(
       <SourcesDrawer
         reportId="r1"
@@ -94,7 +104,7 @@ describe("SourcesDrawer", () => {
       />,
     )
     // Inner SourcesTab exposes 帖文 / 研报 tab triggers with counts.
-    expect(screen.getByRole("tab", { name: /帖文 \(1\)/ })).toBeInTheDocument()
+    expect(await screen.findByRole("tab", { name: /帖文 \(1\)/ })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: /研报 \(1\)/ })).toBeInTheDocument()
     // posts tab is the default panel — row title visible.
     expect(screen.getByText("帖子一")).toBeInTheDocument()
@@ -107,7 +117,7 @@ describe("SourcesDrawer", () => {
   })
 
   it("does not surface the ReportDrawer-level 报告/来源 tabs regardless of reportId", () => {
-    useReportSources.mockReturnValue({ sources: null, loading: false, error: null })
+    getDailySummarySources.mockReturnValue(new Promise(() => {}))
     const { rerender } = render(
       <SourcesDrawer reportId="r1" open onOpenChange={() => {}} />,
     )

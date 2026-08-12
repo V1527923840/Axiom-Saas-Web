@@ -4,12 +4,11 @@ import { LatestWeeklyCard } from './latest-weekly-card'
 import * as hooks from '@/hooks/use-daily-summary'
 import type { DailySummary } from '@/services/daily-summary'
 
-// SourcesDrawer (mounted alongside the card) pulls useReportSources from the
-// same module — give it a default stub so the card test stays isolated from
-// drawer behavior. The card itself never opens the drawer in these tests.
+// SourcesDrawer (mounted alongside the card) does its own fetch via the
+// service module — no hook stub needed here. The card itself never opens
+// the drawer in these tests, so SourcesDrawer's child effects don't fire.
 vi.mock('@/hooks/use-daily-summary', () => ({
   useLatestReports: vi.fn(),
-  useReportSources: vi.fn(() => ({ sources: null, loading: false, error: null })),
 }))
 
 // Track SourcesDrawer props without rendering the real Sheet — keeps the

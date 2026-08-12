@@ -2,8 +2,8 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { useAuth } from '@/contexts/auth-context'
 import * as svc from '@/services/daily-summary'
-import { useLatestReports, useReportDetail, useReportSources } from './use-daily-summary'
-import type { DailySummary, SourcesResponse } from '@/services/daily-summary'
+import { useLatestReports, useReportDetail } from './use-daily-summary'
+import type { DailySummary } from '@/services/daily-summary'
 
 vi.mock('@/contexts/auth-context', () => ({ useAuth: vi.fn() }))
 vi.mock('@/services/daily-summary', () => ({
@@ -52,20 +52,5 @@ describe('useReportDetail', () => {
     vi.mocked(svc.getDailySummary).mockResolvedValue({ data: report } as any)
     const { result } = renderHook(() => useReportDetail('r1'))
     await waitFor(() => expect(result.current.report).toEqual(report))
-  })
-})
-
-describe('useReportSources', () => {
-  it('fetches sources when reportId is set', async () => {
-    const sources: SourcesResponse = {
-      posts: [],
-      research: [],
-      postsTotal: 0,
-      researchTotal: 0,
-      missingIds: [],
-    }
-    vi.mocked(svc.getDailySummarySources).mockResolvedValue({ data: sources } as any)
-    const { result } = renderHook(() => useReportSources('r1'))
-    await waitFor(() => expect(result.current.sources).toEqual(sources))
   })
 })

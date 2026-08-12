@@ -241,6 +241,7 @@ export function useIntelligencePostsStore() {
     detailDialogOpen,
     filters,
     fetchPosts,
+    fetchDetail,
     setPage,
     setPageSize,
     openDetail,

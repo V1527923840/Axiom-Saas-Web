@@ -1,16 +1,22 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
-import { fireEvent, render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { ReportDrawer } from "./index"
 import * as hooks from "@/hooks/use-daily-summary"
+import * as svc from "@/services/daily-summary"
 import type { DailySummary } from "@/services/daily-summary"
 
 vi.mock("@/hooks/use-daily-summary", () => ({
   useReportDetail: vi.fn(),
-  useReportSources: vi.fn(),
+}))
+vi.mock("@/services/daily-summary", () => ({
+  getDailySummarySources: vi.fn(),
+}))
+vi.mock("@/contexts/auth-context", () => ({
+  useAuth: () => ({ token: "tok" }),
 }))
 
 const useReportDetail = vi.mocked(hooks.useReportDetail)
-const useReportSources = vi.mocked(hooks.useReportSources)
+const getDailySummarySources = vi.mocked(svc.getDailySummarySources)
 
 // Radix TabsTrigger selects on `mousedown`, not `click`, so fireEvent.click
 // alone leaves the tab unchanged.
@@ -54,9 +60,11 @@ function makeReport(over: Partial<DailySummary> = {}): DailySummary {
 
 beforeEach(() => {
   useReportDetail.mockReset()
-  useReportSources.mockReset()
+  getDailySummarySources.mockReset()
   useReportDetail.mockReturnValue({ report: null, loading: true, error: null })
-  useReportSources.mockReturnValue({ sources: null, loading: false, error: null })
+  // Default: pending forever so loading skeletons don't appear. Tests
+  // that need a resolved value override per-test.
+  getDailySummarySources.mockReturnValue(new Promise(() => {}))
 })
 
 describe("ReportDrawer", () => {
@@ -66,17 +74,16 @@ describe("ReportDrawer", () => {
     expect(screen.getByRole("tab", { name: "来源" })).toBeInTheDocument()
   })
 
-  it("passes null to both hooks when open is false", () => {
+  it("passes null to useReportDetail when open is false", () => {
     useReportDetail.mockReturnValue({ report: null, loading: false, error: null })
     render(<ReportDrawer reportId="r1" open={false} onOpenChange={() => {}} />)
     expect(useReportDetail).toHaveBeenCalledWith(null)
-    expect(useReportSources).toHaveBeenCalledWith(null)
+    expect(getDailySummarySources).not.toHaveBeenCalled()
   })
 
-  it("passes reportId to both hooks when open", () => {
+  it("passes reportId to useReportDetail when open", () => {
     render(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
     expect(useReportDetail).toHaveBeenCalledWith("r1")
-    expect(useReportSources).toHaveBeenCalledWith("r1")
   })
 
   it("shows the report title and revision once loaded", () => {
@@ -97,10 +104,10 @@ describe("ReportDrawer", () => {
     expect(screen.getByText("周报详情")).toBeInTheDocument()
   })
 
-  it("opens on the sources tab when initialTab is 'sources'", () => {
+  it("opens on the sources tab when initialTab is 'sources'", async () => {
     useReportDetail.mockReturnValue({ report: makeReport(), loading: false, error: null })
-    useReportSources.mockReturnValue({
-      sources: {
+    getDailySummarySources.mockResolvedValue({
+      data: {
         posts: [
           { id: "p1", title: "帖子一", categoryCode: "MACRO", publishDate: "2026-08-09T08:00:00.000Z" },
         ],
@@ -109,9 +116,7 @@ describe("ReportDrawer", () => {
         researchTotal: 0,
         missingIds: [],
       },
-      loading: false,
-      error: null,
-    })
+    } as any)
     render(
       <ReportDrawer reportId="r1" open onOpenChange={() => {}} initialTab="sources" />,
     )
@@ -119,48 +124,52 @@ describe("ReportDrawer", () => {
       "aria-selected",
       "true",
     )
-    expect(screen.getByText("帖子一")).toBeInTheDocument()
+    await waitFor(() =>
+      expect(getDailySummarySources).toHaveBeenCalledWith(
+        expect.anything(),
+        "r1",
+        expect.objectContaining({ limit: 20, offset: 0 }),
+      ),
+    )
+    expect(await screen.findByText("帖子一")).toBeInTheDocument()
   })
 
-  it("switches to the sources tab on click", () => {
+  it("switches to the sources tab on click", async () => {
     useReportDetail.mockReturnValue({ report: makeReport(), loading: false, error: null })
-    // Non-empty fixture so SourcesTab renders the Tabs (aggregate-empty
-    // branch is covered in sources-tab.test.tsx).
-    useReportSources.mockReturnValue({
-      sources: {
+    getDailySummarySources.mockResolvedValue({
+      data: {
         posts: [{ id: "p1", title: "post-a", categoryCode: "X", publishDate: "" }],
         research: [{ id: "1", title: "research-a", categoryCode: "R", publishDate: "" }],
         postsTotal: 1,
         researchTotal: 1,
         missingIds: [],
       },
-      loading: false,
-      error: null,
-    })
+    } as any)
     render(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
     clickTab("来源")
     // SourcesTab exposes 中文 tab triggers with counts.
-    expect(screen.getByRole("tab", { name: /帖文 \(1\)/ })).toBeInTheDocument()
+    expect(await screen.findByRole("tab", { name: /帖文 \(1\)/ })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: /研报 \(1\)/ })).toBeInTheDocument()
   })
 
-  it("re-seeds the tab to initialTab when reopened for another report", () => {
+  it("re-seeds the tab to initialTab when reopened for another report", async () => {
     useReportDetail.mockReturnValue({ report: makeReport(), loading: false, error: null })
-    useReportSources.mockReturnValue({
-      sources: {
+    getDailySummarySources.mockResolvedValue({
+      data: {
         posts: [{ id: "p1", title: "post-a", categoryCode: "X", publishDate: "" }],
         research: [{ id: "1", title: "research-a", categoryCode: "R", publishDate: "" }],
         postsTotal: 1,
         researchTotal: 1,
         missingIds: [],
       },
-      loading: false,
-      error: null,
-    })
+    } as any)
     const { rerender } = render(
       <ReportDrawer reportId="r1" open onOpenChange={() => {}} />,
     )
     clickTab("来源")
+    await waitFor(() =>
+      expect(getDailySummarySources).toHaveBeenCalled(),
+    )
     expect(screen.getByRole("tab", { name: "来源" })).toHaveAttribute("aria-selected", "true")
 
     rerender(<ReportDrawer reportId="r1" open={false} onOpenChange={() => {}} />)

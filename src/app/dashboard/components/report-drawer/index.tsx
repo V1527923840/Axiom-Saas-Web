@@ -7,7 +7,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useReportDetail, useReportSources } from "@/hooks/use-daily-summary"
+import { useReportDetail } from "@/hooks/use-daily-summary"
 import { ReportTab } from "./report-tab"
 import { SourcesTab } from "./sources-tab"
 export { SourcesDrawer } from "./sources-drawer"
@@ -34,11 +34,11 @@ export function ReportDrawer({
     if (open) setTab(initialTab)
   }, [open, initialTab, reportId])
 
-  // Passing null while closed keeps the hooks from firing a request for a
-  // drawer the user can't see.
+  // Pass null while closed so SourcesTab's effect skips the fetch.
+  // useReportDetail still lives here so the header can show frequency /
+  // reportDate / revision; sources pagination lives inside SourcesTab.
   const activeId = open ? reportId : null
   const { report, loading: reportLoading, error: reportError } = useReportDetail(activeId)
-  const { sources, loading: sourcesLoading, error: sourcesError } = useReportSources(activeId)
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -67,11 +67,7 @@ export function ReportDrawer({
             <ReportTab report={report} loading={reportLoading} error={reportError} />
           </TabsContent>
           <TabsContent value="sources" className="mt-4">
-            <SourcesTab
-              sources={sources}
-              loading={sourcesLoading}
-              error={sourcesError}
-            />
+            <SourcesTab reportId={activeId} />
           </TabsContent>
         </Tabs>
       </SheetContent>

@@ -92,6 +92,14 @@ export function useResearchAnalysisStore() {
     setError(null)
     try {
       const detail = await researchApi.getResearchAnalysisDetail(id)
+      if (detail) {
+        // Mirror `openDetail`: setSelectedItem + setDetailDialogOpen so
+        // any consumer of this store (e.g. the dashboard SourcesDrawer)
+        // sees the dialog open after a fetch without going through
+        // openDetail's list-item wrapper.
+        setSelectedItem(detail)
+        setDetailDialogOpen(true)
+      }
       return detail
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch detail")
@@ -155,6 +163,7 @@ export function useResearchAnalysisStore() {
     detailDialogOpen,
     filters,
     fetchItems,
+    fetchDetail,
     setPage,
     setPageSize,
     openDetail,

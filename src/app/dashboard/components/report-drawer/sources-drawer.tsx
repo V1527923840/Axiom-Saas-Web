@@ -1,4 +1,3 @@
-import { useReportSources } from "@/hooks/use-daily-summary"
 import {
   Sheet,
   SheetContent,
@@ -17,7 +16,8 @@ import { SourcesTab } from "./sources-tab"
  *   - Skips `useReportDetail` — header metadata (frequency, date, revision)
  *     comes from the parent via the `header` prop, sourced from the same
  *     `useLatestReports(frequency)` call that populated the card.
- *   - Single `useReportSources` request.
+ *   - Single `useReportSources` request lives inside <SourcesTab> now
+ *     (it owns per-tab pagination state); we just hand down `reportId`.
  */
 export function SourcesDrawer({
   reportId,
@@ -34,10 +34,8 @@ export function SourcesDrawer({
     revision: number
   }
 }) {
-  // Passing null while closed keeps the hook from firing a request for a
-  // drawer the user can't see — mirrors the same guard in ReportDrawer.
+  // Pass null while closed so SourcesTab's effect skips the fetch.
   const activeId = open ? reportId : null
-  const { sources, loading, error } = useReportSources(activeId)
 
   const title = header
     ? header.frequency === "weekly"
@@ -59,7 +57,7 @@ export function SourcesDrawer({
           <SheetDescription>{description}</SheetDescription>
         </SheetHeader>
         <div className="px-4 pb-4">
-          <SourcesTab sources={sources} loading={loading} error={error} />
+          <SourcesTab reportId={activeId} />
         </div>
       </SheetContent>
     </Sheet>
