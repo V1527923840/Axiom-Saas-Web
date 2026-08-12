@@ -260,6 +260,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["RolesController_findAll_v1"];
+        put?: never;
+        post: operations["RolesController_create_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roles/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["RolesController_findOne_v1"];
+        put?: never;
+        post?: never;
+        delete: operations["RolesController_delete_v1"];
+        options?: never;
+        head?: never;
+        patch: operations["RolesController_update_v1"];
+        trace?: never;
+    };
+    "/api/v1/roles/{roleId}/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["RolesController_getRoleUsers_v1"];
+        put?: never;
+        post: operations["RolesController_assignUsers_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/email/login": {
         parameters: {
             query?: never;
@@ -521,6 +569,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/daily-summary/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get the latest summary for a frequency bucket */
+        get: operations["DailySummaryController_latest_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/daily-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List summaries with pagination */
+        get: operations["DailySummaryController_list_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/daily-summary/{reportId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single summary by report id */
+        get: operations["DailySummaryController_one_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/daily-summary/{reportId}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get source content metadata for a summary */
+        get: operations["DailySummaryController_sources_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get research analysis list */
+        get: operations["ResearchController_getResearchList_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/research-analysis/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get research analysis detail by id */
+        get: operations["ResearchController_getResearchDetail_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subscriptions": {
         parameters: {
             query?: never;
@@ -665,54 +815,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/roles": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["RolesController_findAll_v1"];
-        put?: never;
-        post: operations["RolesController_create_v1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/roles/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["RolesController_findOne_v1"];
-        put?: never;
-        post?: never;
-        delete: operations["RolesController_delete_v1"];
-        options?: never;
-        head?: never;
-        patch: operations["RolesController_update_v1"];
-        trace?: never;
-    };
-    "/api/v1/roles/{roleId}/users": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["RolesController_getRoleUsers_v1"];
-        put?: never;
-        post: operations["RolesController_assignUsers_v1"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/categories": {
         parameters: {
             query?: never;
@@ -827,6 +929,70 @@ export interface paths {
         };
         /** Get job status by ID */
         get: operations["EtlController_getJobStatus_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/industry-chains/l1": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["IndustryChainController_findL1_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/industry-chains/l2": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["IndustryChainController_findL2_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/industry-chains/chains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["IndustryChainController_findChains_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/industry-chains/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["IndustryChainController_findVersions_v1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1077,15 +1243,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/research-analysis": {
+    "/api/v1/ai-agent/agents": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get research analysis list */
-        get: operations["ResearchController_getResearchList_v1"];
+        get: operations["AiAgentController_listAgents_v1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1094,17 +1259,224 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/research-analysis/{id}": {
+    "/api/v1/ai-agent/sessions": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Get research analysis detail by id */
-        get: operations["ResearchController_getResearchDetail_v1"];
+        get: operations["AiAgentController_list_v1"];
+        put?: never;
+        post: operations["AiAgentController_create_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai-agent/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AiAgentController_getOne_v1"];
         put?: never;
         post?: never;
+        delete: operations["AiAgentController_remove_v1"];
+        options?: never;
+        head?: never;
+        patch: operations["AiAgentController_update_v1"];
+        trace?: never;
+    };
+    "/api/v1/ai-agent/sessions/{id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AiAgentController_getMessages_v1"];
+        put?: never;
+        post: operations["AiAgentController_submitMessage_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai-agent/sessions/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AiAgentController_events_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai-agent/sessions/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AiAgentController_cancel_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai-agent/sessions/{id}/goal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AiAgentController_getGoal_v1"];
+        put?: never;
+        post: operations["AiAgentController_createGoal_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["AiAgentController_updateGoal_v1"];
+        trace?: never;
+    };
+    "/api/v1/ai-agent/sessions/{id}/goal/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AiAgentController_addGoalEvidence_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai-agent/sessions/{id}/goal/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["AiAgentController_updateGoalStatus_v1"];
+        trace?: never;
+    };
+    "/api/v1/ai-agent/swarm/presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AiAgentController_listSwarmPresets_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai-agent/swarm/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AiAgentController_listSwarmRuns_v1"];
+        put?: never;
+        post: operations["AiAgentController_createSwarmRun_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai-agent/swarm/runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AiAgentController_getSwarmRun_v1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai-agent/swarm/runs/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AiAgentController_cancelSwarmRun_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai-agent/swarm/runs/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AiAgentController_retrySwarmRun_v1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ai-agent/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AiAgentController_uploadFile_v1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1118,22 +1490,20 @@ export interface components {
         FileDto: {
             id: string;
         };
-        RoleDto: {
-            id: Record<string, never>;
-        };
         StatusDto: {
             id: Record<string, never>;
         };
         CreateUserDto: {
             /** @example test1@example.com */
             email: string;
-            password: string;
+            password?: string;
             /** @example John */
             firstName: string;
             /** @example Doe */
-            lastName: string;
+            lastName?: string;
             photo?: components["schemas"]["FileDto"];
-            role?: components["schemas"]["RoleDto"];
+            /** @description 角色 id 列表;至少包含一项以保证刷新 token 可用 */
+            roleIds?: number[];
             status?: components["schemas"]["StatusDto"];
             /** @example Lv0 */
             tier?: string;
@@ -1182,6 +1552,7 @@ export interface components {
             lastName: string;
             photo: components["schemas"]["FileType"];
             role: components["schemas"]["Role"];
+            roles?: components["schemas"]["Role"][];
             status: components["schemas"]["Status"];
             /** Format: date-time */
             createdAt: string;
@@ -1220,7 +1591,8 @@ export interface components {
             /** @example Doe */
             lastName?: string;
             photo?: components["schemas"]["FileDto"];
-            role?: components["schemas"]["RoleDto"];
+            /** @description 角色 id 列表;传空数组将清空 user_roles */
+            roleIds?: number[];
             status?: components["schemas"]["StatusDto"];
             /** @example Lv0 */
             tier?: string;
@@ -1369,6 +1741,41 @@ export interface components {
             /** @example active */
             status?: string;
         };
+        RoleResponseDto: {
+            id: number;
+            name: string;
+            code: string;
+            description?: string;
+            /** @description 是否为超级管理员(由 code 计算) */
+            isSuperAdmin: boolean;
+        };
+        RoleEntity: Record<string, never>;
+        CreateRoleDto: {
+            /** @example Editor */
+            name: string;
+            /** @example editor */
+            code: string;
+            /** @example Can edit content */
+            description?: string;
+        };
+        UpdateRoleDto: {
+            /** @example Editor */
+            name?: string;
+            /** @example editor */
+            code?: string;
+            /** @example Can edit content */
+            description?: string;
+        };
+        AssignUsersDto: {
+            /**
+             * @example [
+             *       1,
+             *       2,
+             *       3
+             *     ]
+             */
+            userIds: number[];
+        };
         AuthEmailLoginDto: {
             /** @example test1@example.com */
             email: string;
@@ -1463,6 +1870,125 @@ export interface components {
             /** @example https://minio-url/summary.md */
             summaryFileUrl?: string;
         };
+        DailySummary: {
+            /** @example cbcfa8b8-3a25-4adb-a9c6-e325f0d0f3ae */
+            reportId: string;
+            /** @example daily */
+            frequency: string;
+            /** @example 2026-08-11 */
+            reportDate: string;
+            /** @example 2026-08-10 */
+            weekStart?: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-08-10T16:00:00.000Z
+             */
+            dataWindowStart: string;
+            /**
+             * Format: date-time
+             * @example 2026-08-11T16:00:00.000Z
+             */
+            dataWindowEnd: string;
+            /**
+             * @description daily: 4 段数组 (macro_overseas|industry|stock|risk); weekly: { weekly_events: [...] }
+             * @example [
+             *       {
+             *         "section": "macro_overseas",
+             *         "items": []
+             *       }
+             *     ]
+             */
+            sections: Record<string, never>;
+            /**
+             * @example [
+             *       "cbcfa8b8-3a25-4adb-a9c6-e325f0d0f3ae"
+             *     ]
+             */
+            sourcePostIds: string[];
+            /**
+             * @example [
+             *       "3a25cbcf-a8b8-4adb-a9c6-e325f0d0f3ae"
+             *     ]
+             */
+            sourceResearchIds: string[];
+            /** @example 42 */
+            sourcePostCount: number;
+            /** @example 7 */
+            sourceResearchCount: number;
+            /** @example 1.000 */
+            completenessRatio: string;
+            /** @example false */
+            hasDataWarning: boolean;
+            /** @example scheduled */
+            triggerReason: string;
+            /** @example v3.1 */
+            buildPromptVersion: string;
+            /** @example gpt-4o */
+            buildModel: string;
+            /** @example false */
+            hasTopics: boolean;
+            /** @example [] */
+            topics: Record<string, never>;
+            /**
+             * @example ## 今日要点
+             *     - ...
+             */
+            briefSummaryMd?: string | null;
+            /**
+             * Format: date-time
+             * @example 2026-08-11T16:05:00.000Z
+             */
+            generatedAt: string;
+            /**
+             * Format: date-time
+             * @example 2026-08-11T16:05:00.000Z
+             */
+            lastDataCheckAt: string;
+        };
+        ListDailySummariesResponseDto: {
+            data: components["schemas"]["DailySummary"][];
+            /** @example 42 */
+            total: number;
+            /**
+             * @description 0-based
+             * @example 0
+             */
+            page: number;
+            /** @example 20 */
+            pageSize: number;
+        };
+        ContentItemMetaDto: {
+            /** @example b2c8d2c0-1f4d-4a3a-9b3a-1b6f1a2a0001 */
+            id: string;
+            /** @example 康方生物双抗 ADC 临床数据更新 */
+            title: string;
+            /** @example STRUCTURED_DAILY */
+            categoryCode: string;
+            /**
+             * @description 帖文来源为 'YYYY-MM-DD'（pg date 列驱动返回字符串），研报来源为 ISO8601。
+             * @example 2026-08-10T08:30:00.000Z
+             */
+            publishDate: string;
+        };
+        SourcesResponseDto: {
+            posts: components["schemas"]["ContentItemMetaDto"][];
+            research: components["schemas"]["ContentItemMetaDto"][];
+            /**
+             * @description 去重后的帖文来源总数（不受 limit 截断影响）。
+             * @example 368
+             */
+            postsTotal: number;
+            /**
+             * @description 去重后的研报来源总数（不受 limit 截断影响）。
+             * @example 12
+             */
+            researchTotal: number;
+            /**
+             * @description 在源表（zsxq_posts + research_analysis）中查不到的 id 合并去重后的列表。前端据此区分"真缺失"与标题恰好叫 (missing) 的行。
+             * @example []
+             */
+            missingIds: string[];
+        };
         CreateSubscriptionDto: {
             /** @example plan-uuid */
             planId: string;
@@ -1544,33 +2070,6 @@ export interface components {
             businessId?: string;
             businessType?: string;
             description?: string;
-        };
-        RoleEntity: Record<string, never>;
-        CreateRoleDto: {
-            /** @example Editor */
-            name: string;
-            /** @example editor */
-            code: string;
-            /** @example Can edit content */
-            description?: string;
-        };
-        UpdateRoleDto: {
-            /** @example Editor */
-            name?: string;
-            /** @example editor */
-            code?: string;
-            /** @example Can edit content */
-            description?: string;
-        };
-        AssignUsersDto: {
-            /**
-             * @example [
-             *       1,
-             *       2,
-             *       3
-             *     ]
-             */
-            userIds: number[];
         };
         CreateCategoryDto: {
             /** @example 行业深度 */
@@ -1674,6 +2173,14 @@ export interface components {
              */
             parser?: string;
         };
+        CreateSessionDto: Record<string, never>;
+        UpdateSessionDto: Record<string, never>;
+        SendMessageDto: Record<string, never>;
+        CreateGoalDto: Record<string, never>;
+        UpdateGoalDto: Record<string, never>;
+        AddGoalEvidenceDto: Record<string, never>;
+        UpdateGoalStatusDto: Record<string, never>;
+        CreateSwarmRunDto: Record<string, never>;
     };
     responses: never;
     parameters: never;
@@ -2374,6 +2881,169 @@ export interface operations {
             };
         };
     };
+    RolesController_findAll_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleResponseDto"][];
+                };
+            };
+        };
+    };
+    RolesController_create_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRoleDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleEntity"];
+                };
+            };
+        };
+    };
+    RolesController_findOne_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleEntity"];
+                };
+            };
+        };
+    };
+    RolesController_delete_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RolesController_update_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRoleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleEntity"];
+                };
+            };
+        };
+    };
+    RolesController_getRoleUsers_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                roleId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    RolesController_assignUsers_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                roleId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignUsersDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AuthController_login_v1: {
         parameters: {
             query?: never;
@@ -2832,6 +3502,166 @@ export interface operations {
             };
         };
     };
+    DailySummaryController_latest_v1: {
+        parameters: {
+            query: {
+                /** @description Summary frequency bucket to fetch the latest for. */
+                frequency: "daily" | "weekly";
+            };
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailySummary"];
+                };
+            };
+        };
+    };
+    DailySummaryController_list_v1: {
+        parameters: {
+            query?: {
+                /** @description Filter by summary frequency bucket. */
+                frequency?: "daily" | "weekly";
+                /** @description Inclusive lower bound for report_date (YYYY-MM-DD). Used with dateTo to define a date range. */
+                dateFrom?: string;
+                /** @description Inclusive upper bound for report_date (YYYY-MM-DD). Used with dateFrom to define a date range. */
+                dateTo?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListDailySummariesResponseDto"];
+                };
+            };
+        };
+    };
+    DailySummaryController_one_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                reportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailySummary"];
+                };
+            };
+        };
+    };
+    DailySummaryController_sources_v1: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                reportId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourcesResponseDto"];
+                };
+            };
+        };
+    };
+    ResearchController_getResearchList_v1: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                /** @description Column to sort by. Use a domain field name. */
+                sortBy?: string;
+                /** @description Sort direction. Applied when `sortBy` is set. */
+                sortOrder?: "ASC" | "DESC";
+                /** @description Level 1 category filter */
+                categoryL1?: string;
+                /** @description Level 2 category filter */
+                categoryL2?: string;
+                /** @description Keyword search in document name */
+                keyword?: string;
+                /** @description Start date filter (YYYY-MM-DD) */
+                dateFrom?: string;
+                /** @description End date filter (YYYY-MM-DD) */
+                dateTo?: string;
+            };
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ResearchController_getResearchDetail_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     SubscriptionsController_findAll_v1: {
         parameters: {
             query?: {
@@ -3178,169 +4008,6 @@ export interface operations {
             };
         };
     };
-    RolesController_findAll_v1: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-custom-lang"?: unknown;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoleEntity"][];
-                };
-            };
-        };
-    };
-    RolesController_create_v1: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-custom-lang"?: unknown;
-            };
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateRoleDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoleEntity"];
-                };
-            };
-        };
-    };
-    RolesController_findOne_v1: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-custom-lang"?: unknown;
-            };
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoleEntity"];
-                };
-            };
-        };
-    };
-    RolesController_delete_v1: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-custom-lang"?: unknown;
-            };
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    RolesController_update_v1: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-custom-lang"?: unknown;
-            };
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateRoleDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RoleEntity"];
-                };
-            };
-        };
-    };
-    RolesController_getRoleUsers_v1: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-custom-lang"?: unknown;
-            };
-            path: {
-                roleId: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    RolesController_assignUsers_v1: {
-        parameters: {
-            query?: never;
-            header?: {
-                "x-custom-lang"?: unknown;
-            };
-            path: {
-                roleId: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AssignUsersDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     CategoriesController_findAll_v1: {
         parameters: {
             query?: {
@@ -3563,6 +4230,116 @@ export interface operations {
             path: {
                 id: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    IndustryChainController_findL1_v1: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                /** @description Column to sort by. Use a domain field name. */
+                sortBy?: string;
+                /** @description Sort direction. Applied when `sortBy` is set. */
+                sortOrder?: "ASC" | "DESC";
+            };
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    IndustryChainController_findL2_v1: {
+        parameters: {
+            query: {
+                page?: number;
+                pageSize?: number;
+                /** @description Column to sort by. Use a domain field name. */
+                sortBy?: string;
+                /** @description Sort direction. Applied when `sortBy` is set. */
+                sortOrder?: "ASC" | "DESC";
+                /** @description 申万一级行业代码 */
+                l1: string;
+            };
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    IndustryChainController_findChains_v1: {
+        parameters: {
+            query: {
+                page?: number;
+                pageSize?: number;
+                /** @description Column to sort by. Use a domain field name. */
+                sortBy?: string;
+                /** @description Sort direction. Applied when `sortBy` is set. */
+                sortOrder?: "ASC" | "DESC";
+                /** @description 申万二级行业代码 */
+                l2: string;
+            };
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    IndustryChainController_findVersions_v1: {
+        parameters: {
+            query: {
+                page?: number;
+                pageSize?: number;
+                /** @description Column to sort by. Use a domain field name. */
+                sortBy?: string;
+                /** @description Sort direction. Applied when `sortBy` is set. */
+                sortOrder?: "ASC" | "DESC";
+                /** @description 产业链 slug */
+                chain: string;
+            };
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -3980,25 +4757,368 @@ export interface operations {
             };
         };
     };
-    ResearchController_getResearchList_v1: {
+    AiAgentController_listAgents_v1: {
         parameters: {
-            query?: {
-                page?: number;
-                pageSize?: number;
-                /** @description Column to sort by. Use a domain field name. */
-                sortBy?: string;
-                /** @description Sort direction. Applied when `sortBy` is set. */
-                sortOrder?: "ASC" | "DESC";
-                /** @description Level 1 category filter */
-                categoryL1?: string;
-                /** @description Level 2 category filter */
-                categoryL2?: string;
-                /** @description Keyword search in document name */
-                keyword?: string;
-                /** @description Start date filter (YYYY-MM-DD) */
-                dateFrom?: string;
-                /** @description End date filter (YYYY-MM-DD) */
-                dateTo?: string;
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_list_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_create_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSessionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_getOne_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_remove_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_update_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSessionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_getMessages_v1: {
+        parameters: {
+            query: {
+                cursor: string;
+            };
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_submitMessage_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SendMessageDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_events_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_cancel_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_getGoal_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_createGoal_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateGoalDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_updateGoal_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateGoalDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_addGoalEvidence_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddGoalEvidenceDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_updateGoalStatus_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateGoalStatusDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_listSwarmPresets_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_listSwarmRuns_v1: {
+        parameters: {
+            query: {
+                limit: string;
             };
             header?: {
                 "x-custom-lang"?: unknown;
@@ -4016,15 +5136,99 @@ export interface operations {
             };
         };
     };
-    ResearchController_getResearchDetail_v1: {
+    AiAgentController_createSwarmRun_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSwarmRunDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_getSwarmRun_v1: {
         parameters: {
             query?: never;
             header?: {
                 "x-custom-lang"?: unknown;
             };
             path: {
-                id: number;
+                id: string;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_cancelSwarmRun_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_retrySwarmRun_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AiAgentController_uploadFile_v1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-custom-lang"?: unknown;
+            };
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
