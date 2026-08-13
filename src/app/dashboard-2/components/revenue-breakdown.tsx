@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Label, Pie, PieChart, Sector } from "recharts"
+import type { LabelProps } from "recharts"
 import type { PieSectorDataItem } from "recharts/types/polar/Pie"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartStyle, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
@@ -134,7 +135,7 @@ export function RevenueBreakdown() {
                   )}
                 >
                   <Label
-                    content={({ viewBox }: { viewBox?: { cx?: number; cy?: number } }) => {
+                    content={({ viewBox }: LabelProps) => {
                       if (viewBox && "cx" in viewBox && "cy" in viewBox) {
                         return (
                           <text

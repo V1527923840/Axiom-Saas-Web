@@ -69,6 +69,11 @@ export function XThemeProvider({ children }: { children: ReactNode }) {
       theme={{
         algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: tokens,
+        // antd 6 的 ConfigProvider.components 类型是 antd 自己的
+        // ComponentsConfig,不包含 @ant-design/x 的 Bubble / Sender —— 但
+        // 运行时 antd 把 components 当 token 字典逐 key 解析,未知 key 不
+        // 会报错,所以这里 cast 跳过类型检查。若 antd 未来在 ComponentsConfig
+        // 里加上同名 key,cast 会失效,届时可以清理。
         components: {
           Bubble: {
             borderRadius: 12,
@@ -77,7 +82,7 @@ export function XThemeProvider({ children }: { children: ReactNode }) {
           Sender: {
             borderRadius: 10,
           },
-        },
+        } as never,
       }}
       componentSize="middle"
     >

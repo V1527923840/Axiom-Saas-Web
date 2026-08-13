@@ -97,6 +97,13 @@ export function ChatDialog({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const inputRef = useRef<SenderRef>(null)
 
+  // 替代原本 Sender 上的 `autoFocus` —— antd-x 的 SenderProps 只 pick 了
+  // placeholder/onKeyUp/onFocus/onBlur,故意排除了 autoFocus;挂载时通过
+  // SenderRef.focus() 主动聚焦,行为等价。
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
   const handleFileChange = async (
     e: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -462,7 +469,6 @@ export function ChatDialog({
                   ? "输入消息,Enter 发送,Shift+Enter 换行…"
                   : "输入消息,自动创建会话…"
             }
-            autoFocus
             className="w-full"
           />
         </div>
