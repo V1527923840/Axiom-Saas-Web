@@ -33,6 +33,7 @@ export const confirmSkillContentFormSchema = z.object({
   name: skillNameSchema,
   description: skillDescriptionSchema,
   changelog: skillChangelogSchema,
+  category: z.string().max(64).optional(),
 })
 
 export type ConfirmSkillContentForm = z.infer<

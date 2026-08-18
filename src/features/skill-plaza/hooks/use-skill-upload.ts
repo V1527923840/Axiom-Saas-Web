@@ -70,6 +70,7 @@ export function useSkillUpload(options: UseSkillUploadOptions = {}) {
         name: input.name,
         description: input.description,
         changelog: input.changelog,
+        category: input.category,
       })
 
       return {

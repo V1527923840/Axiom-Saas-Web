@@ -23,12 +23,20 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, UploadCloud } from "lucide-react"
 import { useSkillUpload } from "../hooks/use-skill-upload"
 import type { UploadSourceFormat } from "../types"
 import { FrontmatterPreview } from "./skill-frontmatter-preview"
 import { parseSkillMd } from "../lib/frontmatter"
+import { PREDEFINED_CATEGORIES } from "../lib/categories"
 
 interface SkillUploadDialogProps {
   trigger?: React.ReactNode
@@ -47,6 +55,7 @@ export function SkillUploadDialog({
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [changelog, setChangelog] = useState("")
+  const [category, setCategory] = useState<string>("")
 
   const upload = useSkillUpload({
     onSuccess: (r) => {
@@ -62,6 +71,7 @@ export function SkillUploadDialog({
     setCode("")
     setName("")
     setDescription("")
+    setCategory("")
     setChangelog("")
     upload.reset()
   }
@@ -98,6 +108,7 @@ export function SkillUploadDialog({
         name,
         description,
         changelog: changelog || undefined,
+        category: category || undefined,
       })
     } catch (e) {
       // 错误显示在下面
@@ -195,14 +206,32 @@ export function SkillUploadDialog({
             disabled={inFlight}
           />
         </div>
-        <div className="space-y-2">
-          <Label>changelog (可选)</Label>
-          <Input
-            placeholder="本次变更说明"
-            value={changelog}
-            onChange={(e) => setChangelog(e.target.value)}
-            disabled={inFlight}
-          />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>分类</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="cursor-pointer">
+                <SelectValue placeholder="选择预设分类" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value=" ">不使用预设</SelectItem>
+                {PREDEFINED_CATEGORIES.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>changelog (可选)</Label>
+            <Input
+              placeholder="本次变更说明"
+              value={changelog}
+              onChange={(e) => setChangelog(e.target.value)}
+              disabled={inFlight}
+            />
+          </div>
         </div>
 
         {upload.error && (

@@ -98,6 +98,7 @@ export interface ConfirmSkillContentInput {
   name: string
   description: string
   changelog?: string
+  category?: string
 }
 
 export interface ConfirmSkillContentOutput {
