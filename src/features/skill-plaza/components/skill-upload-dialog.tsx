@@ -41,13 +41,24 @@ import { PREDEFINED_CATEGORIES } from "../lib/categories"
 interface SkillUploadDialogProps {
   trigger?: React.ReactNode
   onSuccess?: (skillId: string) => void
+  // ★ 受控开关 — 由父组件管理 open 状态(适配 /skills 广场按钮直接弹窗)
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 export function SkillUploadDialog({
   trigger,
   onSuccess,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
 }: SkillUploadDialogProps) {
-  const [open, setOpen] = useState(false)
+  const [openInternal, setOpenInternal] = useState(false)
+  const isControlled = openProp !== undefined
+  const open = isControlled ? openProp : openInternal
+  const setOpen = (v: boolean) => {
+    if (!isControlled) setOpenInternal(v)
+    onOpenChangeProp?.(v)
+  }
   const [format, setFormat] = useState<UploadSourceFormat>("md")
   const [file, setFile] = useState<File | null>(null)
   const [previewMd, setPreviewMd] = useState<string>("")
