@@ -1,148 +1,182 @@
 /**
- * SkillAdminPage — /skills/admin 路由 (super_admin only)。
+ * Skill Admin Page — /skills/admin 路由 (super_admin)。
  *
- * 列表 + 搜索 + 上传 + 详情。Service-side RBAC 走 MenuAccessGuard,
- * 菜单里这个 code='skill-plaza-admin' 所以 admin 自动可见,super_admin 全部通过。
+ * 与 scrape-log/versions 等管理类页面一致:
+ *   - BaseLayout + filter bar (search + status + refresh)
+ *   - DataTable + columns.tsx
+ *   - EmptyState 三态
  */
-import { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
-import { Input } from "@/components/ui/input"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
+"use client"
+
+import { useState, useMemo } from "react"
+import { BaseLayout } from "@/components/layouts/base-layout"
+import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Search, Wrench, ExternalLink } from "lucide-react"
-import { listSkills } from "../services/skill-api"
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { RefreshCw, Search, UploadCloud } from "lucide-react"
+import { columns } from "./columns"
+import { EmptyState } from "../components/empty-state"
 import { SkillUploadDialog } from "../components/skill-upload-dialog"
+import { listSkills } from "../services/skill-api"
+import { useDataTable } from "@/components/data-table"
+import type { FetchData } from "@/components/data-table"
+import type { Skill } from "@/types/skill"
+
+const PAGE_SIZE = 20
 
 export default function SkillAdminPage() {
   const [search, setSearch] = useState("")
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["admin-skills"],
-    queryFn: () =>
-      listSkills({
-        page: 1,
-        pageSize: 50,
-        sortBy: "updatedAt",
-        sortOrder: "DESC",
-      }),
-  })
+  const [statusFilter, setStatusFilter] = useState<string>("all")
 
-  const items = data?.items ?? []
-  const filtered = items.filter(
-    (s) =>
-      !search ||
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.code.toLowerCase().includes(search.toLowerCase()),
+  // 用 useDataTable 自带的 server fetch。
+  // data 表 schema 形如 { items, total }, 但 DataTable 期待 data + total。
+  const fetchData: FetchData<Skill> = async ({
+    pagination,
+    sorting,
+    globalFilter,
+  }) => {
+    const sortBy = (sorting[0]?.id ?? "updatedAt") as
+      | "name"
+      | "updatedAt"
+      | "createdAt"
+    const sortOrder = sorting[0]?.desc ? "DESC" : "ASC"
+    const result = await listSkills({
+      page: pagination.pageIndex + 1,
+      pageSize: pagination.pageSize,
+      sortBy,
+      sortOrder,
+      status:
+        statusFilter === "all"
+          ? undefined
+          : (statusFilter as "draft" | "published" | "archived"),
+      ...(globalFilter ? {} : { search: undefined }),
+    })
+    return { data: result.items, total: result.total }
+  }
+
+  // 过滤栏 status 切换时,reset 到第一页
+  const dataKey = useMemo(
+    () => [statusFilter] as const,
+    [statusFilter],
   )
 
   return (
-    <div className="container mx-auto space-y-6 py-6">
-      <div className="flex items-center gap-3">
-        <Wrench className="h-7 w-7 text-fuchsia-500" />
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold">Skill 管理</h1>
-          <p className="text-sm text-muted-foreground">
-            上传 / 编辑 / 发布 Skill
-          </p>
-        </div>
-        <div className="relative w-64">
-          <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="搜索 code / name…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-8"
+    <BaseLayout title="Skill 管理" description="上传 / 编辑 / 发布 Skill,管理 Skill 知识资产">
+      <div className="px-4 lg:px-6 space-y-4">
+        {/* Filters */}
+        <div className="flex flex-wrap items-end gap-4 p-4 bg-muted/30 rounded-lg">
+          <div className="space-y-1 min-w-[200px] flex-1">
+            <Label className="text-xs">搜索</Label>
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="按 code / name 搜索"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">状态</Label>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[140px] cursor-pointer">
+                <SelectValue placeholder="全部状态" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部状态</SelectItem>
+                <SelectItem value="draft">草稿</SelectItem>
+                <SelectItem value="published">已发布</SelectItem>
+                <SelectItem value="archived">已归档</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button variant="outline" className="cursor-pointer">
+            <RefreshCw className="size-4 mr-2" />
+            刷新
+          </Button>
+          <SkillUploadDialog
+            trigger={
+              <Button className="cursor-pointer">
+                <UploadCloud className="size-4 mr-2" />
+                上传 Skill
+              </Button>
+            }
           />
         </div>
-        <SkillUploadDialog onSuccess={() => refetch()} />
+
+        {/* Data Table */}
+        {/*
+          DataTable 期望 data + pagination 形态 (本地状态)。
+          这里直接用 fetchData,内部自管 loading/error/empty。
+          status 切换通过 queryKey 重 mount 实现。
+        */}
+        <DataTableWrapper
+          key={dataKey.join("-")}
+          fetchData={fetchData}
+          pageSize={PAGE_SIZE}
+          statusFilter={statusFilter}
+        />
       </div>
+    </BaseLayout>
+  )
+}
 
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>
-            加载失败:{(error as Error).message}
-          </AlertDescription>
-        </Alert>
-      )}
+/**
+ * DataTableWrapper — 单文件组件,把 useDataTable + DataTable 打包,
+ * 让 statusFilter 变化时通过 key 重 mount 重置所有状态。
+ */
+function DataTableWrapper({
+  fetchData,
+  pageSize,
+  statusFilter,
+}: {
+  fetchData: FetchData<Skill>
+  pageSize: number
+  statusFilter: string
+}) {
+  void statusFilter
+  // Skill 类型没有 index signature,这里 cast 成 Record<string, unknown> 满足 useDataTable 约束
+  const { data, total, isLoading, error, pagination, setPagination } =
+    useDataTable<Skill & Record<string, unknown>>({
+      fetchData: fetchData as FetchData<Skill & Record<string, unknown>>,
+      pageSize,
+    })
+  const typedData = data as Skill[]
 
-      {isLoading ? (
-        <Skeleton className="h-96 w-full" />
-      ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>name</TableHead>
-                <TableHead>code</TableHead>
-                <TableHead>category</TableHead>
-                <TableHead>status</TableHead>
-                <TableHead>tools</TableHead>
-                <TableHead>updated</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-12 text-center text-muted-foreground">
-                    {search ? "没有匹配" : "尚未上传 skill"}
-                  </TableCell>
-                </TableRow>
-              )}
-              {filtered.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell className="font-mono text-xs">{s.code}</TableCell>
-                  <TableCell>
-                    {s.category ? (
-                      <Badge variant="outline">{s.category}</Badge>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        s.status === "published"
-                          ? "default"
-                          : s.status === "draft"
-                          ? "secondary"
-                          : "outline"
-                      }
-                    >
-                      {s.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{s.tools.length}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {new Date(s.updatedAt).toLocaleString()}
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="ghost" size="sm" asChild>
-                      <a
-                        href={`/skills/${encodeURIComponent(s.id)}`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </a>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+  return (
+    <>
+      <DataTable
+        columns={columns}
+        data={typedData}
+        total={total}
+        loading={isLoading}
+        error={error ? (error as Error).message : null}
+        pagination={{
+          page: pagination.pageIndex + 1,
+          pageSize: pagination.pageSize,
+          total,
+          onPageChange: (p) => setPagination((prev) => ({ ...prev, pageIndex: p - 1 })),
+          onPageSizeChange: (s) => setPagination((prev) => ({ ...prev, pageSize: s })),
+        }}
+        showToolbar={false}
+        showSearch={false}
+      />
+      {!isLoading && typedData.length === 0 && (
+        <EmptyState
+          emptyHint={
+            statusFilter === "all" ? "尚未上传 skill" : "该状态下没有 skill"
+          }
+        />
       )}
-    </div>
+    </>
   )
 }
