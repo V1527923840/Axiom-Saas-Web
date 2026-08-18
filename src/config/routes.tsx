@@ -73,6 +73,10 @@ const Menus = lazy(() => import('@/features/menus/menus/page'))
 // Vibe Trading pages
 const VibeTrading = lazy(() => import('@/features/vibe-trading/page'))
 
+// Skill Plaza pages
+const SkillPlaza = lazy(() => import('@/features/skill-plaza/page'))
+const SkillAdmin = lazy(() => import('@/features/skill-plaza/admin/page'))
+
 // Settings pages
 const UserSettings = lazy(() => import('@/app/settings/user/page'))
 const AccountSettings = lazy(() => import('@/app/settings/account/page'))
@@ -232,6 +236,16 @@ export const routes: RouteConfig[] = [
   {
     path: "/vibe-trading",
     element: <ProtectedRoute menuPaths={['/vibe-trading']}><VibeTrading /></ProtectedRoute>
+  },
+
+  // Skill Plaza Routes - menu-based permission
+  {
+    path: "/skills",
+    element: <ProtectedRoute menuPaths={['/skills']}><SkillPlaza /></ProtectedRoute>
+  },
+  {
+    path: "/skills/admin",
+    element: <ProtectedRoute menuPaths={['/skills/admin']}><SkillAdmin /></ProtectedRoute>
   },
 
   // Public Pages

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react"
 import { useGoal } from "../hooks/use-goal"
 import { useSwarmStatus } from "../hooks/use-swarm-status"
 import { useChatStream } from "../hooks/use-chat-stream"
+import { useUserSkillBindings } from "@/features/skill-plaza/hooks/use-user-skill-bindings"
 import type { SwarmRunStatus } from "../lib/vibe-types"
 import { criterionCovered } from "../lib/goal-criteria"
 import { findOpenToolCalls, parseAttachmentPrefix } from "../lib/parse-message"
@@ -20,6 +21,8 @@ import { GoalChip } from "./goal-chip"
 import { GoalPanel } from "./goal-panel"
 import { MoreMenu } from "./more-menu"
 import { SwarmChip } from "./swarm-chip"
+import { SkillIndicator } from "./skill-indicator"
+import { SkillAttachMenu } from "./skill-attach-menu"
 import { SwarmStatusCard } from "./swarm-status-card"
 import { ToolCallIndicator } from "./tool-call-indicator"
 
@@ -60,6 +63,9 @@ export function ChatDialog({
 }) {
   const { messages, streaming, error, send, cancel } =
     useChatStream(sessionId, title)
+  // ★ Skill Plaza:ChatDialog 顶部展示当前 user 已启用 skills,
+  // 让用户清楚本次对话上下文带哪些 skill,避免 LLM 上下文爆炸(用户可见)。
+  const { enabledSkills } = useUserSkillBindings()
   const {
     snapshot: goalSnapshot,
     create: createGoalAction,
@@ -357,6 +363,7 @@ export function ChatDialog({
 
   return (
     <div className="flex h-full min-h-0 flex-1 min-w-0 flex-col">
+      <SkillIndicator enabledSkills={enabledSkills} />
       <div className="flex-1 min-h-0 overflow-hidden">
         {showWelcome ? (
           <WelcomeState />
@@ -452,6 +459,8 @@ export function ChatDialog({
             onChange={handleFileChange}
             className="hidden"
           />
+          {/* ★ Skill 广场:Sender 旁的 📌 按钮 — 弹出会话级挂载菜单 */}
+          {sessionId && <SkillAttachMenu sessionId={sessionId} />}
           <Sender
             ref={inputRef}
             value={input}
