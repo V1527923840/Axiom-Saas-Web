@@ -65,13 +65,13 @@ export default function SkillPlazaPage() {
           <div className="flex flex-wrap items-end justify-between gap-4">
             <TabsList>
               <TabsTrigger value="public" className="cursor-pointer">
-                公开 Skill
+                Skill 市场
                 <span className="ml-2 text-xs text-muted-foreground">
                   ({publicSkills.data?.total ?? publicItems.length})
                 </span>
               </TabsTrigger>
               <TabsTrigger value="personal" className="cursor-pointer">
-                个人用户
+                我的 Skill
                 <span className="ml-2 text-xs text-muted-foreground">
                   ({personalItems.length})
                 </span>
@@ -134,7 +134,7 @@ export default function SkillPlazaPage() {
             </div>
           )}
 
-          {/* 公开列表 */}
+          {/* Skill 市场 — 平台已发布的全部 */}
           <TabsContent value="public" className="space-y-3">
             {publicSkills.isLoading && publicItems.length === 0 ? (
               <EmptyState loading />
@@ -167,7 +167,7 @@ export default function SkillPlazaPage() {
             )}
           </TabsContent>
 
-          {/* 个人已启用 */}
+          {/* 我的 Skill — 已启用的 */}
           <TabsContent value="personal" className="space-y-3">
             {personalSkills.isLoading ? (
               <EmptyState loading />
@@ -178,7 +178,7 @@ export default function SkillPlazaPage() {
               />
             ) : personalItems.length === 0 ? (
               <EmptyState
-                emptyHint="你还没有启用任何 Skill — 切换到「公开 Skill」挑几个吧"
+                emptyHint="你还没有启用任何 Skill — 切换到「Skill 市场」挑几个吧"
               />
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
