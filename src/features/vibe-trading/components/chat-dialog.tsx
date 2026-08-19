@@ -7,7 +7,6 @@ import { useEffect, useRef, useState } from "react"
 import { useGoal } from "../hooks/use-goal"
 import { useSwarmStatus } from "../hooks/use-swarm-status"
 import { useChatStream } from "../hooks/use-chat-stream"
-import { useUserSkillBindings } from "@/features/skill-plaza/hooks/use-user-skill-bindings"
 import type { SwarmRunStatus } from "../lib/vibe-types"
 import { criterionCovered } from "../lib/goal-criteria"
 import { findOpenToolCalls, parseAttachmentPrefix } from "../lib/parse-message"
@@ -21,8 +20,6 @@ import { GoalChip } from "./goal-chip"
 import { GoalPanel } from "./goal-panel"
 import { MoreMenu } from "./more-menu"
 import { SwarmChip } from "./swarm-chip"
-import { SkillIndicator } from "./skill-indicator"
-import { SkillAttachMenu } from "./skill-attach-menu"
 import { SwarmStatusCard } from "./swarm-status-card"
 import { ToolCallIndicator } from "./tool-call-indicator"
 
@@ -63,9 +60,6 @@ export function ChatDialog({
 }) {
   const { messages, streaming, error, send, cancel } =
     useChatStream(sessionId, title)
-  // ★ Skill Plaza:ChatDialog 顶部展示当前 user 已启用 skills,
-  // 让用户清楚本次对话上下文带哪些 skill,避免 LLM 上下文爆炸(用户可见)。
-  const { enabledSkills } = useUserSkillBindings()
   const {
     snapshot: goalSnapshot,
     create: createGoalAction,
@@ -372,7 +366,8 @@ export function ChatDialog({
 
   return (
     <div className="flex h-full min-h-0 flex-1 min-w-0 flex-col">
-      <SkillIndicator enabledSkills={enabledSkills} />
+      {/* ★ 2026-08-19: 顶部"已启用 Skill"胶囊条隐藏 — 按需求只在"我的 Agent"页展示 Skill Plaza,
+          对话区不再重复展示已启用列表。SkillIndicator 组件保留以便后续复用。 */}
       <div className="flex-1 min-h-0 overflow-hidden">
         {showWelcome ? (
           <WelcomeState />
@@ -468,14 +463,9 @@ export function ChatDialog({
             onChange={handleFileChange}
             className="hidden"
           />
-          {/* ★ Skill 广场:Sender 旁的 📌 按钮 — 弹出会话级挂载菜单 */}
-          {sessionId && (
-            <SkillAttachMenu
-              sessionId={sessionId}
-              selectedIds={selectedSkillIds}
-              onChange={setSelectedSkillIds}
-            />
-          )}
+          {/* ★ 2026-08-19: 输入框旁的"会话 Skill 挂载"📌 按钮隐藏 — 按需求只展示"我的 Agent"页,
+              对话区不再暴露会话级挂载入口。SkillAttachMenu 组件保留以便后续复用。
+              selectedSkillIds 状态机仍保留,后端透传 `skills:[{id}]` 能力不变。 */}
           <Sender
             ref={inputRef}
             value={input}
