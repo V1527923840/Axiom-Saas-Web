@@ -12,21 +12,19 @@ import { useSessionStore } from "../stores/session-store"
 
 const submitMessageMock = vi.fn()
 
-vi.mock("@/services/vibe-trading", async () => {
-  const actual = await vi.importActual<Record<string, unknown>>("@/services/vibe-trading")
+vi.mock("../services/vibe-api", async () => {
+  const actual = await vi.importActual<Record<string, unknown>>("../services/vibe-api")
   return {
     ...actual,
+    vibeApi: {
+      ...(actual as { vibeApi: object }).vibeApi,
+      getGoal: vi.fn().mockResolvedValue(null),
+      listSwarmRuns: vi.fn().mockResolvedValue([]),
+      getSwarmRun: vi.fn(),
+    },
     submitMessage: submitMessageMock,
   }
 })
-
-vi.mock("../services/vibe-api", () => ({
-  vibeApi: {
-    getGoal: vi.fn().mockResolvedValue(null),
-    listSwarmRuns: vi.fn().mockResolvedValue([]),
-    getSwarmRun: vi.fn(),
-  },
-}))
 
 vi.mock("../hooks/use-chat-stream", () => ({
   useChatStream: () => ({

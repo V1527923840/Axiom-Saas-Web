@@ -4,7 +4,7 @@ import {
   getMessages,
   patchSession,
   submitMessage,
-} from "@/services/vibe-trading"
+} from "../services/vibe-api"
 import {
   type ChatMessage,
   type PerSession,

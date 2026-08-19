@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from "react"
 import {
-  type AiSession,
   createSession,
   deleteSession,
   listSessions,
   patchSession,
-} from "@/services/vibe-trading"
+} from "../services/vibe-api"
+import type { AiSession } from "../lib/vibe-types"
 
 export function useAiSessions(agentType: string) {
   const [sessions, setSessions] = useState<AiSession[]>([])

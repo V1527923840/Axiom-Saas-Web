@@ -19,22 +19,20 @@ const { submitMessageMock, createGoalMock, alertSpy } = vi.hoisted(() => ({
   alertSpy: vi.fn(),
 }))
 
-vi.mock("@/services/vibe-trading", async () => {
-  const actual = await vi.importActual<Record<string, unknown>>("@/services/vibe-trading")
+vi.mock("../services/vibe-api", async () => {
+  const actual = await vi.importActual<Record<string, unknown>>("../services/vibe-api")
   return {
     ...actual,
+    vibeApi: {
+      ...(actual as { vibeApi: object }).vibeApi,
+      createGoal: (...args: unknown[]) => createGoalMock(...args),
+      getGoal: vi.fn().mockResolvedValue(null),
+      listSwarmRuns: vi.fn().mockResolvedValue([]),
+      getSwarmRun: vi.fn(),
+    },
     submitMessage: (...args: unknown[]) => submitMessageMock(...args),
   }
 })
-
-vi.mock("../services/vibe-api", () => ({
-  vibeApi: {
-    createGoal: (...args: unknown[]) => createGoalMock(...args),
-    getGoal: vi.fn().mockResolvedValue(null),
-    listSwarmRuns: vi.fn().mockResolvedValue([]),
-    getSwarmRun: vi.fn(),
-  },
-}))
 
 vi.stubGlobal("alert", alertSpy)
 

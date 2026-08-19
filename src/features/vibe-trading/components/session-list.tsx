@@ -5,7 +5,7 @@ import { AlertCircle, Pencil, Plus, Trash2 } from "lucide-react"
 import { useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import type { AiSession } from "@/services/vibe-trading"
+import type { AiSession } from "../lib/vibe-types"
 
 export function SessionList({
   sessions,
