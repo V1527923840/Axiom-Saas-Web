@@ -21,8 +21,8 @@ import { Loader2, Sparkles, Plus, Minus } from "lucide-react"
 import {
   useSessionMounts,
   useSetSessionMount,
-} from "@/features/skill-plaza/hooks/use-session-skills"
-import { useUserSkillBindings } from "@/features/skill-plaza/hooks/use-user-skill-bindings"
+  useUserSkillBindings,
+} from "@/features/skill-plaza/public-api"
 
 interface SkillAttachMenuProps {
   sessionId: string
