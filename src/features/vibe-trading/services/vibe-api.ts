@@ -15,7 +15,13 @@
 //
 // 与 `events-stream.ts` 风格一致:同一份 `authHeaders` 工具函数模式。
 
-import type { GoalSnapshot, UploadResult } from "../lib/vibe-types"
+import type {
+  AiMessage,
+  AiSession,
+  GoalSnapshot,
+  SessionListResult,
+  UploadResult,
+} from "../lib/vibe-types"
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ?? "/api"
@@ -141,4 +147,141 @@ export const vibeApi = {
       { method: "GET" },
     )
   },
+}
+
+// ---- Standalone session/message verbs (ported from src/services/vibe-trading.ts) ----
+//
+// 命名上沿用旧 service 的原函数名 (`listAgents` / `listSessions` / ...) 与签名,
+// 这样 use-ai-sessions / use-chat-stream / session-list 等现有 caller 不需要改业务逻辑。
+// 内部统一走本文件的 `request<>` (raw fetch + authHeaders),与上面 `vibeApi` 对象共享
+// 同一套 token 注入 / 错误抛出 / 401 行为 (本文件不强制跳转)。
+
+const SESSION_BASE = "/v1/ai-agent"
+
+export async function listAgents(): Promise<string[]> {
+  const res = await request<{ data: string[] }>(`${SESSION_BASE}/agents`, {
+    method: "GET",
+  })
+  return Array.isArray(res.data) ? res.data : []
+}
+
+export async function listSessions(
+  agentType: string,
+  page = 1,
+  pageSize = 20,
+): Promise<SessionListResult> {
+  const params = new URLSearchParams({
+    agentType,
+    page: String(page),
+    pageSize: String(pageSize),
+  })
+  const res = await request<{
+    data: AiSession[]
+    meta?: { total?: number; page?: number; pageSize?: number }
+  }>(`${SESSION_BASE}/sessions?${params.toString()}`, { method: "GET" })
+  return {
+    data: Array.isArray(res.data) ? res.data : [],
+    total: res.meta?.total ?? 0,
+    page: res.meta?.page ?? page,
+    pageSize: res.meta?.pageSize ?? pageSize,
+  }
+}
+
+export async function createSession(
+  agentType: string,
+  title?: string,
+): Promise<AiSession> {
+  const res = await request<{ data: AiSession }>(`${SESSION_BASE}/sessions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ agentType, title }),
+  })
+  return res.data
+}
+
+export async function getSession(id: string): Promise<AiSession> {
+  const res = await request<{ data: AiSession }>(
+    `${SESSION_BASE}/sessions/${encodeURIComponent(id)}`,
+    { method: "GET" },
+  )
+  return res.data
+}
+
+export async function deleteSession(id: string): Promise<void> {
+  await request(
+    `${SESSION_BASE}/sessions/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  )
+}
+
+export async function getMessages(
+  id: string,
+  cursor?: string,
+): Promise<AiMessage[]> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""
+  const res = await request<{ data: AiMessage[] }>(
+    `${SESSION_BASE}/sessions/${encodeURIComponent(id)}/messages${query}`,
+    { method: "GET" },
+  )
+  return Array.isArray(res.data) ? res.data : []
+}
+
+export async function cancelSession(id: string): Promise<void> {
+  await request(
+    `${SESSION_BASE}/sessions/${encodeURIComponent(id)}/cancel`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    },
+  )
+}
+
+/**
+ * 同步提交一条消息。流式输出走独立的 GET /events SSE（见 events-stream.ts）。
+ *
+ * `skills` 是 Skill Plaza 的 per-message 附加项 —— 用户在 ChatDialog 里通过
+ * SkillAttachMenu 临时挑出本次想用的 skill 列表,随本条 message 一起下发;
+ * 走 SaaS 的 `GET /internal/users/{uid}/skills` 在 vibe 端按 user_id 注入系统
+ * prompt 的 `{skill_descriptions}`。空数组时省略 `skills` key,保持对 bundled-only
+ * session 的向后兼容(老调用方不需要改)。
+ */
+export async function submitMessage(
+  sessionId: string,
+  content: string,
+  skills?: { id: string }[],
+): Promise<{ messageId: string; attemptId: string }> {
+  const body: { content: string; skills?: { id: string }[] } = { content }
+  if (skills && skills.length > 0) {
+    body.skills = skills
+  }
+  const res = await request<{
+    data: { messageId: string; attemptId: string }
+  }>(
+    `${SESSION_BASE}/sessions/${encodeURIComponent(sessionId)}/messages`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+  )
+  return res.data
+}
+
+/**
+ * 更新会话元数据（当前仅 title）。
+ */
+export async function patchSession(
+  id: string,
+  patchBody: { title?: string },
+): Promise<AiSession> {
+  const res = await request<{ data: AiSession }>(
+    `${SESSION_BASE}/sessions/${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patchBody),
+    },
+  )
+  return res.data
 }

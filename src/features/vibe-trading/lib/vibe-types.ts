@@ -131,3 +131,33 @@ export interface UploadResult {
   file_path: string;
   filename: string;
 }
+
+// ---- Session / message types (ported from src/services/vibe-trading.ts) ----
+
+export type AiSessionStatus = "active" | "cancelled" | "error"
+
+export interface AiSession {
+  id: string;
+  agentType: string;
+  remoteSessionId: string | null;
+  title: string | null;
+  status: AiSessionStatus;
+  lastActiveAt: string;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface AiMessage {
+  id: string;
+  role: "user" | "assistant" | "system" | "tool";
+  content: string;
+  createdAt: string;
+  meta?: Record<string, unknown>;
+}
+
+export interface SessionListResult {
+  data: AiSession[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
