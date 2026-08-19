@@ -26,13 +26,26 @@ import { useUserSkillBindings } from "@/features/skill-plaza/hooks/use-user-skil
 
 interface SkillAttachMenuProps {
   sessionId: string
+  /**
+   * Skill Plaza per-message 选中集。受控模式 — 当父组件同时传 `onChange` 时,
+   * 复选框状态完全由 `selectedIds` 驱动,toggle 只调 `onChange`,不再走
+   * session-level mount 持久化。两参数都不传时维持旧行为(useSessionMounts +
+   * useSetSessionMount),保持向后兼容。
+   */
+  selectedIds?: string[]
+  onChange?: (next: string[]) => void
 }
 
-export function SkillAttachMenu({ sessionId }: SkillAttachMenuProps) {
+export function SkillAttachMenu({
+  sessionId,
+  selectedIds,
+  onChange,
+}: SkillAttachMenuProps) {
   const [open, setOpen] = useState(false)
   const { enabledSkills } = useUserSkillBindings()
   const mounts = useSessionMounts(sessionId)
   const setMount = useSetSessionMount(sessionId)
+  const isControlled = Array.isArray(selectedIds) && typeof onChange === "function"
 
   // 当前 session 实际生效的 skill 集合 = user baseline ∪ mounts(add) - mounts(remove)
   // UI 仅展示 user baseline + 当前 mounts 的状态;
@@ -43,11 +56,23 @@ export function SkillAttachMenu({ sessionId }: SkillAttachMenuProps) {
   )
 
   function isEffectivelyMounted(skillId: string): boolean {
+    // 受控模式:状态由父组件 selectedIds 决定
+    if (isControlled) return (selectedIds as string[]).includes(skillId)
     if (mountMap.get(skillId) === "remove") return false
     return true // baseline enabled
   }
 
   async function onToggle(skillId: string, baselineEnabled: boolean) {
+    // 受控模式:只通知父组件,不触发 session-level mount 持久化,
+    // 父组件可以选择 reset 或把当前选中追加到下次 send。
+    if (isControlled) {
+      const cur = selectedIds as string[]
+      const next = cur.includes(skillId)
+        ? cur.filter((id) => id !== skillId)
+        : [...cur, skillId]
+      onChange?.(next)
+      return
+    }
     const effective = isEffectivelyMounted(skillId)
 
     if (baselineEnabled) {

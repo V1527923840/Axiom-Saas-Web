@@ -96,6 +96,11 @@ export function ChatDialog({
   const [uploading, setUploading] = useState(false)
   const [goalDetailsOpen, setGoalDetailsOpen] = useState(false)
   const [goalComposerActive, setGoalComposerActive] = useState(false)
+  // Skill Plaza:本次发送临时挂载的 skill id 列表 — 用户在 SkillAttachMenu
+  // 勾选 / 取消后 lift 到 ChatDialog 状态,send 时透传到 submitMessage 的
+  // `skills:[{id}]` body。发送成功后 reset,避免下次不带任何 skill 的消息
+  // 误带旧选择。
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([])
   // 无会话路径下,用户已输入目标文本但还没创建会话 —— 等 sessionId 出现后由
   // 下方 useEffect 触发 createGoalAction + kickoff,避免老逻辑里"必须先发消息"
   // 的限制。
@@ -183,7 +188,9 @@ export function ChatDialog({
     if (sessionId) {
       // 有会话:正常提交。streaming 由 store 内部拒绝(per-session 串行保护)。
       if (streaming) return
-      void send(trimmed, attachment, swarmPreset)
+      // Skill Plaza:把本次勾选的 skill id 透传给 send → submitMessage。
+      // 发送后立即清空 selectedSkillIds,避免下次不带 skill 的消息误带旧选择。
+      void send(trimmed, attachment, swarmPreset, selectedSkillIds)
     } else if (onCreateAndSend) {
       // 无会话:让上层建一个新会话并把内容作为 pendingMessage 自动发出。
       // 新会话创建时 attachment 状态会被丢弃(因为 pendingMessage 触发新会话后
@@ -195,6 +202,8 @@ export function ChatDialog({
     }
     setInput("")
     setAttachment(null)
+    // Skill Plaza:清空 per-message 临时挂载选择,下次消息默认无附加 skill。
+    setSelectedSkillIds([])
     // 不重置 swarmPreset:placeholder 卡片要一直可见,直到 SSE swarm.started
     // 事件把它替换成真实 run。如果用户想退出 swarm 模式,点 SwarmChip 上的
     // × 或者 MoreMenu 切到目标模式即可(mutex 会清 swarmPreset)。
@@ -460,7 +469,13 @@ export function ChatDialog({
             className="hidden"
           />
           {/* ★ Skill 广场:Sender 旁的 📌 按钮 — 弹出会话级挂载菜单 */}
-          {sessionId && <SkillAttachMenu sessionId={sessionId} />}
+          {sessionId && (
+            <SkillAttachMenu
+              sessionId={sessionId}
+              selectedIds={selectedSkillIds}
+              onChange={setSelectedSkillIds}
+            />
+          )}
           <Sender
             ref={inputRef}
             value={input}

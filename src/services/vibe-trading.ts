@@ -83,14 +83,25 @@ export async function cancelSession(id: string): Promise<void> {
 
 /**
  * 同步提交一条消息。流式输出走独立的 GET /events SSE（见 events-stream.ts）。
+ *
+ * `skills` 是 Skill Plaza 的 per-message 附加项 —— 用户在 ChatDialog 里通过
+ * SkillAttachMenu 临时挑出本次想用的 skill 列表,随本条 message 一起下发;
+ * 走 SaaS 的 `GET /internal/users/{uid}/skills` 在 vibe 端按 user_id 注入系统
+ * prompt 的 `{skill_descriptions}`。空数组时省略 `skills` key,保持对 bundled-only
+ * session 的向后兼容(老调用方不需要改)。
  */
 export async function submitMessage(
   sessionId: string,
   content: string,
+  skills?: { id: string }[],
 ): Promise<{ messageId: string; attemptId: string }> {
+  const body: { content: string; skills?: { id: string }[] } = { content }
+  if (skills && skills.length > 0) {
+    body.skills = skills
+  }
   const response = await post<{ messageId: string; attemptId: string }>(
     `${BASE}/sessions/${encodeURIComponent(sessionId)}/messages`,
-    { content },
+    body,
   )
   return response.data
 }

@@ -75,6 +75,7 @@ export function useChatStream(
       content: string,
       attachment?: { filename: string; file_path: string } | null,
       swarmPreset?: { name: string; title: string } | null,
+      attachedSkillIds: string[] = [],
     ) => {
       if (!sessionId) return
       const cur = useSessionStore.getState().byId[sessionId]
@@ -131,7 +132,14 @@ export function useChatStream(
       const currentSessionTitle = typeof title === "string" ? title : null
 
       try {
-        const { attemptId } = await submitMessage(sessionId, finalContent)
+        // Skill Plaza:仅当用户本次确实选了 skill 才把 skills 字段带过去。
+        // 空数组 / undefined 走 submitMessage 的 default 省略路径,保持
+        // bundled-only session 的向后兼容(老调用方签名兼容)。
+        const skillsPayload =
+          attachedSkillIds.length > 0
+            ? attachedSkillIds.map((id) => ({ id }))
+            : undefined
+        const { attemptId } = await submitMessage(sessionId, finalContent, skillsPayload)
 
         // 把 attemptId 写回占位;同时回放 POST 期间积压在 pendingDeltas 里的早批 delta。
         // 同时清掉上一次 attempt 残留的 error 状态,防止 cancel 旧 attempt 的滞后 attempt.error 事件污染当前会话。
