@@ -53,8 +53,3 @@ export function useReportDetail(reportId: string | null) {
 
   return { report, loading, error }
 }
-
-// useReportSources was removed when SourcesTab took ownership of the
-// per-tab pagination state and the underlying fetch itself. The hook
-// was only called by SourcesTab, so the consumers (ReportDrawer and
-// SourcesDrawer) now hand `reportId` straight down.

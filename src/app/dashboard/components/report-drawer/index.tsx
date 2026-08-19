@@ -7,7 +7,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useReportDetail } from "@/hooks/use-daily-summary"
+import { useReportDetail } from "./hooks/use-daily-summary"
 import { ReportTab } from "./report-tab"
 import { SourcesTab } from "./sources-tab"
 export { SourcesDrawer } from "./sources-drawer"

@@ -1,13 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { LatestWeeklyCard } from './latest-weekly-card'
-import * as hooks from '@/hooks/use-daily-summary'
+import * as hooks from '@/app/dashboard/components/report-drawer/hooks/use-daily-summary'
 import type { DailySummary } from '@/services/daily-summary'
 
 // SourcesDrawer (mounted alongside the card) does its own fetch via the
 // service module — no hook stub needed here. The card itself never opens
 // the drawer in these tests, so SourcesDrawer's child effects don't fire.
-vi.mock('@/hooks/use-daily-summary', () => ({
+vi.mock('@/app/dashboard/components/report-drawer/hooks/use-daily-summary', () => ({
   useLatestReports: vi.fn(),
 }))
 

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { ReportDrawer } from "./index"
-import * as hooks from "@/hooks/use-daily-summary"
+import * as hooks from "./hooks/use-daily-summary"
 import * as svc from "@/services/daily-summary"
 import type { DailySummary } from "@/services/daily-summary"
 
-vi.mock("@/hooks/use-daily-summary", () => ({
+vi.mock("./hooks/use-daily-summary", () => ({
   useReportDetail: vi.fn(),
 }))
 vi.mock("@/services/daily-summary", () => ({
