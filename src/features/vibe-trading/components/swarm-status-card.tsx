@@ -9,6 +9,7 @@ import {
   Users,
   XCircle,
 } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
 import type {
   SwarmAgentDisplayStatus,
   SwarmRunStatus,
@@ -117,22 +118,15 @@ export const SwarmStatusCard = memo(function SwarmStatusCard({ status }: Props) 
         </div>
 
         <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
-          {/* 内联 ProgressBar:简单 <progress> + 视觉填充 div,不依赖 AxiomVibeTrading 的 chat/ProgressBar 组件。
+          {/* 进度条: shadcn Progress 组件。
               clamp done 到 [0, total] 防止 SSE 顺序错乱时渲染 "6/2" 这种非法计数。 */}
           {total > 0 && (
             <div className="flex items-center gap-2 min-w-0" aria-label="Swarm agent progress">
-              <progress
-                value={Math.min(done, total)}
-                max={total}
-                className="sr-only"
+              <Progress
+                value={Math.min(100, Math.max(0, (done / total) * 100))}
+                className="flex-1"
                 aria-label="Swarm agent progress"
               />
-              <div className="bg-muted rounded-full overflow-hidden flex-1 h-1">
-                <div
-                  className="h-full bg-primary transition-all duration-300"
-                  style={{ width: `${Math.min(100, Math.max(0, (done / total) * 100))}%` }}
-                />
-              </div>
               <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
                 {Math.min(done, total)}/{total}
               </span>

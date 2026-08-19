@@ -15,6 +15,27 @@ import type { ImportedTheme } from '@/types/theme-customizer'
 import React from 'react'
 import "./circular-transition.css"
 
+/** 四色色板:在 SelectItem 里渲染一个主题的 4 个色点(light 模式下的 primary/secondary/accent/muted)。 */
+function ThemeSwatchGrid({ preset }: { preset: { styles: { light: { primary: string; secondary: string; accent: string; muted: string } } } }) {
+  const swatches: Array<{ key: keyof typeof preset.styles.light; color: string }> = [
+    { key: "primary", color: preset.styles.light.primary },
+    { key: "secondary", color: preset.styles.light.secondary },
+    { key: "accent", color: preset.styles.light.accent },
+    { key: "muted", color: preset.styles.light.muted },
+  ]
+  return (
+    <div className="flex gap-1">
+      {swatches.map(({ key, color }) => (
+        <div
+          key={key}
+          className="w-3 h-3 rounded-full border border-border/20"
+          style={{ backgroundColor: color }}
+        />
+      ))}
+    </div>
+  )
+}
+
 interface ThemeTabProps {
   selectedTheme: string
   setSelectedTheme: (theme: string) => void
@@ -112,24 +133,7 @@ export function ThemeTab({
               {colorThemes.map((theme) => (
                 <SelectItem key={theme.value} value={theme.value} className="cursor-pointer">
                   <div className="flex items-center gap-2">
-                    <div className="flex gap-1">
-                      <div
-                        className="w-3 h-3 rounded-full border border-border/20"
-                        style={{ backgroundColor: theme.preset.styles.light.primary }}
-                      />
-                      <div
-                        className="w-3 h-3 rounded-full border border-border/20"
-                        style={{ backgroundColor: theme.preset.styles.light.secondary }}
-                      />
-                      <div
-                        className="w-3 h-3 rounded-full border border-border/20"
-                        style={{ backgroundColor: theme.preset.styles.light.accent }}
-                      />
-                      <div
-                        className="w-3 h-3 rounded-full border border-border/20"
-                        style={{ backgroundColor: theme.preset.styles.light.muted }}
-                      />
-                    </div>
+                    <ThemeSwatchGrid preset={theme.preset} />
                     <span>{theme.name}</span>
                   </div>
                 </SelectItem>
@@ -169,24 +173,7 @@ export function ThemeTab({
               {tweakcnThemes.map((theme) => (
                 <SelectItem key={theme.value} value={theme.value} className="cursor-pointer">
                   <div className="flex items-center gap-2">
-                    <div className="flex gap-1">
-                      <div
-                        className="w-3 h-3 rounded-full border border-border/20"
-                        style={{ backgroundColor: theme.preset.styles.light.primary }}
-                      />
-                      <div
-                        className="w-3 h-3 rounded-full border border-border/20"
-                        style={{ backgroundColor: theme.preset.styles.light.secondary }}
-                      />
-                      <div
-                        className="w-3 h-3 rounded-full border border-border/20"
-                        style={{ backgroundColor: theme.preset.styles.light.accent }}
-                      />
-                      <div
-                        className="w-3 h-3 rounded-full border border-border/20"
-                        style={{ backgroundColor: theme.preset.styles.light.muted }}
-                      />
-                    </div>
+                    <ThemeSwatchGrid preset={theme.preset} />
                     <span>{theme.name}</span>
                   </div>
                 </SelectItem>
