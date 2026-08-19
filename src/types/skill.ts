@@ -37,8 +37,6 @@ export interface SkillToolSchema {
   description?: string | null
   parameters?: Record<string, unknown> | null
   tokenEstimate?: number | null
-  // 后端 jsonb 字段可能含任意键,允许 string | number
-  [key: string]: unknown
 }
 
 // -------- 文件清单 --------
@@ -94,7 +92,9 @@ export interface ConfirmSkillContentInput {
   ossKey: string
   hash: string
   sourceFormat: UploadSourceFormat
-  code: string
+  // ★ code 现在由后端从 name 自动生成(slug + hash fallback),客户端不传即可。
+  // 仍允许显式 override(向后兼容 / 高级用户场景)。
+  code?: string
   name: string
   description: string
   changelog?: string
@@ -106,4 +106,10 @@ export interface ConfirmSkillContentOutput {
   skillId: string
   filesCount: number
   toolsCount: number
+}
+
+// -------- 个人 Skill 列表 (GET /users/me/skills) --------
+// 后端返回 MySkillDto[] — Skill + enabled 字段
+export interface MySkill extends Skill {
+  enabled: boolean
 }

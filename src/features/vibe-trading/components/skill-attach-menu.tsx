@@ -23,6 +23,7 @@ import {
   useSetSessionMount,
   useUserSkillBindings,
 } from "@/features/skill-plaza/public-api"
+import type { MountOp } from "@/types/skill"
 
 interface SkillAttachMenuProps {
   sessionId: string
@@ -50,7 +51,6 @@ export function SkillAttachMenu({
   // 当前 session 实际生效的 skill 集合 = user baseline ∪ mounts(add) - mounts(remove)
   // UI 仅展示 user baseline + 当前 mounts 的状态;
   // 用户 toggle 把对应 mount 行 upsert 成 add/remove
-  type MountOp = "add" | "remove"
   const mountMap = new Map<string, MountOp>(
     (mounts.data ?? []).map((m) => [m.skillId, m.op as MountOp]),
   )

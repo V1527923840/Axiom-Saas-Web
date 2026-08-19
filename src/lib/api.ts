@@ -166,21 +166,4 @@ export async function del<T>(
   return request<T>(endpoint, { method: "DELETE", ...(options as RequestInit & RequestOptions | undefined) })
 }
 
-export function createCrudApi<T>(
-  endpoint: string,
-  options: RequestOptions = {},
-) {
-  return {
-    getAll: (params?: Record<string, string | number | boolean | undefined>) =>
-      get<T[]>(endpoint, { ...options, params }),
-    getOne: (id: string) => get<T>(`${endpoint}/${id}`, options),
-    create: (data: unknown) => post<T>(endpoint, data, options),
-    update: (id: string, data: unknown) =>
-      put<T>(`${endpoint}/${id}`, data, options),
-    patch: (id: string, data: unknown) =>
-      patch<T>(`${endpoint}/${id}`, data, options),
-    delete: (id: string) => del<T>(`${endpoint}/${id}`, options),
-  }
-}
-
 export { API_BASE_URL }

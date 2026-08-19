@@ -43,8 +43,7 @@ const menuSchema = z.object({
 
 export function MenuForm({ initialData, parentMenus, onSubmit, onCancel, loading }: MenuFormProps) {
   const form = useForm<MenuFormValues>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(menuSchema) as any,
+    resolver: zodResolver(menuSchema),
     defaultValues: {
       name: initialData?.name || "",
       code: initialData?.code || "",
