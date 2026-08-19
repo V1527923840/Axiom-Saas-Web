@@ -1,10 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { inferSseEvent, routeEvent } from "./events-stream"
+import { parseSseEvent, routeEvent } from "./events-stream"
 import { useSessionStore } from "../stores/session-store"
 import { vibeApi } from "./vibe-api"
 
 function frame(data: Record<string, unknown>): string {
   return `data: ${JSON.stringify(data)}\n\n`
+}
+
+// 仅供单测使用:从原始 SSE 帧推断事件类型,不分发副作用。
+// 真实流式消费请走 subscribeSession()。原来的 export 助手 inferSseEvent
+// 仅被这个测试文件使用,所以把映射逻辑放在这里,避免把内部 parser 推到 public api。
+function inferSseEvent(raw: string): string | null {
+  const ev = parseSseEvent(raw)
+  return ev ? ev.event : null
 }
 
 const sid = "session-1"

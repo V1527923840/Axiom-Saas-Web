@@ -211,7 +211,7 @@ export function routeEvent(
   }
 }
 
-function parseSseEvent(raw: string): { event: string; data: Record<string, unknown> } | null {
+export function parseSseEvent(raw: string): { event: string; data: Record<string, unknown> } | null {
   let event = "message"
   const dataLines: string[] = []
   // 与后端 vibe-client.service.ts 的 parseSseFrame 保持一致:
@@ -252,15 +252,6 @@ function parseSseEvent(raw: string): { event: string; data: Record<string, unkno
     else if (obj.status === "error" && obj.attempt_id) event = "attempt.error"
   }
   return { event, data: obj }
-}
-
-/**
- * 仅供单测使用:从原始 SSE 帧推断事件类型,不分发副作用。
- * 真实流式消费请走 subscribeSession()。
- */
-export function inferSseEvent(raw: string): string | null {
-  const ev = parseSseEvent(raw)
-  return ev ? ev.event : null
 }
 
 function sleep(ms: number): Promise<void> {
