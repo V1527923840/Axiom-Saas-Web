@@ -95,15 +95,18 @@ afterEach(() => {
   container.remove()
 })
 
+// MoreMenu is built on the Radix-based shadcn <DropdownMenu>: it opens on
+// `pointerdown` (a plain `.click()` is ignored) and portals its items to
+// `document.body`, so they are queried off `document` rather than `container`.
 function clickNewGoal(): void {
   const trigger = container.querySelector('button[aria-label="更多选项"]') as HTMLButtonElement | null
   expect(trigger).not.toBeNull()
   act(() => {
-    trigger!.click()
+    trigger!.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0 }))
   })
-  const items = Array.from(container.querySelectorAll("button"))
+  const items = Array.from(document.querySelectorAll('[role="menuitem"]'))
   const goalBtn = items.find((b) => b.textContent?.includes("新建研究目标")) as
-    | HTMLButtonElement
+    | HTMLElement
     | undefined
   expect(goalBtn).toBeDefined()
   act(() => {
