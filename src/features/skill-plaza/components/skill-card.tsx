@@ -5,7 +5,9 @@
  *   - 不要 thumbnail(用户要求)
  *   - 显示 name + category + description 摘要(>120 字截断)
  *   - 长描述点击卡片打开 SkillDetailDialog
- *   - 启用按钮始终可见
+ *   - mode="public" → 收藏按钮(新 UX)
+ *   - mode="personal" → 显示「已启用 / 未启用」状态 badge
+ *                     + 启用/停用切换按钮 + 右上 X 移除
  */
 "use client"
 
@@ -14,39 +16,81 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ChevronRight, Wrench } from "lucide-react"
-import type { Skill } from "@/types/skill"
+import type { MySkill, Skill } from "@/types/skill"
 import { EnableSkillButton } from "./enable-skill-button"
+import { FavoriteSkillButton } from "./favorite-skill-button"
+import { RemoveSkillButton } from "./remove-skill-button"
 import { SkillDetailDialog } from "./skill-detail-dialog"
 
+export type SkillCardMode = "public" | "personal"
+
 interface SkillCardProps {
-  skill: Skill
+  skill: Skill | MySkill
+  mode?: SkillCardMode
 }
 
 const DESCRIPTION_PREVIEW = 120
 
-export function SkillCard({ skill }: SkillCardProps) {
+export function SkillCard({ skill, mode = "public" }: SkillCardProps) {
   const [open, setOpen] = useState(false)
   const isLong = skill.description.length > DESCRIPTION_PREVIEW
   const preview = isLong
     ? skill.description.slice(0, DESCRIPTION_PREVIEW).trimEnd() + "…"
     : skill.description
 
+  // 个人 Tab 才显示启用状态 badge;公开 Tab 不显示(还未收藏)
+  const showStatusBadge = mode === "personal" && "enabled" in skill
+  const isEnabled = showStatusBadge && (skill as MySkill).enabled
+
   return (
     <>
+      {/*
+        ★ 卡片高度统一 — 模板是「公司财报分析的框架」,同一行里的所有卡片
+        必须等高,footer 始终在卡片底部对齐。两个关键 class:
+          1. h-full — 让 Card 填满 grid cell(grid 默认 items-stretch,
+             但 Card 自己不显式 h-full 的话,高度还是内容自适应)
+          2. flex-1 (CardContent) — Card 已经是 flex flex-col,content
+             flex-1 会吃掉 footer 下方剩余空间,把 footer 推到卡片底部
+        没有 h-full,卡片还是按内容撑开;没有 flex-1,footer 会紧贴内容
+        而不是贴底。
+      */}
       <Card
-        className="cursor-pointer transition-colors hover:bg-muted/30"
+        className="relative h-full cursor-pointer transition-colors hover:bg-muted/30"
         onClick={() => setOpen(true)}
       >
-        <CardContent className="space-y-2 pt-4">
+        {/* ★ 个人 Tab 右上角 X 按钮 — 移除收藏 */}
+        {mode === "personal" && (
+          <div
+            className="absolute right-2 top-2 z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <RemoveSkillButton
+              skillId={skill.id}
+              skillName={skill.name}
+              variant="card"
+            />
+          </div>
+        )}
+        <CardContent className="flex-1 space-y-2 pt-4">
           <div className="flex items-start justify-between gap-2">
             <h3 className="line-clamp-1 text-base font-semibold">
               {skill.name}
             </h3>
-            {skill.category && (
-              <Badge variant="outline" className="shrink-0">
-                {skill.category}
-              </Badge>
-            )}
+            <div className="flex shrink-0 items-center gap-1">
+              {showStatusBadge && (
+                <Badge
+                  variant={isEnabled ? "default" : "secondary"}
+                  className="text-xs"
+                >
+                  {isEnabled ? "已启用" : "未启用"}
+                </Badge>
+              )}
+              {skill.category && (
+                <Badge variant="outline" className="text-xs">
+                  {skill.category}
+                </Badge>
+              )}
+            </div>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
             {preview}
@@ -64,14 +108,21 @@ export function SkillCard({ skill }: SkillCardProps) {
                 variant="link"
                 size="sm"
                 onClick={() => setOpen(true)}
-                className="ml-2 h-auto p-0 text-xs"
+                className="ml-2 h-auto p-0 text-xs cursor-pointer"
               >
                 查看详情
                 <ChevronRight className="size-3" />
               </Button>
             )}
           </span>
-          <EnableSkillButton skillId={skill.id} />
+          {mode === "public" ? (
+            <FavoriteSkillButton
+              skillId={skill.id}
+              skillName={skill.name}
+            />
+          ) : (
+            <EnableSkillButton skillId={skill.id} />
+          )}
         </CardFooter>
       </Card>
 
@@ -79,6 +130,7 @@ export function SkillCard({ skill }: SkillCardProps) {
         skill={skill}
         open={open}
         onOpenChange={setOpen}
+        mode={mode}
       />
     </>
   )

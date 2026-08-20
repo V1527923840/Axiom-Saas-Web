@@ -89,14 +89,11 @@ export default function SkillPlazaPage() {
     () => clientFilter(allItems, appliedSearch, category),
     [allItems, appliedSearch, category],
   )
-  const personalItems = personalSkills.enabledSkills
-  const personalFiltered = useMemo(() => {
-    if (!appliedSearch.trim()) return personalItems
-    const q = appliedSearch.toLowerCase()
-    return personalItems.filter(
-      (s) => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q),
-    )
-  }, [personalItems, appliedSearch])
+  // ★ 个人 Tab 完全独立 — 不复用公开 Tab 的 appliedSearch / category。
+  // /users/me/skills 接口本来就不接受任何 query 参数,
+  // 之前 personalFiltered 用 appliedSearch 做客户端模糊匹配,会让用户在
+  // 公开 Tab 搜索后切到「我的 Skill」时,自己的收藏被同一关键字过滤。
+  const personalItems = personalSkills.favorites
 
   function handleSearch() {
     setAppliedSearch(search)
@@ -167,27 +164,33 @@ export default function SkillPlazaPage() {
                     placeholder="按技能名称 / 描述搜索"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="pl-8"
+                    // ★ 三件套对齐:
+                    //   1. h-10 — 显式设 40px(默认 h-9=36px 偏矮)
+                    //   2. py-2 — shadcn Input 默认 py-1(4px),Button / SelectTrigger
+                    //      默认 py-2(8px),即使 box 同高,文字垂直位置也会差 4px
+                    //   3. pl-8 — 给左侧 Search icon 留位置
+                    className="pl-8 h-10 py-2"
                   />
                 </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">分类</Label>
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger className="w-[160px] cursor-pointer">
-                    <SelectValue placeholder="全部分类" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">全部分类</SelectItem>
-                    {categoryOptions.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button type="submit" className="cursor-pointer">
+              {/* ★ 分类不要 Label:items-end 排布下,Label 在 wrapper 顶部会让 wrapper
+                  高度多出 label + space-y-1,SelectTrigger 被推到 wrapper 底部,
+                  跟紧邻的按钮产生明显视觉错位。placeholder "全部分类" 已经
+                  表达了用途,Label 是冗余的。 */}
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger className="w-[160px] cursor-pointer !h-10">
+                  <SelectValue placeholder="全部分类" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">全部分类</SelectItem>
+                  {categoryOptions.map((c) => (
+                    <SelectItem key={c} value={c}>
+                      {c}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button type="submit" className="cursor-pointer h-10">
                 <Search className="size-4 mr-2" />
                 搜索
               </Button>
@@ -195,7 +198,7 @@ export default function SkillPlazaPage() {
                 type="button"
                 variant="outline"
                 onClick={handleReset}
-                className="cursor-pointer"
+                className="cursor-pointer h-10"
               >
                 <X className="size-4 mr-2" />
                 重置
@@ -224,7 +227,7 @@ export default function SkillPlazaPage() {
               <>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {visibleItems.map((s) => (
-                    <SkillCard key={s.id} skill={s} />
+                    <SkillCard key={s.id} skill={s} mode="public" />
                   ))}
                 </div>
                 <Pagination
@@ -236,7 +239,8 @@ export default function SkillPlazaPage() {
             )}
           </TabsContent>
 
-          {/* 我的 Skill — 已启用的 */}
+          {/* 我的 Skill — 所有收藏(已启用 + 仅收藏)。
+              独立于公开 Tab 的过滤条件,展示用户实际绑定的全部 skill。 */}
           <TabsContent value="personal" className="space-y-3">
             {personalSkills.isLoading ? (
               <EmptyState loading />
@@ -245,28 +249,16 @@ export default function SkillPlazaPage() {
                 error={(personalSkills.error as Error).message}
                 onRetry={() => publicSkills.refetch()}
               />
-            ) : personalFiltered.length === 0 ? (
+            ) : personalItems.length === 0 ? (
               <EmptyState
-                emptyHint={
-                  appliedSearch
-                    ? "没有匹配的 Skill"
-                    : "你还没有启用任何 Skill — 切换到「Skill 市场」挑几个吧"
-                }
+                emptyHint="你还没有收藏任何 Skill — 切换到「Skill 市场」挑几个吧"
               />
             ) : (
-              <>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {personalFiltered.map((s) => (
-                    <SkillCard key={s.id} skill={s} />
-                  ))}
-                </div>
-                {appliedSearch && (
-                  <p className="text-xs text-muted-foreground">
-                    在 {personalItems.length} 个已启用 Skill 中匹配到{" "}
-                    {personalFiltered.length} 个
-                  </p>
-                )}
-              </>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {personalItems.map((s) => (
+                  <SkillCard key={s.id} skill={s} mode="personal" />
+                ))}
+              </div>
             )}
           </TabsContent>
         </Tabs>

@@ -30,6 +30,9 @@ export function EnableSkillButton({
   }
 
   if (enabled) {
+    // ★ 不显示「已启用」前缀 — 状态已经由 outline(空心)实心变体传达,
+    // 文字只需传达下一步动作。卡片右上角已有「已启用/未启用」badge,
+    // 这里再写一遍是冗余。
     return (
       <Button
         variant="outline"
@@ -38,7 +41,7 @@ export function EnableSkillButton({
         disabled={isToggling}
       >
         {isToggling && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-        已启用 · 停用
+        停用
       </Button>
     )
   }

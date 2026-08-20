@@ -18,11 +18,14 @@ import { Wrench, Calendar, Hash } from "lucide-react"
 import type { Skill } from "@/types/skill"
 import { SkillTag } from "./skill-tag"
 import { EnableSkillButton } from "./enable-skill-button"
+import { FavoriteSkillButton } from "./favorite-skill-button"
+import { RemoveSkillButton } from "./remove-skill-button"
 
 interface SkillDetailDialogProps {
   skill: Skill | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  mode?: "public" | "personal"
 }
 
 function formatDate(s: string | null): string {
@@ -38,6 +41,7 @@ export function SkillDetailDialog({
   skill,
   open,
   onOpenChange,
+  mode = "public",
 }: SkillDetailDialogProps) {
   if (!skill) return null
   return (
@@ -129,7 +133,23 @@ export function SkillDetailDialog({
                 更新于 {formatDate(skill.updatedAt)}
               </span>
             </div>
-            <EnableSkillButton skillId={skill.id} />
+            <div className="flex items-center gap-2">
+              {mode === "public" ? (
+                <FavoriteSkillButton
+                  skillId={skill.id}
+                  skillName={skill.name}
+                />
+              ) : (
+                <>
+                  <EnableSkillButton skillId={skill.id} />
+                  <RemoveSkillButton
+                    skillId={skill.id}
+                    skillName={skill.name}
+                    variant="inline"
+                  />
+                </>
+              )}
+            </div>
           </section>
         </div>
       </DialogContent>
