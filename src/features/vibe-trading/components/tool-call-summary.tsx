@@ -28,7 +28,7 @@ import { ToolCallBlock } from "./tool-call-block"
  * because the only "expanded" state is local UI).
  */
 
-export const MAX_INLINE_TOOL_ROWS = 3
+export const MAX_INLINE_TOOL_ROWS = 4
 
 export function ToolCallSummary({ segments }: { segments: Segment[] }) {
   const toolSegments = segments.filter(
