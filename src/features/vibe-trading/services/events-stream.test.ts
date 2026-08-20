@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { parseSseEvent, routeEvent } from "./events-stream"
+import {
+  parseSseEvent,
+  routeEvent,
+  shouldReconnectSession,
+  STREAMING_STALE_THRESHOLD_MS,
+} from "./events-stream"
 import { useSessionStore } from "../stores/session-store"
 import { vibeApi } from "./vibe-api"
 
@@ -107,5 +112,35 @@ describe("goal/swarm/mandate routing", () => {
     const getGoal = vi.spyOn(vibeApi, "getGoal").mockResolvedValue({ id: "g" } as never)
     routeEvent(sid, { event: "goal.created", data: { goal: { id: "g" } } })
     await vi.waitFor(() => expect(getGoal).toHaveBeenCalledWith(sid))
+  })
+})
+
+describe("shouldReconnectSession (2026-08-20 SSE STALE fix)", () => {
+  it("exports STREAMING_STALE_THRESHOLD_MS = 5000", () => {
+    expect(STREAMING_STALE_THRESHOLD_MS).toBe(5_000)
+  })
+
+  it("returns false when session is idle (not streaming)", () => {
+    // Idle sessions never reconnect — silence is normal when no attempt is in flight.
+    expect(shouldReconnectSession(false, 0, Date.now())).toBe(false)
+    expect(shouldReconnectSession(false, Date.now() - 60_000, Date.now())).toBe(false)
+  })
+
+  it("returns false for streaming session within threshold", () => {
+    const now = 1_000_000
+    expect(shouldReconnectSession(true, now - 1_000, now)).toBe(false)
+    expect(shouldReconnectSession(true, now - (5_000 - 1), now)).toBe(false)
+  })
+
+  it("returns true for streaming session beyond threshold", () => {
+    const now = 1_000_000
+    expect(shouldReconnectSession(true, now - 5_000, now)).toBe(true)
+    expect(shouldReconnectSession(true, now - 10_000, now)).toBe(true)
+    // The 10s "load_skill_file" frozen timer case from the bug report.
+    expect(shouldReconnectSession(true, now - 10_000, now)).toBe(true)
+  })
+
+  it("returns true for streaming session with no events at all (lastEventAt=0)", () => {
+    expect(shouldReconnectSession(true, 0, Date.now())).toBe(true)
   })
 })

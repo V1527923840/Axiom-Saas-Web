@@ -11,8 +11,29 @@ const TERMINAL_GOAL_STATUSES = new Set([
 
 const controllers = new Map<string, AbortController>()
 
-/** 超过这个时长没收到事件就认为控制器可能已死,触发强制重连。 */
+/** 超过这个时长(in-flight streaming)没收到事件就认为控制器可能已死,触发强制重连。 */
+export const STREAMING_STALE_THRESHOLD_MS = 5_000
+/**
+ * Legacy single-threshold. Kept for backward compatibility; idle sessions
+ * never reconnect (only streaming ones do), so the idle branch is a no-op
+ * and this constant is effectively unused outside tests. Prefer
+ * ``STREAMING_STALE_THRESHOLD_MS`` for new code.
+ */
 export const STALE_THRESHOLD_MS = 30_000
+
+/**
+ * Pure decision: should the SSE controller for `sessionId` be torn down
+ * and reconnected? Extracted so the policy is unit-testable without
+ * spinning up a real fetch loop.
+ */
+export function shouldReconnectSession(
+  isStreaming: boolean,
+  lastEventAt: number,
+  now: number = Date.now(),
+): boolean {
+  if (!isStreaming) return false
+  return now - lastEventAt >= STREAMING_STALE_THRESHOLD_MS
+}
 
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const token =
@@ -31,10 +52,14 @@ export function subscribeSession(sessionId: string): void {
     // 控制器存在但太久没收到事件 → 仅当"我们正期望收到事件" (streaming === true) 才视为死链。
     // lastEventAt 跟踪的是 AI 事件活跃度,空闲会话 (idle, 没有 in-flight attempt) 30s+ 没事件完全正常,
     // 不应主动 abort + 重建一个本来就健康的 SSE 连接 (I5 bug)。
+    // ★ 2026-08-20 fix: streaming sessions now reconnect after
+    // STREAMING_STALE_THRESHOLD_MS (5s) of silence instead of the legacy
+    // 30s — otherwise a broken SSE silently freezes the UI's tool-call
+    // timer at the last heartbeat value (the "load_skill_file 10s" hang).
     const slot = useSessionStore.getState().byId[sessionId]
+    const isStreaming = slot?.streaming ?? false
     const lastEvent = slot?.lastEventAt ?? 0
-    const isIdle = !(slot?.streaming ?? false)
-    if (isIdle || Date.now() - lastEvent < STALE_THRESHOLD_MS) return
+    if (!shouldReconnectSession(isStreaming, lastEvent)) return
     existing.abort()
     controllers.delete(sessionId)
     useSessionStore.getState().setEventsSubscribed(sessionId, false)
