@@ -15,23 +15,32 @@ import type { ImportedTheme } from '@/types/theme-customizer'
 import React from 'react'
 import "./circular-transition.css"
 
-/** 四色色板:在 SelectItem 里渲染一个主题的 4 个色点(light 模式下的 primary/secondary/accent/muted)。 */
-function ThemeSwatchGrid({ preset }: { preset: { styles: { light: { primary: string; secondary: string; accent: string; muted: string } } } }) {
-  const swatches: Array<{ key: keyof typeof preset.styles.light; color: string }> = [
-    { key: "primary", color: preset.styles.light.primary },
-    { key: "secondary", color: preset.styles.light.secondary },
-    { key: "accent", color: preset.styles.light.accent },
-    { key: "muted", color: preset.styles.light.muted },
-  ]
+/** 四色色板:在 SelectItem 里渲染一个主题的 4 个色点(light 模式下的 primary/secondary/accent/muted)。
+ *
+ * ★ 2026-08-20: shadcn 预设一定有这 4 个 key,tweakcn 预设可能是稀疏的
+ * Record<string, string>。统一按 Record 收口,然后跳过缺值的色点,
+ * 避免 `Type 'Record<string,string>' is not assignable to {primary,...}`
+ * 这种 strict-shape 报错。
+ */
+function ThemeSwatchGrid({
+  preset,
+}: {
+  preset: { styles: { light: Record<string, string> } }
+}) {
+  const swatchKeys = ["primary", "secondary", "accent", "muted"] as const
   return (
     <div className="flex gap-1">
-      {swatches.map(({ key, color }) => (
-        <div
-          key={key}
-          className="w-3 h-3 rounded-full border border-border/20"
-          style={{ backgroundColor: color }}
-        />
-      ))}
+      {swatchKeys.flatMap((key) => {
+        const color = preset.styles.light[key]
+        if (!color) return []
+        return [
+          <div
+            key={key}
+            className="w-3 h-3 rounded-full border border-border/20"
+            style={{ backgroundColor: color }}
+          />,
+        ]
+      })}
     </div>
   )
 }
