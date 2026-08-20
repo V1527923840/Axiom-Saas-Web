@@ -66,7 +66,9 @@ export function useSkillUpload(options: UseSkillUploadOptions = {}) {
         ossKey: phase1.key,
         hash: normalized.hash,
         sourceFormat: normalized.sourceFormat,
-        code: input.code,
+        // 空串被剥掉 — 后端 @IsOptional 不会把 "" 当作"可选",会触发
+        // @Length(1, 64) 校验失败。让 service 走 deriveCode fallback。
+        code: input.code?.trim() ? input.code : undefined,
         name: input.name,
         description: input.description,
         changelog: input.changelog,

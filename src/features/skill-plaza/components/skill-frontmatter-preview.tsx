@@ -42,7 +42,6 @@ export function FrontmatterPreview({ md }: FrontmatterPreviewProps) {
       <CardContent className="space-y-2 p-3 text-sm">
         <div className="flex items-center gap-2">
           <Badge>name: {fm.name}</Badge>
-          <Badge variant="outline">v{fm.version}</Badge>
           {fm.category && <Badge variant="secondary">{fm.category}</Badge>}
         </div>
         <p className="text-muted-foreground">{fm.description}</p>
