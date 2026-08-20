@@ -31,13 +31,19 @@ interface MenuFormProps {
   loading?: boolean
 }
 
+// ★ 2026-08-20: 原先 sortOrder 用 z.coerce.number(),这会让 Zod 把 input type
+// 推成 unknown,进而 zodResolver 推导的 Resolver<…,unknown,…> 无法赋给
+// useForm<MenuFormValues> 期望的 Resolver<MenuFormValues,…,MenuFormValues>
+// (Type 'unknown' is not assignable to type 'number')。
+// 改用纯 z.number() —— <FormField name="sortOrder"> 下面已经传了
+// valueAsNumber,会把表单提交的 string 自动转 number,Zod 这边不需要再 coerce。
 const menuSchema = z.object({
   name: z.string().min(2, "菜单名称至少2个字符").max(20, "菜单名称最多20个字符"),
   code: z.string().min(2, "菜单编码至少2个字符").max(50, "菜单编码最多50个字符").regex(/^[a-zA-Z0-9_]+$/, "只能包含字母、数字和下划线"),
   parentId: z.string().nullable(),
   path: z.string().min(1, "请输入菜单路径"),
   icon: z.string().min(1, "请输入图标名称"),
-  sortOrder: z.coerce.number().int().min(0, "排序号最小为0"),
+  sortOrder: z.number().int().min(0, "排序号最小为0"),
   status: z.enum(["active", "inactive"]),
 })
 
@@ -153,7 +159,18 @@ export function MenuForm({ initialData, parentMenus, onSubmit, onCancel, loading
             <FormItem>
               <FormLabel>排序号</FormLabel>
               <FormControl>
-                <Input type="number" min="0" {...field} />
+                <Input
+                  type="number"
+                  min="0"
+                  // ★ 配套 z.number() 改动:让 RHF 在 onChange 时把 string → number,
+                  // 否则 Zod 解析会拒掉 "0" / "1" 这种 raw string。
+                  {...field}
+                  value={field.value ?? 0}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    field.onChange(v === "" ? 0 : Number(v))
+                  }}
+                />
               </FormControl>
               <FormMessage />
             </FormItem>

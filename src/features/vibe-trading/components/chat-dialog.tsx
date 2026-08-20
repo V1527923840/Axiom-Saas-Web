@@ -1,6 +1,6 @@
 "use client";
 
-import { Bubble, Prompts, Sender, Welcome } from "@ant-design/x";
+import { Bubble, Prompts, Welcome } from "@ant-design/x";
 import { Bot, Lightbulb, Sparkles, TrendingUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useGoal } from "../hooks/use-goal";

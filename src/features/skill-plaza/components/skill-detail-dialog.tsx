@@ -108,11 +108,10 @@ export function SkillDetailDialog({
                           </span>
                         )}
                       </div>
-                      {Boolean(t.endpoint) && (
-                        <div className="mt-1 font-mono text-muted-foreground">
-                          {String(t.endpoint)}
-                        </div>
-                      )}
+                      {/* ★ 2026-08-20: SkillToolSchema 没有 endpoint 字段
+                          (见 src/types/skill.ts:35)。后端 jsonb tools 也不存这个 key,
+                          之前留下的 t.endpoint JSX 是 dead code,移除即可。
+                          如果以后需要展示 endpoint,先在 SkillToolSchema 加字段。 */}
                     </div>
                   ))}
                 </div>
