@@ -24,6 +24,21 @@ export default defineConfig({
         target: process.env.VITE_API_PROXY_TARGET ?? "http://localhost:3000",
         changeOrigin: true,
       },
+      // ★ Dev-only CORS workaround for Qiniu S3 direct upload.
+      // axiom 桶没配 CORS,浏览器 PUT 直传七牛云被预检 OPTIONS 拒绝
+      // (返回 403 "CORSResponse: CORS is not enabled for this bucket"),
+      // 浏览器报 "Failed to fetch"。
+      // 这里把同源请求 `/qiniu-upload/*` 代理到 Qiniu S3 端点,再用
+      // changeOrigin=true 把 Host header 改写为 axiom.s3-cn-south-1.qiniucs.com,
+      // 与 presigned URL 里 X-Amz-SignedHeaders=host 的签名匹配。
+      // 生产环境由运维在 Qiniu 控制台给 axiom 桶加 CORS 规则,这里不再需要。
+      "/qiniu-upload": {
+        target: "https://axiom.s3-cn-south-1.qiniucs.com",
+        changeOrigin: true,
+        // 剥掉 `/qiniu-upload` 前缀,让 /qiniu-upload/skills/.../x.zip 变成
+        // Qiniu 上的 /skills/.../x.zip
+        rewrite: (path) => path.replace(/^\/qiniu-upload/, ""),
+      },
     },
   },
   optimizeDeps: {
