@@ -17,6 +17,7 @@ import type {
   CreateUploadUrlOutput,
   MountOp,
   MountSource,
+  MySkill,
   SessionSkillMountItem,
   Skill,
   SkillFile,
@@ -38,9 +39,21 @@ async function request<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
+  // ★ 关键:如果有 body(非 GET/HEAD),自动加 Content-Type: application/json。
+  // 浏览器的 fetch 默认对字符串 body 设为 `text/plain;charset=UTF-8`,
+  // NestJS 的 body parser 只认 application/json,否则 body 会被跳过,
+  // DTO 收到空对象 → 422 "filename must be a string" 之类的错误。
+  const hasBody = init?.body != null && init.method !== "GET" && init.method !== "HEAD"
+  const autoContentType: Record<string, string> = hasBody
+    ? { "Content-Type": "application/json" }
+    : {}
   const res = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
-    headers: { ...authHeaders(), ...(init?.headers ?? {}) },
+    headers: {
+      ...authHeaders(),
+      ...autoContentType,
+      ...(init?.headers ?? {}),
+    },
   })
   if (!res.ok) {
     const body = await res.text().catch(() => "")
@@ -78,11 +91,22 @@ export function createUploadUrl(
 
 // 直接 PUT zip bytes 到 Qiniu(不经 saas-server)。
 // 后端给的 uploadUrl 是预签名 PUT URL,客户端用 fetch PUT 即可。
+//
+// ★ Dev-only CORS 兜底:Qiniu axiom 桶在本地开发时还没配 CORS,浏览器 PUT
+// 直连 s3-cn-south-1.qiniucs.com 会被预检 OPTIONS 拒绝("CORSResponse:
+// CORS is not enabled for this bucket")。本地 vite.config.ts 里把
+// `/qiniu-upload/*` 反代到 Qiniu 端点 + changeOrigin,同源转发规避 CORS。
+// 生产环境由运维在 Qiniu 控制台加 CORS 规则,届时这层兜底自动让位给直传。
 export async function putZipToQiniu(
   uploadUrl: string,
   file: Blob,
 ): Promise<void> {
-  const res = await fetch(uploadUrl, {
+  // 把 uploadUrl 的 host 部分(https://axiom.s3-cn-south-1.qiniucs.com)
+  // 替换成同源代理路径 /qiniu-upload。query string 与 path 保留。
+  const targetUrl = import.meta.env.DEV
+    ? uploadUrl.replace(/^https:\/\/[^/]+/, "/qiniu-upload")
+    : uploadUrl
+  const res = await fetch(targetUrl, {
     method: "PUT",
     body: file,
     headers: { "Content-Type": "application/zip" },
@@ -162,8 +186,13 @@ export function listSkillFiles(
 }
 
 // ===== 用户绑定 =====
-export function listMyEnabledSkills(): Promise<Skill[]> {
-  return request<{ data: Skill[] }>("/v1/users/me/skills").then((r) => r.data)
+/**
+ * GET /v1/users/me/skills — caller's personal skill collection
+ * (any binding, enabled or disabled). Each item carries `enabled`
+ * so the UI can render 已启用 / 已收藏 但未启用 differently.
+ */
+export function listMySkills(): Promise<MySkill[]> {
+  return request<{ data: MySkill[] }>("/v1/users/me/skills").then((r) => r.data)
 }
 
 export function enableSkillForUser(
@@ -182,6 +211,36 @@ export function disableSkillForUser(
     `/v1/skills/${encodeURIComponent(skillId)}/disable`,
     { method: "POST" },
   ).then((r) => r.data)
+}
+
+/**
+ * POST /v1/skills/{id}/favorite — bookmark without enabling.
+ * Idempotent; returns current enabled state after upsert.
+ */
+export function favoriteSkillForUser(
+  skillId: string,
+): Promise<{ skillId: string; favorited: true; enabled: boolean }> {
+  return request<{
+    data: { skillId: string; favorited: true; enabled: boolean }
+  }>(`/v1/skills/${encodeURIComponent(skillId)}/favorite`, {
+    method: "POST",
+  }).then((r) => r.data)
+}
+
+/**
+ * DELETE /v1/users/me/skills/{id} — drop the caller from the
+ * "我的 Skill" collection. Idempotent; returns whether the binding
+ * was enabled at the moment of removal so the UI can render the
+ * correct toast/dialog.
+ */
+export function removeSkillFromMySkills(
+  skillId: string,
+): Promise<{ skillId: string; removed: true; wasEnabled: boolean }> {
+  return request<{
+    data: { skillId: string; removed: true; wasEnabled: boolean }
+  }>(`/v1/users/me/skills/${encodeURIComponent(skillId)}`, {
+    method: "DELETE",
+  }).then((r) => r.data)
 }
 
 // ===== 会话挂载 =====

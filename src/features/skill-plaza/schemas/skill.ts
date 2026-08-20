@@ -27,9 +27,10 @@ export const skillChangelogSchema = z
   .max(500, "changelog 不超过 500 字符")
   .optional()
 
-// 上传 Phase 2 的 body
+// 上传 Phase 2 的 body — code 字段已不再由 UI 填写,后端从 name + hash 自己派生。
+// 仍允许 UI 显式传入(向后兼容老客户端 / 高级用例),所以这里用 optional。
 export const confirmSkillContentFormSchema = z.object({
-  code: skillCodeSchema,
+  code: skillCodeSchema.optional(),
   name: skillNameSchema,
   description: skillDescriptionSchema,
   changelog: skillChangelogSchema,
@@ -60,7 +61,6 @@ export const skillFrontmatterSchema = z.object({
   description: z.string().min(10).max(500),
   category: z.string().max(64).optional(),
   tags: z.array(z.string()).optional(),
-  version: z.number().int().positive(),
   files_index: z
     .array(
       z.object({

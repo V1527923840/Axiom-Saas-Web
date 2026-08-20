@@ -22,7 +22,8 @@ export interface SkillUploadPhase2Input {
   ossKey: string
   hash: string
   sourceFormat: UploadSourceFormat
-  code: string
+  // code 由后端从 name + hash 派生;UI 不再要求填写 — 传 undefined 会让后端走 deriveCode
+  code?: string
   name: string
   description: string
   changelog?: string
@@ -41,7 +42,6 @@ export interface SkillFrontmatter {
   description: string
   category?: string
   tags?: string[]
-  version: number
   files_index?: Array<{
     path: string
     description?: string
