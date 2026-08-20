@@ -2,7 +2,7 @@ import { Ban } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 import { ThinkingBlock } from "./thinking-block"
-import { ToolCallBlock } from "./tool-call-block"
+import { ToolCallSummary } from "./tool-call-summary"
 import { parseMessageSegments } from "../lib/parse-message"
 
 /**
@@ -13,6 +13,8 @@ import { parseMessageSegments } from "../lib/parse-message"
  * - 解析在每次渲染时跑(纯函数,O(n)),React 按 content 已做 memo 不会无谓重渲染。
  * - 空 main 段(<=0 字符)直接跳过,不显示空 markdown 框。
  * - 流式场景下未闭合的 <think>/<tool_call> 段被解析器视为开块,UI 自然延展。
+ * - 多个 closed <tool_call> 段(>3 个)由 ToolCallSummary 折叠成摘要 chip,
+ *   避免一长串 tool 行把主回答挤出视口(2026-08-20 用户反馈)。
  */
 export function AiMessageContent({
   content,
@@ -22,74 +24,88 @@ export function AiMessageContent({
   cancelledAt?: string
 }) {
   const segments = parseMessageSegments(content)
+  // 连续 tool 段合并后再渲染 ToolCallSummary(单次扫,O(n))
+  const rendered: React.ReactNode[] = []
+  let toolBuf: ReturnType<typeof parseMessageSegments> = []
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i]
+    if (seg.type === "tool") {
+      toolBuf.push(seg)
+      continue
+    }
+    if (toolBuf.length > 0) {
+      rendered.push(<ToolCallSummary key={`ts-${toolBuf[0].start}`} segments={toolBuf} />)
+      toolBuf = []
+    }
+    if (seg.type === "thinking") {
+      rendered.push(<ThinkingBlock key={`t-${seg.start}`} content={seg.content} closed={seg.closed} />)
+      continue
+    }
+    if (!seg.content.trim()) continue
+    rendered.push(
+      <div key={`m-${seg.start}`} className="ai-md">
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            // 代码块:黑底等宽,可滚动
+            pre: ({ children, ...rest }) => (
+              <pre
+                {...rest}
+                className="bg-muted overflow-x-auto rounded-md p-3 text-xs leading-relaxed"
+              >
+                {children}
+              </pre>
+            ),
+            code: ({ children, className, ...rest }) => {
+              // 行内 code vs 代码块:代码块的 className 会被 react-markdown 加 "language-xxx"
+              const isBlock = typeof className === "string" && className.startsWith("language-")
+              if (isBlock) {
+                return (
+                  <code className={className} {...rest}>
+                    {children}
+                  </code>
+                )
+              }
+              return (
+                <code
+                  className="bg-muted rounded px-1 py-0.5 font-mono text-xs"
+                  {...rest}
+                >
+                  {children}
+                </code>
+              )
+            },
+            a: ({ children, ...rest }) => (
+              <a {...rest} target="_blank" rel="noreferrer noopener" className="text-primary underline">
+                {children}
+              </a>
+            ),
+            table: ({ children }) => (
+              <div className="my-2 overflow-x-auto">
+                <table className="border-collapse text-sm">{children}</table>
+              </div>
+            ),
+            th: ({ children }) => (
+              <th className="border-muted-foreground/30 border px-2 py-1 text-left font-medium">
+                {children}
+              </th>
+            ),
+            td: ({ children }) => (
+              <td className="border-muted-foreground/30 border px-2 py-1">{children}</td>
+            ),
+          }}
+        >
+          {seg.content}
+        </ReactMarkdown>
+      </div>,
+    )
+  }
+  if (toolBuf.length > 0) {
+    rendered.push(<ToolCallSummary key={`ts-${toolBuf[0].start}`} segments={toolBuf} />)
+  }
   return (
     <div>
-      {segments.map((seg) => {
-        if (seg.type === "thinking") {
-          return <ThinkingBlock key={`t-${seg.start}`} content={seg.content} closed={seg.closed} />
-        }
-        if (seg.type === "tool") {
-          return <ToolCallBlock key={`x-${seg.start}`} content={seg.content} closed={seg.closed} />
-        }
-        if (!seg.content.trim()) return null
-        return (
-          <div key={`m-${seg.start}`} className="ai-md">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                // 代码块:黑底等宽,可滚动
-                pre: ({ children, ...rest }) => (
-                  <pre
-                    {...rest}
-                    className="bg-muted overflow-x-auto rounded-md p-3 text-xs leading-relaxed"
-                  >
-                    {children}
-                  </pre>
-                ),
-                code: ({ children, className, ...rest }) => {
-                  // 行内 code vs 代码块:代码块的 className 会被 react-markdown 加 "language-xxx"
-                  const isBlock = typeof className === "string" && className.startsWith("language-")
-                  if (isBlock) {
-                    return (
-                      <code className={className} {...rest}>
-                        {children}
-                      </code>
-                    )
-                  }
-                  return (
-                    <code
-                      className="bg-muted rounded px-1 py-0.5 font-mono text-xs"
-                      {...rest}
-                    >
-                      {children}
-                    </code>
-                  )
-                },
-                a: ({ children, ...rest }) => (
-                  <a {...rest} target="_blank" rel="noreferrer noopener" className="text-primary underline">
-                    {children}
-                  </a>
-                ),
-                table: ({ children }) => (
-                  <div className="my-2 overflow-x-auto">
-                    <table className="border-collapse text-sm">{children}</table>
-                  </div>
-                ),
-                th: ({ children }) => (
-                  <th className="border-muted-foreground/30 border px-2 py-1 text-left font-medium">
-                    {children}
-                  </th>
-                ),
-                td: ({ children }) => (
-                  <td className="border-muted-foreground/30 border px-2 py-1">{children}</td>
-                ),
-              }}
-            >
-              {seg.content}
-            </ReactMarkdown>
-          </div>
-        )
-      })}
+      {rendered}
       {cancelledAt && (
         <div
           className="text-muted-foreground mt-2 flex items-center gap-1.5 text-xs italic"

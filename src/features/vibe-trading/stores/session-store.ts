@@ -1,5 +1,9 @@
 import { create } from "zustand"
-import { TOOL_OPEN, TOOL_CLOSE } from "../lib/parse-message"
+import {
+  TOOL_OPEN,
+  TOOL_CLOSE,
+  findTrailingOpenToolCall,
+} from "../lib/parse-message"
 import type { GoalSnapshot, SwarmRunStatus } from "../lib/vibe-types"
 
 export type ChatMessage = {
@@ -350,8 +354,9 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       if (!cur) return s
       // 区分 in-progress (status 未定义) vs done (status 有值)。
       // in-progress 写 OPEN 块 → parser 标 closed:false → findOpenToolCalls
-      // 才能返回它,ToolCallIndicator 才会在输入框上方显示;done 写 CLOSED 块,
-      // 让 inline ToolCallBlock 渲染 checkmark,且不再计入上方指示器。
+      // 才能返回它,ToolCallIndicator 才会在输入框上方显示;done 关闭与之配对的
+      // OPEN 块(close-in-place),让 inline ToolCallBlock 渲染 checkmark,
+      // 且不再计入上方指示器。
       const isDone = status !== undefined
       const toolData: Record<string, unknown> = { name: toolName }
       if (isDone) {
@@ -362,31 +367,78 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
       } else if (elapsedS !== undefined) {
         toolData.elapsed_s = elapsedS
       }
-      const block = isDone
-        ? `${TOOL_OPEN}${JSON.stringify(toolData)}${TOOL_CLOSE}`
-        : `${TOOL_OPEN}${JSON.stringify(toolData)}`
 
       const matched = cur.messages.find((m) => m.attemptId === aid)
-      if (matched) {
+      if (!matched) {
+        // 没有匹配 → 创建 synthetic stream-<aid> 并把 block 作为初始 content。
+        // done 事件在 no-match 时直接写成自闭合块(synthetic 还没有 prior OPEN
+        // 可关联),代价是上游 done 早于 in-progress 到达时丢掉 elapsed_s;可接受。
+        const block = isDone
+          ? `${TOOL_OPEN}${JSON.stringify(toolData)}${TOOL_CLOSE}`
+          : `${TOOL_OPEN}${JSON.stringify(toolData)}`
+        const synthetic: ChatMessage = {
+          id: `stream-${aid}`,
+          role: "assistant",
+          attemptId: aid,
+          content: block,
+          createdAt: new Date().toISOString(),
+        }
+        return {
+          byId: {
+            ...s.byId,
+            [sid]: touchEvent({ ...cur, messages: [...cur.messages, synthetic] }),
+          },
+        }
+      }
+
+      // 已存在匹配的 assistant 消息。
+      if (isDone) {
+        // ★ Done 事件:close-in-place。如果 matched.content 末尾有一个 name
+        // 匹配的未闭合 <tool_call> 块,把它替换成新的 closed 块(用本次的
+        // status/elapsed_ms/preview 数据)。
+        //
+        // 为什么:appendToolCall 之前的设计是 done 时再 append 一个新的 closed
+        // 块,与 prior OPEN 并存。结果 parser 从 OPEN 一直扫到下一个 CLOSE,
+        // 把 OPEN 和 CLOSED 合并成同一个 closed:true segment,内含嵌套字面
+        // <tool_call> 文本 → JSON.parse 失败 → ToolCallBlock 显示"工具"
+        // 而不是真实 tool name。
+        //
+        // close-in-place 让每个 tool 永远是单独的 closed 块(JSON 合法,
+        // name 可读),同时把 N 个 tool 调用占用的视觉空间减半(本来是
+        // N*2 段,现在是 N 段)。
+        const content = matched.content
+        const trailing = findTrailingOpenToolCall(content, toolName)
+        if (trailing && trailing.name === toolName) {
+          const openStart = trailing.startIdx
+          const afterOpen = openStart + TOOL_OPEN.length
+          const nextOpen = content.indexOf(TOOL_OPEN, afterOpen)
+          const blockEnd = nextOpen === -1 ? content.length : nextOpen
+          const replacement = `${TOOL_OPEN}${JSON.stringify(toolData)}${TOOL_CLOSE}`
+          const newContent =
+            content.slice(0, openStart) + replacement + content.slice(blockEnd)
+          const messages = cur.messages.map((m) =>
+            m.attemptId === aid ? { ...m, content: newContent } : m,
+          )
+          return {
+            byId: { ...s.byId, [sid]: touchEvent({ ...cur, messages }) },
+          }
+        }
+        // ★ Defensive fallback:找不到同名未闭合 OPEN(done 早于 in-progress,
+        // 或 done 跨同名 tool 误关联)。保持旧行为 append 一个 fresh CLOSED
+        // 块,避免数据丢失。
+        const block = `${TOOL_OPEN}${JSON.stringify(toolData)}${TOOL_CLOSE}`
         const messages = cur.messages.map((m) =>
           m.attemptId === aid ? { ...m, content: m.content + block } : m,
         )
         return { byId: { ...s.byId, [sid]: touchEvent({ ...cur, messages }) } }
       }
-      // 没有匹配 → 创建 synthetic stream-<aid> 并把 block 作为初始 content。
-      const synthetic: ChatMessage = {
-        id: `stream-${aid}`,
-        role: "assistant",
-        attemptId: aid,
-        content: block,
-        createdAt: new Date().toISOString(),
-      }
-      return {
-        byId: {
-          ...s.byId,
-          [sid]: touchEvent({ ...cur, messages: [...cur.messages, synthetic] }),
-        },
-      }
+
+      // In-progress: append OPEN 块(无 CLOSE),UI 显示 spinner。
+      const block = `${TOOL_OPEN}${JSON.stringify(toolData)}`
+      const messages = cur.messages.map((m) =>
+        m.attemptId === aid ? { ...m, content: m.content + block } : m,
+      )
+      return { byId: { ...s.byId, [sid]: touchEvent({ ...cur, messages }) } }
     }),
   setEventsSubscribed: (sid, subscribed) =>
     set((s) => {

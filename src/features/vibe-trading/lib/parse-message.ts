@@ -106,13 +106,70 @@ export type OpenToolCall = {
  * Extract toolName from a partial JSON object string (stream-friendly).
  * Looks for the first "name" or "tool" key whose value is a quoted string.
  * Returns undefined if neither is found.
+ *
+ * Exported so the session store's appendToolCall can match a trailing
+ * unclosed <tool_call> block by name when closing it in place on the
+ * upstream "done" event.
  */
-function extractToolNameFromPartialJson(raw: string): string | undefined {
+export function extractToolNameFromPartialJson(raw: string): string | undefined {
   const nameMatch = raw.match(/"name"\s*:\s*"([^"]*)"/)
   if (nameMatch) return nameMatch[1]
   const toolMatch = raw.match(/"tool"\s*:\s*"([^"]*)"/)
   if (toolMatch) return toolMatch[1]
   return undefined
+}
+
+/**
+ * Find the most recent unclosed <tool_call> block in `content` whose partial
+ * JSON names match `toolName`.
+ *
+ * "Unclosed" = the OPEN tag has no matching `</tool_call>` to its right
+ * inside `content`. Walks backward from the end of content, scanning past
+ * both closed and unclosed OPEN tags, returning the first unclosed OPEN
+ * whose name matches. Returns null when no unclosed OPEN with that name exists —
+ * caller falls back to appending a fresh CLOSED block.
+ *
+ * Used by the session store to close-in-place when an upstream tool "done"
+ * event arrives. Walking backward (rather than matching only the very last
+ * OPEN) means parallel tool calls work correctly: when 3 tools are in-flight
+ * and "alpha" finishes first, this finds the OPEN that belongs to "alpha"
+ * (which may not be the last OPEN — "beta" and "gamma" come after).
+ *
+ * The returned `name` is best-effort; undefined if the JSON hasn't streamed
+ * in enough yet. Caller compares it to the upstream toolName to decide.
+ *
+ * ★ Boundary: searches only forward within each OPEN tag (TOOL_OPEN at
+ * openStart → next TOOL_OPEN or end of content). Does not consider content
+ * past a hypothetical unclosed CLOSE — there shouldn't be one.
+ */
+export function findTrailingOpenToolCall(
+  content: string,
+  toolName: string,
+): { startIdx: number; name: string | undefined } | null {
+  let cursor = content.length
+  while (cursor > 0) {
+    const openStart = content.lastIndexOf(TOOL_OPEN, cursor - 1)
+    if (openStart === -1) return null
+    const closeAfterOpen = content.indexOf(TOOL_CLOSE, openStart + TOOL_OPEN.length)
+    if (closeAfterOpen !== -1 && closeAfterOpen < cursor) {
+      // This OPEN is closed (the matching CLOSE is between it and cursor).
+      // Walk past it and keep searching.
+      cursor = openStart
+      continue
+    }
+    // Unclosed (no CLOSE between openStart and cursor). Extract name.
+    const afterOpen = openStart + TOOL_OPEN.length
+    const nextOpen = content.indexOf(TOOL_OPEN, afterOpen)
+    const blockEnd = nextOpen === -1 ? content.length : nextOpen
+    const raw = content.slice(afterOpen, blockEnd)
+    const name = extractToolNameFromPartialJson(raw)
+    if (name === toolName) {
+      return { startIdx: openStart, name }
+    }
+    // Wrong name — keep walking backward.
+    cursor = openStart
+  }
+  return null
 }
 
 export function findOpenToolCalls(content: string): OpenToolCall[] {

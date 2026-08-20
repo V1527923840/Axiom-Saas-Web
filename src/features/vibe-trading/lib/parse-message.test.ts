@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest"
-import { parseMessageSegments, findOpenToolCalls, parseAttachmentPrefix } from "./parse-message"
+import {
+  parseMessageSegments,
+  findOpenToolCalls,
+  parseAttachmentPrefix,
+  findTrailingOpenToolCall,
+  TOOL_OPEN,
+  TOOL_CLOSE,
+} from "./parse-message"
 
 describe("parseMessageSegments — closed flag", () => {
   it("marks a fully-closed think segment as closed=true", () => {
@@ -144,5 +151,84 @@ describe("parseAttachmentPrefix", () => {
     const parsed = parseAttachmentPrefix(content)
     expect(parsed).not.toBeNull()
     expect(parsed!.remaining).toBe("")
+  })
+})
+
+// Used by the session store's appendToolCall to close-in-place when a "done"
+// tool event matches a prior in-progress OPEN.
+describe("findTrailingOpenToolCall", () => {
+  it("returns null when there is no tool_call tag", () => {
+    expect(findTrailingOpenToolCall("plain text only", "any")).toBeNull()
+  })
+
+  it("returns null when the trailing tool_call is already closed", () => {
+    const content = `${TOOL_OPEN}{"name":"x"}${TOOL_CLOSE}`
+    expect(findTrailingOpenToolCall(content, "x")).toBeNull()
+  })
+
+  it("returns the trailing OPEN start index when a tool_call is unclosed", () => {
+    const content = `${TOOL_OPEN}{"name":"getQuote"}`
+    const out = findTrailingOpenToolCall(content, "getQuote")
+    expect(out).not.toBeNull()
+    expect(out!.startIdx).toBe(0)
+    expect(out!.name).toBe("getQuote")
+  })
+
+  it("returns the most-recent matching unclosed OPEN when multiple tool_calls are open", () => {
+    // Two OPEN blocks back-to-back, no CLOSE anywhere. Both unclosed, but
+    // we want the matching one (the upstream done event names a specific tool).
+    const content =
+      `${TOOL_OPEN}{"name":"first"}` +
+      `${TOOL_OPEN}{"name":"second","elapsed_s":5}`
+    const out = findTrailingOpenToolCall(content, "first")
+    expect(out).not.toBeNull()
+    expect(content.slice(out!.startIdx, out!.startIdx + TOOL_OPEN.length)).toBe(TOOL_OPEN)
+    expect(out!.name).toBe("first")
+  })
+
+  it("returns null when no unclosed OPEN matches the requested name", () => {
+    // Two OPENs, none closed. Asking for a third name → no match.
+    const content =
+      `${TOOL_OPEN}{"name":"alpha"}` +
+      `${TOOL_OPEN}{"name":"beta"}`
+    expect(findTrailingOpenToolCall(content, "gamma")).toBeNull()
+  })
+
+  it("ignores closed blocks when finding the matching unclosed OPEN", () => {
+    // First call closed, second call still in-progress; ask for the open one.
+    const content =
+      `${TOOL_OPEN}{"name":"first"}${TOOL_CLOSE}` +
+      `${TOOL_OPEN}{"name":"second"}`
+    const out = findTrailingOpenToolCall(content, "second")
+    expect(out).not.toBeNull()
+    expect(out!.name).toBe("second")
+    // startIdx points at the SECOND OPEN, not the first
+    expect(out!.startIdx).toBeGreaterThan(0)
+  })
+
+  it("walks past closed blocks of other tools when matching", () => {
+    // First two calls closed (alpha + beta), third call still open (gamma).
+    const content =
+      `${TOOL_OPEN}{"name":"alpha"}${TOOL_CLOSE}` +
+      `${TOOL_OPEN}{"name":"beta"}${TOOL_CLOSE}` +
+      `${TOOL_OPEN}{"name":"gamma"}`
+    const out = findTrailingOpenToolCall(content, "gamma")
+    expect(out).not.toBeNull()
+    expect(out!.name).toBe("gamma")
+  })
+
+  it("recovers name from partial JSON when the name field has streamed in but other fields haven't", () => {
+    // Stream-friendly: open block has streamed the name but JSON is incomplete.
+    const content = `${TOOL_OPEN}{"name":"getQuote","sym`
+    const out = findTrailingOpenToolCall(content, "getQuote")
+    expect(out).not.toBeNull()
+    expect(out!.name).toBe("getQuote")
+  })
+
+  it("returns null when the JSON hasn't streamed in enough to recover the name", () => {
+    const content = `${TOOL_OPEN}{`
+    // No name recoverable → cannot match → null (the store falls back to
+    // appending a fresh CLOSED block, which is fine).
+    expect(findTrailingOpenToolCall(content, "anything")).toBeNull()
   })
 })

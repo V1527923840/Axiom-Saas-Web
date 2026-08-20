@@ -360,10 +360,13 @@ describe("appendToolCall — synthesize <tool_call> block from upstream tool eve
     expect(content.indexOf(TOOL_CLOSE)).toBeGreaterThan(content.indexOf(TOOL_OPEN))
   })
 
-  it("in-progress then done appends two blocks (open + closed) in order", () => {
+  it("in-progress then done closes the matching OPEN in place (one closed block per call)", () => {
     // in-progress → done flow: appendToolCall is called twice on the same attemptId.
-    // Result content should contain exactly one OPEN region and one CLOSED region,
-    // and findOpenToolCalls should only return the still-open one (the in-progress).
+    // ★ close-in-place: the done event REPLACES the trailing OPEN with a fresh
+    // CLOSED block carrying status/elapsed_ms/preview — NOT appends a new
+    // CLOSED block alongside the OPEN. This way each tool call becomes ONE
+    // self-contained closed block with parseable JSON (so ToolCallBlock shows
+    // the real tool name instead of falling back to "工具").
     useSessionStore.getState().appendToolCall(SID, AID, "first_tool", 3)
     useSessionStore.getState().appendToolCall(
       SID,
@@ -377,18 +380,89 @@ describe("appendToolCall — synthesize <tool_call> block from upstream tool eve
     const cur = useSessionStore.getState().byId[SID]
     expect(cur.messages).toHaveLength(1)
     const content = cur.messages[0].content
-    // First call appended an OPEN block at the start
+    // Exactly one OPEN tag (replaced in place) and exactly one CLOSE tag.
+    expect(content.split(TOOL_OPEN).length - 1).toBe(1)
+    expect(content.split(TOOL_CLOSE).length - 1).toBe(1)
     expect(content.startsWith(TOOL_OPEN)).toBe(true)
-    // Second call appended a CLOSED block after the OPEN block
-    const firstOpen = content.indexOf(TOOL_OPEN)
-    const close = content.indexOf(TOOL_CLOSE)
-    const secondOpen = content.indexOf(TOOL_OPEN, firstOpen + TOOL_OPEN.length)
-    expect(firstOpen).toBe(0)
-    expect(secondOpen).toBeGreaterThan(firstOpen)
-    expect(close).toBeGreaterThan(secondOpen)
-    // No closing after first open, but closing after second open
-    const sliceBetweenOpens = content.slice(firstOpen + TOOL_OPEN.length, secondOpen)
-    expect(sliceBetweenOpens).not.toContain(TOOL_CLOSE)
+    expect(content.endsWith(TOOL_CLOSE)).toBe(true)
+    // The block JSON carries the done fields (status/elapsed_ms/preview),
+    // not the in-progress elapsed_s.
+    const blockJson = content.slice(
+      TOOL_OPEN.length,
+      content.length - TOOL_CLOSE.length,
+    )
+    const parsed = JSON.parse(blockJson)
+    expect(parsed).toEqual({
+      name: "first_tool",
+      status: "ok",
+      elapsed_ms: 3000,
+      preview: "ok preview",
+    })
+    // findOpenToolCalls: tool is closed, so the indicator should not show.
+    // (covered by parse-message.test.ts for the underlying parser; here we
+    // assert the storage shape enables that.)
+    const openIdx = content.indexOf(TOOL_OPEN)
+    expect(content.indexOf(TOOL_CLOSE, openIdx)).toBeGreaterThan(openIdx)
+  })
+
+  it("close-in-place: parallel tool calls each close their own matching OPEN", () => {
+    // Three tool calls in flight, then done events arrive in order.
+    // After all three are done, the message must have exactly three clean
+    // closed blocks — one per tool, each with its own status/elapsed_ms.
+    useSessionStore.getState().appendToolCall(SID, AID, "alpha", 1)
+    useSessionStore.getState().appendToolCall(SID, AID, "beta", 2)
+    useSessionStore.getState().appendToolCall(SID, AID, "gamma", 3)
+    useSessionStore.getState().appendToolCall(SID, AID, "alpha", undefined, 100, "a-prev", "ok")
+    useSessionStore.getState().appendToolCall(SID, AID, "beta", undefined, 200, "b-prev", "ok")
+    useSessionStore.getState().appendToolCall(SID, AID, "gamma", undefined, 300, "g-prev", "ok")
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.messages).toHaveLength(1)
+    const content = cur.messages[0].content
+    expect(content.split(TOOL_OPEN).length - 1).toBe(3)
+    expect(content.split(TOOL_CLOSE).length - 1).toBe(3)
+    // All three names should appear with their done fields.
+    expect(content).toContain('"name":"alpha"')
+    expect(content).toContain('"name":"beta"')
+    expect(content).toContain('"name":"gamma"')
+    expect(content).toContain('"elapsed_ms":100')
+    expect(content).toContain('"elapsed_ms":200')
+    expect(content).toContain('"elapsed_ms":300')
+    // The OPEN blocks must all be closed (no leftover in-progress markers).
+    expect(content.includes(TOOL_OPEN)).toBe(true)
+    // Every OPEN tag is followed (before the next OPEN) by exactly one CLOSE tag.
+    let cursor = 0
+    const parsedNames: string[] = []
+    while (cursor < content.length) {
+      const openIdx = content.indexOf(TOOL_OPEN, cursor)
+      if (openIdx === -1) break
+      const nextOpenIdx = content.indexOf(TOOL_OPEN, openIdx + TOOL_OPEN.length)
+      const sliceEnd = nextOpenIdx === -1 ? content.length : nextOpenIdx
+      const block = content.slice(openIdx, sliceEnd)
+      expect(block.endsWith(TOOL_CLOSE)).toBe(true)
+      const json = block.slice(TOOL_OPEN.length, block.length - TOOL_CLOSE.length)
+      parsedNames.push(JSON.parse(json).name)
+      cursor = sliceEnd
+    }
+    expect(parsedNames).toEqual(["alpha", "beta", "gamma"])
+  })
+
+  it("done event with no matching trailing OPEN falls back to appending a fresh CLOSED block", () => {
+    // Defensive: upstream could send done before in-progress (rare). With no
+    // trailing unclosed OPEN, we fall back to the old "append a fresh CLOSED
+    // block" behavior so data is never lost.
+    useSessionStore.getState().appendToolCall(SID, AID, "lone_done", undefined, 50, undefined, "ok")
+    const content = useSessionStore.getState().byId[SID].messages[0].content
+    // Should have produced a self-contained CLOSED block (one OPEN, one CLOSE).
+    expect(content.split(TOOL_OPEN).length - 1).toBe(1)
+    expect(content.split(TOOL_CLOSE).length - 1).toBe(1)
+    expect(content.startsWith(TOOL_OPEN)).toBe(true)
+    expect(content.endsWith(TOOL_CLOSE)).toBe(true)
+    const json = content.slice(TOOL_OPEN.length, content.length - TOOL_CLOSE.length)
+    expect(JSON.parse(json)).toEqual({
+      name: "lone_done",
+      status: "ok",
+      elapsed_ms: 50,
+    })
   })
 })
 
