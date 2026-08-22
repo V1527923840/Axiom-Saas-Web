@@ -6,16 +6,10 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { Archive, ArrowUpDown, ExternalLink, Eye, MoreHorizontal, PencilLine, RotateCcw, Wrench } from "lucide-react"
+import { Archive, ArrowUpDown, Eye, PencilLine, RotateCcw, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Switch } from "@/components/ui/switch"
 import { format } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import type { Skill } from "@/types/skill"
@@ -120,54 +114,71 @@ export const columns = (meta: SkillActionsMeta): ColumnDef<Skill>[] => [
     header: "",
     cell: ({ row }) => {
       const skill = row.original
-      const canUpdate = meta.isSuperAdmin || (skill.uploaderId === meta.currentUserId)
+      const canUpdate =
+        meta.isSuperAdmin || skill.uploaderId === meta.currentUserId
       const canManage = meta.isSuperAdmin || meta.isAdmin
+      const isArchived = skill.status === "archived"
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="cursor-pointer">
-              <MoreHorizontal className="size-4" />
+        <div className="flex items-center justify-end gap-2">
+          {/* 详情 */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => meta.onDetail(skill)}
+            aria-label={`查看 ${skill.name} 详情`}
+            className="cursor-pointer"
+          >
+            <Eye className="size-4" />
+          </Button>
+
+          {/* 更新 — 仅 user_self 作者本人 或 super_admin */}
+          {canUpdate && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => meta.onUpdate(skill)}
+              aria-label={`更新 ${skill.name}`}
+              className="cursor-pointer"
+            >
+              <PencilLine className="size-4" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => meta.onDetail(skill)}>
-              <Eye className="size-4 mr-2" />
-              详情
-            </DropdownMenuItem>
-            {canUpdate && (
-              <DropdownMenuItem onClick={() => meta.onUpdate(skill)}>
-                <PencilLine className="size-4 mr-2" />
-                更新
-              </DropdownMenuItem>
-            )}
-            {canManage && skill.status !== "archived" && (
-              <DropdownMenuItem
-                onClick={() => meta.onArchive(skill)}
-                className="text-destructive"
-              >
-                <Archive className="size-4 mr-2" />
-                强制停用
-              </DropdownMenuItem>
-            )}
-            {canManage && skill.status === "archived" && (
-              <DropdownMenuItem onClick={() => meta.onRestore(skill)}>
-                <RotateCcw className="size-4 mr-2" />
-                恢复
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <a
-                href={`/skills/${encodeURIComponent(skill.id)}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <ExternalLink className="size-4 mr-2" />
-                公开页面
-              </a>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          )}
+
+          {/* 强制停用 / 恢复 — admin 旁路。
+              Switch.checked = published,unchecked = archived。
+              点击触发 confirm dialog(由父组件 onArchive / onRestore 处理),
+              不直接调 API,避免误操作。 */}
+          {canManage && (
+            <div
+              className="flex items-center gap-1.5"
+              title={
+                isArchived
+                  ? `恢复 ${skill.name}`
+                  : `强制停用 ${skill.name}`
+              }
+            >
+              <Switch
+                checked={!isArchived}
+                onCheckedChange={(checked) => {
+                  if (checked) meta.onRestore(skill)
+                  else meta.onArchive(skill)
+                }}
+                aria-label={
+                  isArchived
+                    ? `恢复 ${skill.name}`
+                    : `强制停用 ${skill.name}`
+                }
+              />
+              <span className="text-xs text-muted-foreground min-w-4">
+                {isArchived ? (
+                  <RotateCcw className="inline size-3" />
+                ) : (
+                  <Archive className="inline size-3" />
+                )}
+              </span>
+            </div>
+          )}
+        </div>
       )
     },
   },
