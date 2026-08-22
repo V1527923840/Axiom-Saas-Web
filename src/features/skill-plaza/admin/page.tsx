@@ -8,7 +8,7 @@
  */
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useCallback } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { DataTable } from "@/components/data-table"
 import { Button } from "@/components/ui/button"
@@ -57,29 +57,34 @@ export default function SkillAdminPage() {
 
   // 用 useDataTable 自带的 server fetch。
   // data 表 schema 形如 { items, total }, 但 DataTable 期待 data + total。
-  const fetchData: FetchData<Skill> = async ({
-    pagination,
-    sorting,
-    globalFilter,
-  }) => {
-    const sortBy = (sorting[0]?.id ?? "updatedAt") as
-      | "name"
-      | "updatedAt"
-      | "createdAt"
-    const sortOrder = sorting[0]?.desc ? "DESC" : "ASC"
-    const result = await listSkills({
-      page: pagination.pageIndex + 1,
-      pageSize: pagination.pageSize,
-      sortBy,
-      sortOrder,
-      status:
-        statusFilter === "all"
-          ? undefined
-          : (statusFilter as "draft" | "published" | "archived"),
-      ...(globalFilter ? {} : { search: undefined }),
-    })
-    return { data: result.items, total: result.total }
-  }
+  //
+  // ★ 必须包 useCallback —— 否则这个闭包每次 render 都是新引用,
+  // useDataTable.loadData 会因 fetchData 依赖变化而 useEffect 重跑,
+  // setData → re-render → 新 fetchData → 死循环(无限调用 listSkills)。
+  // 依赖只有 statusFilter:sorting/globalFilter 由 useDataTable 内部 state 管,
+  // 不需要在父组件重新订阅。
+  const fetchData = useCallback<FetchData<Skill>>(
+    async ({ pagination, sorting, globalFilter }) => {
+      const sortBy = (sorting[0]?.id ?? "updatedAt") as
+        | "name"
+        | "updatedAt"
+        | "createdAt"
+      const sortOrder = sorting[0]?.desc ? "DESC" : "ASC"
+      const result = await listSkills({
+        page: pagination.pageIndex + 1,
+        pageSize: pagination.pageSize,
+        sortBy,
+        sortOrder,
+        status:
+          statusFilter === "all"
+            ? undefined
+            : (statusFilter as "draft" | "published" | "archived"),
+        ...(globalFilter ? {} : { search: undefined }),
+      })
+      return { data: result.items, total: result.total }
+    },
+    [statusFilter],
+  )
 
   // 把 useDataTable 提升到父组件,以便 archive/restore/update 成功后
   // 直接调用 refresh() 让表格立刻拉新数据,不必等用户手动点「刷新」。
