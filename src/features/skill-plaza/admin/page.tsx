@@ -44,11 +44,16 @@ export default function SkillAdminPage() {
   // 当前用户身份 — 用来决定 columns 的 menu 是否显示「更新」「停用/恢复」
   const auth = useAuth()
   const currentUserId = typeof auth.user?.id === "number" ? auth.user.id : null
-  // auth.user.roles 是 Role[] (每个 Role { id, name }),不是 string[]
-  // Role.name 在本仓库沿用 NestJS 端 seed 的 "admin" / "super_admin" 字面量
-  const roleNames = (auth.user?.roles ?? []).map((r) => r?.name).filter(Boolean) as string[]
-  const isSuperAdmin = roleNames.includes("super_admin")
-  const isAdmin = isSuperAdmin || roleNames.includes("admin")
+  // auth.user.roles 是 Role[] — 每项 { id, name, code, ... }。
+// role.name 是中文(例如「超级管理员」),role.code 是英文字面量
+// (例如 'super_admin' / 'admin')。用 code 做权限判断,跨语言稳定。
+// 注: 生成的 api.d.ts schema 把 Role 类型裁剪成 { id, name },但运行时 API
+// 实际返回 code 字段。cast as any 跳过 TS 限制。
+  const roleCodes = (auth.user?.roles ?? [])
+    .map((r: any) => r?.code)
+    .filter(Boolean) as string[]
+  const isSuperAdmin = roleCodes.includes("super_admin")
+  const isAdmin = isSuperAdmin || roleCodes.includes("admin")
 
   // 各弹窗/drawer 的「目标 skill」
   const [detailSkill, setDetailSkill] = useState<Skill | null>(null)
