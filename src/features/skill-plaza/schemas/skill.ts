@@ -20,7 +20,7 @@ export const skillNameSchema = z
 export const skillDescriptionSchema = z
   .string()
   .min(10, "description 至少 10 字符")
-  .max(500, "description 不超过 500 字符")
+  .max(2000, "description 不超过 2000 字符")
 
 export const skillChangelogSchema = z
   .string()
@@ -58,7 +58,7 @@ export type CreateUploadUrlForm = z.infer<typeof createUploadUrlFormSchema>
 // frontmatter 校验
 export const skillFrontmatterSchema = z.object({
   name: z.string().min(1).max(128),
-  description: z.string().min(10).max(500),
+  description: z.string().min(10).max(2000),
   category: z.string().max(64).optional(),
   tags: z.array(z.string()).optional(),
   files_index: z

@@ -80,12 +80,12 @@ export function parseSkillMd(md: string): ParsedSkillMd {
     fm.description.length < 10
   ) {
     throw new Error(
-      `frontmatter.description 必填,长度 10-500 字符。当前值: ${JSON.stringify(fm.description)?.slice(0, 80)}`,
+      `frontmatter.description 必填,长度 10-2000 字符。当前值: ${JSON.stringify(fm.description)?.slice(0, 80)}`,
     )
   }
-  if (fm.description.length > 500) {
+  if (fm.description.length > 2000) {
     throw new Error(
-      `frontmatter.description 不超过 500 字符 (当前 ${fm.description.length})`,
+      `frontmatter.description 不超过 2000 字符 (当前 ${fm.description.length})`,
     )
   }
   // ★ 2026-08-18:version 字段已废弃。Skill 表是 unversioned,
