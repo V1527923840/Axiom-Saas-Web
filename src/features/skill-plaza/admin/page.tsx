@@ -25,8 +25,12 @@ import { RefreshCw, Search, UploadCloud } from "lucide-react"
 import { columns } from "./columns"
 import { EmptyState } from "../components/empty-state"
 import { SkillUploadDialog } from "../components/skill-upload-dialog"
+import { SkillDetailDrawer } from "../components/skill-detail-drawer"
+import { SkillArchiveConfirmDialog } from "../components/skill-archive-confirm-dialog"
+import { SkillRestoreConfirmDialog } from "../components/skill-restore-confirm-dialog"
 import { listSkills } from "../services/skill-api"
 import { useDataTable } from "@/components/data-table"
+import { useAuth } from "@/contexts/auth-context"
 import type { FetchData } from "@/components/data-table"
 import type { Skill } from "@/types/skill"
 
@@ -35,6 +39,21 @@ const PAGE_SIZE = 20
 export default function SkillAdminPage() {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+
+  // 当前用户身份 — 用来决定 columns 的 menu 是否显示「更新」「停用/恢复」
+  const auth = useAuth()
+  const currentUserId = typeof auth.user?.id === "number" ? auth.user.id : null
+  // auth.user.roles 是 Role[] (每个 Role { id, name }),不是 string[]
+  // Role.name 在本仓库沿用 NestJS 端 seed 的 "admin" / "super_admin" 字面量
+  const roleNames = (auth.user?.roles ?? []).map((r) => r?.name).filter(Boolean) as string[]
+  const isSuperAdmin = roleNames.includes("super_admin")
+  const isAdmin = isSuperAdmin || roleNames.includes("admin")
+
+  // 各弹窗/drawer 的「目标 skill」
+  const [detailSkill, setDetailSkill] = useState<Skill | null>(null)
+  const [updateSkill, setUpdateSkill] = useState<Skill | null>(null)
+  const [archiveSkillState, setArchiveSkill] = useState<Skill | null>(null)
+  const [restoreSkillState, setRestoreSkill] = useState<Skill | null>(null)
 
   // 用 useDataTable 自带的 server fetch。
   // data 表 schema 形如 { items, total }, 但 DataTable 期待 data + total。
@@ -124,7 +143,58 @@ export default function SkillAdminPage() {
           fetchData={fetchData}
           pageSize={PAGE_SIZE}
           statusFilter={statusFilter}
+          meta={{
+            currentUserId,
+              isSuperAdmin,
+              isAdmin,
+              onDetail: setDetailSkill,
+              onUpdate: setUpdateSkill,
+              onArchive: setArchiveSkill,
+              onRestore: setRestoreSkill,
+            }}
         />
+
+        {/* Detail Drawer */}
+        {detailSkill && (
+          <SkillDetailDrawer
+            skill={detailSkill}
+            open={!!detailSkill}
+            onOpenChange={(o) => !o && setDetailSkill(null)}
+          />
+        )}
+
+        {/* Update Dialog (mode='update') */}
+        {updateSkill && (
+          <SkillUploadDialog
+            mode="update"
+            skill={updateSkill}
+            open={!!updateSkill}
+            onOpenChange={(o) => !o && setUpdateSkill(null)}
+            onSuccess={() => {
+              // detail drawer 会通过自己的 query refetch;此处无需全局刷新
+            }}
+          />
+        )}
+
+        {/* Archive Confirm */}
+        {archiveSkillState && (
+          <SkillArchiveConfirmDialog
+            skill={archiveSkillState}
+            open={!!archiveSkillState}
+            onOpenChange={(o) => !o && setArchiveSkill(null)}
+            onSuccess={() => setArchiveSkill(null)}
+          />
+        )}
+
+        {/* Restore Confirm */}
+        {restoreSkillState && (
+          <SkillRestoreConfirmDialog
+            skill={restoreSkillState}
+            open={!!restoreSkillState}
+            onOpenChange={(o) => !o && setRestoreSkill(null)}
+            onSuccess={() => setRestoreSkill(null)}
+          />
+        )}
       </div>
     </BaseLayout>
   )
@@ -138,10 +208,20 @@ function DataTableWrapper({
   fetchData,
   pageSize,
   statusFilter,
+  meta,
 }: {
   fetchData: FetchData<Skill>
   pageSize: number
   statusFilter: string
+  meta: {
+    currentUserId: number | null
+    isSuperAdmin: boolean
+    isAdmin: boolean
+    onDetail: (skill: Skill) => void
+    onUpdate: (skill: Skill) => void
+    onArchive: (skill: Skill) => void
+    onRestore: (skill: Skill) => void
+  }
 }) {
   void statusFilter
   // Skill 类型没有 index signature,这里 cast 成 Record<string, unknown> 满足 useDataTable 约束
@@ -155,7 +235,7 @@ function DataTableWrapper({
   return (
     <>
       <DataTable
-        columns={columns}
+        columns={columns(meta)}
         data={typedData}
         total={total}
         loading={isLoading}
