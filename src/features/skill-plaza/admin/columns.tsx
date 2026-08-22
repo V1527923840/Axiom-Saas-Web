@@ -6,9 +6,16 @@
 "use client"
 
 import type { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, ExternalLink, Wrench } from "lucide-react"
+import { Archive, ArrowUpDown, ExternalLink, Eye, MoreHorizontal, PencilLine, RotateCcw, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { format } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import type { Skill } from "@/types/skill"
@@ -28,7 +35,17 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
-export const columns: ColumnDef<Skill>[] = [
+interface SkillActionsMeta {
+  currentUserId: number | null
+  isSuperAdmin: boolean
+  isAdmin: boolean
+  onDetail: (skill: Skill) => void
+  onUpdate: (skill: Skill) => void
+  onArchive: (skill: Skill) => void
+  onRestore: (skill: Skill) => void
+}
+
+export const columns = (meta: SkillActionsMeta): ColumnDef<Skill>[] => [
   {
     accessorKey: "name",
     header: ({ column }) => (
@@ -102,22 +119,55 @@ export const columns: ColumnDef<Skill>[] = [
     id: "actions",
     header: "",
     cell: ({ row }) => {
-      const id = row.original.id
+      const skill = row.original
+      const canUpdate = meta.isSuperAdmin || (skill.uploaderId === meta.currentUserId)
+      const canManage = meta.isSuperAdmin || meta.isAdmin
       return (
-        <Button
-          variant="ghost"
-          size="sm"
-          asChild
-          className="cursor-pointer"
-        >
-          <a
-            href={`/skills/${encodeURIComponent(id)}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <ExternalLink className="size-4" />
-          </a>
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="cursor-pointer">
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => meta.onDetail(skill)}>
+              <Eye className="size-4 mr-2" />
+              详情
+            </DropdownMenuItem>
+            {canUpdate && (
+              <DropdownMenuItem onClick={() => meta.onUpdate(skill)}>
+                <PencilLine className="size-4 mr-2" />
+                更新
+              </DropdownMenuItem>
+            )}
+            {canManage && skill.status !== "archived" && (
+              <DropdownMenuItem
+                onClick={() => meta.onArchive(skill)}
+                className="text-destructive"
+              >
+                <Archive className="size-4 mr-2" />
+                强制停用
+              </DropdownMenuItem>
+            )}
+            {canManage && skill.status === "archived" && (
+              <DropdownMenuItem onClick={() => meta.onRestore(skill)}>
+                <RotateCcw className="size-4 mr-2" />
+                恢复
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <a
+                href={`/skills/${encodeURIComponent(skill.id)}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <ExternalLink className="size-4 mr-2" />
+                公开页面
+              </a>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )
     },
   },
