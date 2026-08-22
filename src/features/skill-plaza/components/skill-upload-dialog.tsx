@@ -48,7 +48,6 @@ import {
   FileText,
   Loader2,
   Trash2,
-  UploadCloud,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSkillUpload } from "../hooks/use-skill-upload"
@@ -100,14 +99,14 @@ export function SkillUploadDialog(props: SkillUploadDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button>
-            <UploadCloud className="mr-2 h-4 w-4" />
-            {isUpdate ? "更新 Skill" : "上传 Skill"}
-          </Button>
-        )}
-      </DialogTrigger>
+      {/*
+        ★ 只在父组件显式传了 trigger 时才渲染 DialogTrigger。
+        受控模式(open + onOpenChange,没有 trigger)下不能渲染默认按钮,
+        否则会作为页面流里的"孤儿"按钮出现,跟 Dialog 内容毫无关系。
+      */}
+      {trigger !== undefined && (
+        <DialogTrigger asChild>{trigger}</DialogTrigger>
+      )}
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{isUpdate ? "更新 Skill" : "上传 Skill"}</DialogTitle>

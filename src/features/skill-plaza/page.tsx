@@ -276,11 +276,14 @@ export default function SkillPlazaPage() {
           </TabsContent>
         </Tabs>
 
-        {/* 与 admin 页面同源的 SkillUploadDialog */}
+        {/*
+          与 admin 页面同源的 SkillUploadDialog — 完全受控。
+          父组件自己持有 open 状态,不再传 trigger(以前用 hidden span
+          遮住组件内部的默认按钮 — 那个 bug 已修复,现在 trigger 不传即可)。
+        */}
         <SkillUploadDialog
           open={uploadDialogOpen}
           onOpenChange={setUploadDialogOpen}
-          trigger={<span className="hidden" />}
           onSuccess={() => {
             setUploadDialogOpen(false)
             publicSkills.refetch()
