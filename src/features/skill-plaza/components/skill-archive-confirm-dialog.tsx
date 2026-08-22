@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Archive, AlertTriangle } from "lucide-react"
+import { toast } from "sonner"
 import { useSkillArchive } from "../hooks/use-skill-lifecycle"
 import type { Skill } from "@/types/skill"
 
@@ -66,6 +67,8 @@ export function SkillArchiveConfirmDialog({ skill, open, onOpenChange, onSuccess
                 onOpenChange(false)
               } catch (e) {
                 console.error(e)
+                const message = e instanceof Error && e.message ? e.message : "操作失败"
+                toast.error(`停用失败: ${message}`)
               }
             }}
           >

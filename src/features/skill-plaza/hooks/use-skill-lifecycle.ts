@@ -8,6 +8,7 @@ export function useSkillArchive(skillId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["skills"] })
       qc.invalidateQueries({ queryKey: ["skill", skillId] })
+      qc.invalidateQueries({ queryKey: ["skill", skillId, "updates"] })
     },
   })
 }
@@ -19,6 +20,7 @@ export function useSkillRestore(skillId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["skills"] })
       qc.invalidateQueries({ queryKey: ["skill", skillId] })
+      qc.invalidateQueries({ queryKey: ["skill", skillId, "updates"] })
     },
   })
 }
