@@ -119,14 +119,56 @@ export const columns = (meta: SkillActionsMeta): ColumnDef<Skill>[] => [
     ),
   },
   {
+    id: "force-archive",
+    header: "停用/启用【强制】",
+    cell: ({ row }) => {
+      const skill = row.original
+      const canManage = meta.isSuperAdmin || meta.isAdmin
+      const isArchived = skill.status === "archived"
+      if (!canManage) {
+        return (
+          <span className="text-xs text-muted-foreground" title="无管理权限">
+            —
+          </span>
+        )
+      }
+      return (
+        <div
+          className="flex items-center gap-1.5"
+          title={
+            isArchived ? `恢复 ${skill.name}` : `强制停用 ${skill.name}`
+          }
+        >
+          <Switch
+            checked={!isArchived}
+            onCheckedChange={(checked) => {
+              if (checked) meta.onRestore(skill)
+              else meta.onArchive(skill)
+            }}
+            aria-label={
+              isArchived
+                ? `恢复 ${skill.name}`
+                : `强制停用 ${skill.name}`
+            }
+          />
+          <span className="text-xs text-muted-foreground min-w-4">
+            {isArchived ? (
+              <RotateCcw className="inline size-3" />
+            ) : (
+              <Archive className="inline size-3" />
+            )}
+          </span>
+        </div>
+      )
+    },
+  },
+  {
     id: "actions",
     header: "",
     cell: ({ row }) => {
       const skill = row.original
       const canUpdate =
         meta.isSuperAdmin || skill.uploaderId === meta.currentUserId
-      const canManage = meta.isSuperAdmin || meta.isAdmin
-      const isArchived = skill.status === "archived"
       return (
         <div className="flex items-center justify-end gap-2">
           {/* 详情 */}
@@ -153,46 +195,10 @@ export const columns = (meta: SkillActionsMeta): ColumnDef<Skill>[] => [
             </Button>
           )}
 
-          {/* 强制停用 / 恢复 — admin 旁路。
-              Switch.checked = published,unchecked = archived。
-              点击触发 confirm dialog(由父组件 onArchive / onRestore 处理),
-              不直接调 API,避免误操作。 */}
-          {canManage && (
-            <div
-              className="flex items-center gap-1.5"
-              title={
-                isArchived
-                  ? `恢复 ${skill.name}`
-                  : `强制停用 ${skill.name}`
-              }
-            >
-              <Switch
-                checked={!isArchived}
-                onCheckedChange={(checked) => {
-                  if (checked) meta.onRestore(skill)
-                  else meta.onArchive(skill)
-                }}
-                aria-label={
-                  isArchived
-                    ? `恢复 ${skill.name}`
-                    : `强制停用 ${skill.name}`
-                }
-              />
-              <span className="text-xs text-muted-foreground min-w-4">
-                {isArchived ? (
-                  <RotateCcw className="inline size-3" />
-                ) : (
-                  <Archive className="inline size-3" />
-                )}
-              </span>
-            </div>
-          )}
-
           {/* 用户级 启用/停用 — 当前 admin 对此 skill 的 binding。
-              反映的是 admin 自己作为用户的收藏状态,与「强制停用」正交:
-              archived 的 skill 仍可以「启用」(只不过 Vibe 端看不到) ——
-              实际场景下 admin 通常不应 enable archived 的 skill,但 admin UI
-              不强制阻止。 */}
+              与「强制停用」正交:archived 的 skill 仍可以「启用」
+              (只是 Vibe 端看不到);启用的 skill 可以被强制停用
+              (binding 行保留,Vibe 按 status gate 拒绝)。 */}
           <div
             className="flex items-center gap-1.5"
             title={
