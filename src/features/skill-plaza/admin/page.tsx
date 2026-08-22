@@ -81,6 +81,23 @@ export default function SkillAdminPage() {
     return { data: result.items, total: result.total }
   }
 
+  // 把 useDataTable 提升到父组件,以便 archive/restore/update 成功后
+  // 直接调用 refresh() 让表格立刻拉新数据,不必等用户手动点「刷新」。
+  // (use-skill-lifecycle 的 qc.invalidateQueries 找不到这里的 useState 缓存)
+  const {
+    data,
+    total,
+    isLoading,
+    error,
+    pagination,
+    setPagination,
+    refresh,
+  } = useDataTable<Skill & Record<string, unknown>>({
+    fetchData: fetchData as FetchData<Skill & Record<string, unknown>>,
+    pageSize: PAGE_SIZE,
+  })
+  const typedData = data as Skill[]
+
   // 过滤栏 status 切换时,reset 到第一页
   const dataKey = useMemo(
     () => [statusFilter] as const,
@@ -118,7 +135,11 @@ export default function SkillAdminPage() {
               </SelectContent>
             </Select>
           </div>
-          <Button variant="outline" className="cursor-pointer">
+          <Button
+            variant="outline"
+            className="cursor-pointer"
+            onClick={refresh}
+          >
             <RefreshCw className="size-4 mr-2" />
             刷新
           </Button>
@@ -140,8 +161,12 @@ export default function SkillAdminPage() {
         */}
         <DataTableWrapper
           key={dataKey.join("-")}
-          fetchData={fetchData}
-          pageSize={PAGE_SIZE}
+          data={typedData}
+          total={total}
+          isLoading={isLoading}
+          error={error}
+          pagination={pagination}
+          setPagination={setPagination}
           statusFilter={statusFilter}
           meta={{
             currentUserId,
@@ -171,7 +196,9 @@ export default function SkillAdminPage() {
             open={!!updateSkill}
             onOpenChange={(o) => !o && setUpdateSkill(null)}
             onSuccess={() => {
-              // detail drawer 会通过自己的 query refetch;此处无需全局刷新
+              setUpdateSkill(null)
+              // 行内显示新的 contentHash + updatedAt
+              refresh()
             }}
           />
         )}
@@ -182,7 +209,10 @@ export default function SkillAdminPage() {
             skill={archiveSkillState}
             open={!!archiveSkillState}
             onOpenChange={(o) => !o && setArchiveSkill(null)}
-            onSuccess={() => setArchiveSkill(null)}
+            onSuccess={() => {
+              setArchiveSkill(null)
+              refresh()
+            }}
           />
         )}
 
@@ -192,7 +222,10 @@ export default function SkillAdminPage() {
             skill={restoreSkillState}
             open={!!restoreSkillState}
             onOpenChange={(o) => !o && setRestoreSkill(null)}
-            onSuccess={() => setRestoreSkill(null)}
+            onSuccess={() => {
+              setRestoreSkill(null)
+              refresh()
+            }}
           />
         )}
       </div>
@@ -201,17 +234,35 @@ export default function SkillAdminPage() {
 }
 
 /**
- * DataTableWrapper — 单文件组件,把 useDataTable + DataTable 打包,
+ * DataTableWrapper — 单文件组件,把 useDataTable 的返回值从父组件透传下来,
  * 让 statusFilter 变化时通过 key 重 mount 重置所有状态。
+ *
+ * useDataTable 调用本身在父组件 SkillAdminPage 中,以便 dialog onSuccess
+ * 能直接调用 refresh() 让表格立刻拉新数据(不依赖 react-query 缓存)。
  */
 function DataTableWrapper({
-  fetchData,
-  pageSize,
+  data,
+  total,
+  isLoading,
+  error,
+  pagination,
+  setPagination,
   statusFilter,
   meta,
 }: {
-  fetchData: FetchData<Skill>
-  pageSize: number
+  data: Skill[]
+  total: number
+  isLoading: boolean
+  error: Error | null
+  pagination: { pageIndex: number; pageSize: number }
+  setPagination: (
+    p:
+      | { pageIndex: number; pageSize: number }
+      | ((prev: { pageIndex: number; pageSize: number }) => {
+          pageIndex: number
+          pageSize: number
+        }),
+  ) => void
   statusFilter: string
   meta: {
     currentUserId: number | null
@@ -223,34 +274,27 @@ function DataTableWrapper({
     onRestore: (skill: Skill) => void
   }
 }) {
-  void statusFilter
-  // Skill 类型没有 index signature,这里 cast 成 Record<string, unknown> 满足 useDataTable 约束
-  const { data, total, isLoading, error, pagination, setPagination } =
-    useDataTable<Skill & Record<string, unknown>>({
-      fetchData: fetchData as FetchData<Skill & Record<string, unknown>>,
-      pageSize,
-    })
-  const typedData = data as Skill[]
-
   return (
     <>
       <DataTable
         columns={columns(meta)}
-        data={typedData}
+        data={data}
         total={total}
         loading={isLoading}
-        error={error ? (error as Error).message : null}
+        error={error ? error.message : null}
         pagination={{
           page: pagination.pageIndex + 1,
           pageSize: pagination.pageSize,
           total,
-          onPageChange: (p) => setPagination((prev) => ({ ...prev, pageIndex: p - 1 })),
-          onPageSizeChange: (s) => setPagination((prev) => ({ ...prev, pageSize: s })),
+          onPageChange: (p) =>
+            setPagination((prev) => ({ ...prev, pageIndex: p - 1 })),
+          onPageSizeChange: (s) =>
+            setPagination((prev) => ({ ...prev, pageSize: s })),
         }}
         showToolbar={false}
         showSearch={false}
       />
-      {!isLoading && typedData.length === 0 && (
+      {!isLoading && data.length === 0 && (
         <EmptyState
           emptyHint={
             statusFilter === "all" ? "尚未上传 skill" : "该状态下没有 skill"
