@@ -15,7 +15,7 @@ import { useState } from "react"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ChevronRight, Wrench } from "lucide-react"
+import { ChevronRight, PencilLine, Wrench } from "lucide-react"
 import type { MySkill, Skill } from "@/types/skill"
 import { EnableSkillButton } from "./enable-skill-button"
 import { FavoriteSkillButton } from "./favorite-skill-button"
@@ -27,11 +27,24 @@ export type SkillCardMode = "public" | "personal"
 interface SkillCardProps {
   skill: Skill | MySkill
   mode?: SkillCardMode
+  /**
+   * Current user id. When provided together with mode="personal",
+   * SkillCard renders an "更新" button on user_self skills the
+   * current user owns. Callers that don't want this affordance can
+   * omit the prop (e.g. when the page can't determine ownership).
+   */
+  currentUserId?: number | null
+  /**
+   * Click handler for the "更新" button. Required when currentUserId
+   * is set so the parent can open the update dialog. Card stops the
+   * click from bubbling up to the card's own open-detail handler.
+   */
+  onUpdate?: (skill: Skill | MySkill) => void
 }
 
 const DESCRIPTION_PREVIEW = 120
 
-export function SkillCard({ skill, mode = "public" }: SkillCardProps) {
+export function SkillCard({ skill, mode = "public", currentUserId, onUpdate }: SkillCardProps) {
   const [open, setOpen] = useState(false)
   const isLong = skill.description.length > DESCRIPTION_PREVIEW
   const preview = isLong
@@ -41,6 +54,16 @@ export function SkillCard({ skill, mode = "public" }: SkillCardProps) {
   // 个人 Tab 才显示启用状态 badge;公开 Tab 不显示(还未收藏)
   const showStatusBadge = mode === "personal" && "enabled" in skill
   const isEnabled = showStatusBadge && (skill as MySkill).enabled
+
+  // 「我的 Skill」Tab:仅当当前用户是 user_self 作者时,显示「更新」按钮。
+  // (admin / super_admin 也能更新任意 skill,但那是 /skills/admin 的范畴,
+  // 公开广场 + 我的 Skill Tab 不应混入管理操作)
+  const canUpdate =
+    mode === "personal" &&
+    skill.uploaderType === "user_self" &&
+    currentUserId != null &&
+    skill.uploaderId === currentUserId &&
+    typeof onUpdate === "function"
 
   return (
     <>
@@ -121,7 +144,24 @@ export function SkillCard({ skill, mode = "public" }: SkillCardProps) {
               skillName={skill.name}
             />
           ) : (
-            <EnableSkillButton skillId={skill.id} />
+            <div className="flex items-center gap-1">
+              {canUpdate && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onUpdate?.(skill)
+                  }}
+                  className="cursor-pointer"
+                >
+                  <PencilLine className="mr-1 size-3" />
+                  更新
+                </Button>
+              )}
+              <EnableSkillButton skillId={skill.id} />
+            </div>
           )}
         </CardFooter>
       </Card>

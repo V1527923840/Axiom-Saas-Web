@@ -34,6 +34,7 @@ import { EmptyState } from "./components/empty-state"
 import { SkillUploadDialog } from "./components/skill-upload-dialog"
 import { useSkills } from "./hooks/use-skills"
 import { useUserSkillBindings } from "./hooks/use-user-skill-bindings"
+import { useAuth } from "@/contexts/auth-context"
 import { PREDEFINED_CATEGORIES } from "./lib/categories"
 import type { Skill } from "@/types/skill"
 
@@ -65,6 +66,12 @@ export default function SkillPlazaPage() {
   const [category, setCategory] = useState<string>("all")
   const [page, setPage] = useState(1)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  // 「我的 Skill」Tab 内联更新弹窗 — 只在 user_self + 本人是作者时打开
+  const [updateSkill, setUpdateSkill] = useState<Skill | null>(null)
+
+  const auth = useAuth()
+  const currentUserId =
+    typeof auth.user?.id === "number" ? auth.user.id : null
 
   const publicSkills = useSkills({
     page,
@@ -256,7 +263,13 @@ export default function SkillPlazaPage() {
             ) : (
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {personalItems.map((s) => (
-                  <SkillCard key={s.id} skill={s} mode="personal" />
+                  <SkillCard
+                    key={s.id}
+                    skill={s}
+                    mode="personal"
+                    currentUserId={currentUserId}
+                    onUpdate={setUpdateSkill}
+                  />
                 ))}
               </div>
             )}
@@ -273,6 +286,22 @@ export default function SkillPlazaPage() {
             publicSkills.refetch()
           }}
         />
+
+        {/* 「我的 Skill」Tab 的内联更新弹窗 — 只在本人是 user_self 作者时打开 */}
+        {updateSkill && (
+          <SkillUploadDialog
+            mode="update"
+            skill={updateSkill}
+            open={!!updateSkill}
+            onOpenChange={(o) => !o && setUpdateSkill(null)}
+            onSuccess={() => {
+              setUpdateSkill(null)
+              // 公开 Tab 的 skills 缓存 + 个人 Tab 的 bindings 都要刷
+              publicSkills.refetch()
+              personalSkills.refetch?.()
+            }}
+          />
+        )}
       </div>
     </BaseLayout>
   )

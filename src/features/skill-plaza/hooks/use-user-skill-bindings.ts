@@ -117,6 +117,9 @@ export function useUserSkillBindings() {
     disable: disable.mutateAsync,
     favorite: favorite.mutateAsync,
     remove: remove.mutateAsync,
+    // 显式 refetch:SkillUpdateDialog 完成后父组件想立即刷「我的 Skill」Tab
+    // 而不是等下次 staleTime 触发。
+    refetch: list.refetch,
     isToggling:
       enable.isPending ||
       disable.isPending ||
