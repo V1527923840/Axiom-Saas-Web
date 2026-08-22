@@ -114,6 +114,12 @@ export interface ConfirmSkillContentOutput {
 // 后端返回 MySkillDto[] — Skill + enabled 字段
 export interface MySkill extends Skill {
   enabled: boolean
+  /**
+   * 仅当 status='archived' 时由后端填充:最近一次 archive 事件的
+   * changelog(管理员停用原因)。null 表示 skill 未停用,或停用时
+   * 没有填 reason。
+   */
+  archivedReason?: string | null
 }
 
 // -------- 更新审计事件 (GET /skills/:id/updates) --------

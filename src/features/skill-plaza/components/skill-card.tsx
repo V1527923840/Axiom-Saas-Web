@@ -15,7 +15,7 @@ import { useState } from "react"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ChevronRight, PencilLine, Wrench } from "lucide-react"
+import { ChevronRight, PencilLine, ShieldOff, Wrench } from "lucide-react"
 import type { MySkill, Skill } from "@/types/skill"
 import { EnableSkillButton } from "./enable-skill-button"
 import { FavoriteSkillButton } from "./favorite-skill-button"
@@ -64,6 +64,15 @@ export function SkillCard({ skill, mode = "public", currentUserId, onUpdate }: S
     currentUserId != null &&
     skill.uploaderId === currentUserId &&
     typeof onUpdate === "function"
+
+  // 管理员强制停用 — 显示原因 + 禁用启用按钮。
+  // archived 的 skill 仍可能在用户的收藏夹里(我们不删除 user_skill_binding),
+  // 但 Vibe 端看不到。让用户知道「为什么这个 skill 不能用了」。
+  const isArchived = skill.status === "archived"
+  const archivedReason =
+    mode === "personal" && "archivedReason" in skill
+      ? (skill as MySkill).archivedReason
+      : null
 
   return (
     <>
@@ -118,6 +127,24 @@ export function SkillCard({ skill, mode = "public", currentUserId, onUpdate }: S
           <p className="text-sm text-muted-foreground leading-relaxed">
             {preview}
           </p>
+          {/* ★ 管理员停用提示 — 仅在「我的 Skill」Tab + archived 状态下渲染。
+              即使没有填 reason,也告诉用户「管理员停用的」而不是空白。 */}
+          {mode === "personal" && isArchived && (
+            <div
+              className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"
+              data-testid="archived-banner"
+            >
+              <div className="flex items-center gap-1.5 font-medium">
+                <ShieldOff className="size-3" />
+                管理员已停用
+              </div>
+              {archivedReason && (
+                <div className="mt-0.5 text-amber-800/80 dark:text-amber-300/80">
+                  {archivedReason}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
         <CardFooter
           className="flex items-center justify-between border-t pt-3"
@@ -160,7 +187,23 @@ export function SkillCard({ skill, mode = "public", currentUserId, onUpdate }: S
                   更新
                 </Button>
               )}
-              <EnableSkillButton skillId={skill.id} />
+              {/*
+                ★ Archived skill 的启用 / 停用按钮 — 服务端已经拒绝 enable
+                archived skill(返回 403),前端提前禁用避免触发失败请求。
+                hover 提示告诉用户原因。 */}
+              {isArchived ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled
+                  title="该 Skill 已被管理员停用,无法启用"
+                  className="cursor-not-allowed"
+                >
+                  启用
+                </Button>
+              ) : (
+                <EnableSkillButton skillId={skill.id} />
+              )}
             </div>
           )}
         </CardFooter>
