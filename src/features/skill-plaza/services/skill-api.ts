@@ -21,6 +21,8 @@ import type {
   SessionSkillMountItem,
   Skill,
   SkillFile,
+  SkillUpdateEvent,
+  UpdateUploadUrlOutput,
 } from "@/types/skill"
 
 const API_BASE_URL = (
@@ -264,6 +266,52 @@ export function setSessionMount(
       method: "PUT",
       body: JSON.stringify({ op, source }),
     },
+  ).then((r) => r.data)
+}
+
+// ===== 更新 / 生命周期 / 审计 (2026-08-22) =====
+export interface CreateUpdateUploadUrlInput {
+  filename: string
+  size: number
+  sourceFormat: "md" | "zip"
+  hash: string
+}
+
+export function createUpdateUploadUrl(
+  skillId: string,
+  body: CreateUpdateUploadUrlInput,
+): Promise<UpdateUploadUrlOutput> {
+  return request<{ data: UpdateUploadUrlOutput }>(
+    `/v1/skills/${encodeURIComponent(skillId)}/upload-url`,
+    { method: "POST", body: JSON.stringify(body) },
+  ).then((r) => r.data)
+}
+
+export function archiveSkill(
+  skillId: string,
+  reason?: string,
+): Promise<{ skillId: string; status: "archived" }> {
+  return request<{ data: { skillId: string; status: "archived" } }>(
+    `/v1/skills/${encodeURIComponent(skillId)}/archive`,
+    { method: "POST", body: JSON.stringify({ reason }) },
+  ).then((r) => r.data)
+}
+
+export function restoreSkill(
+  skillId: string,
+  reason?: string,
+): Promise<{ skillId: string; status: "published" }> {
+  return request<{ data: { skillId: string; status: "published" } }>(
+    `/v1/skills/${encodeURIComponent(skillId)}/restore`,
+    { method: "POST", body: JSON.stringify({ reason }) },
+  ).then((r) => r.data)
+}
+
+export function listSkillUpdateEvents(
+  skillId: string,
+): Promise<SkillUpdateEvent[]> {
+  return request<{ data: SkillUpdateEvent[] }>(
+    `/v1/skills/${encodeURIComponent(skillId)}/updates`,
   ).then((r) => r.data)
 }
 

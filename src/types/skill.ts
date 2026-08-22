@@ -21,6 +21,7 @@ export interface Skill {
   tags: string[] | null
   thumbnailUrl: string | null
   uploaderType: UploaderType
+  uploaderId: number | null  // ★ NEW: nullable for platform / third_party
   marketplaceStatus: MarketplaceStatus
   status: SkillStatus
   contentHash: string | null
@@ -99,6 +100,7 @@ export interface ConfirmSkillContentInput {
   description: string
   changelog?: string
   category?: string
+  expectedUpdatedAt?: string  // ★ NEW: ISO 8601
 }
 
 export interface ConfirmSkillContentOutput {
@@ -112,4 +114,27 @@ export interface ConfirmSkillContentOutput {
 // 后端返回 MySkillDto[] — Skill + enabled 字段
 export interface MySkill extends Skill {
   enabled: boolean
+}
+
+// -------- 更新审计事件 (GET /skills/:id/updates) --------
+export type SkillUpdateEventAction = "update" | "archive" | "restore"
+export type SkillUpdateEventActorRole = "self" | "admin" | "super_admin"
+
+export interface SkillUpdateEvent {
+  id: string
+  action: SkillUpdateEventAction
+  actorUserId: number
+  actorRole: SkillUpdateEventActorRole
+  ossKey: string | null
+  oldHash: string | null
+  newHash: string | null
+  sourceFormat: "md" | "zip" | null
+  changelog: string | null
+  createdAt: string
+}
+
+// -------- 更新场景的 upload-url 响应 (POST /skills/:id/upload-url) --------
+export interface UpdateUploadUrlOutput extends CreateUploadUrlOutput {
+  updatedAt: string
+  actorRole: SkillUpdateEventActorRole
 }
