@@ -29,10 +29,19 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
-interface SkillActionsMeta {
+export interface SkillActionsMeta {
   currentUserId: number | null
   isSuperAdmin: boolean
   isAdmin: boolean
+  /**
+   * 当前用户的 user_skill_binding map。用于行内 启用/停用 toggle。
+   * Map[skillId] = true 表示当前 admin 已启用该 skill。
+   */
+  enabledMap: Record<string, true>
+  /** 当前是否有任何 enable/disable mutation 在进行(共享 loading) */
+  isTogglingBinding: boolean
+  /** 触发 enable / disable mutation(乐观更新由 hook 处理) */
+  onToggleBinding: (skill: Skill) => void
   onDetail: (skill: Skill) => void
   onUpdate: (skill: Skill) => void
   onArchive: (skill: Skill) => void
@@ -178,6 +187,31 @@ export const columns = (meta: SkillActionsMeta): ColumnDef<Skill>[] => [
               </span>
             </div>
           )}
+
+          {/* 用户级 启用/停用 — 当前 admin 对此 skill 的 binding。
+              反映的是 admin 自己作为用户的收藏状态,与「强制停用」正交:
+              archived 的 skill 仍可以「启用」(只不过 Vibe 端看不到) ——
+              实际场景下 admin 通常不应 enable archived 的 skill,但 admin UI
+              不强制阻止。 */}
+          <div
+            className="flex items-center gap-1.5"
+            title={
+              meta.enabledMap[skill.id]
+                ? `停用 ${skill.name}(个人收藏)`
+                : `启用 ${skill.name}(个人收藏)`
+            }
+          >
+            <Switch
+              checked={!!meta.enabledMap[skill.id]}
+              disabled={meta.isTogglingBinding}
+              onCheckedChange={() => meta.onToggleBinding(skill)}
+              aria-label={
+                meta.enabledMap[skill.id]
+                  ? `停用 ${skill.name}`
+                  : `启用 ${skill.name}`
+              }
+            />
+          </div>
         </div>
       )
     },

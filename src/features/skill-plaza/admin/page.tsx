@@ -22,13 +22,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { RefreshCw, Search, UploadCloud } from "lucide-react"
-import { columns } from "./columns"
+import { columns, type SkillActionsMeta } from "./columns"
 import { EmptyState } from "../components/empty-state"
 import { SkillUploadDialog } from "../components/skill-upload-dialog"
 import { SkillDetailDrawer } from "../components/skill-detail-drawer"
 import { SkillArchiveConfirmDialog } from "../components/skill-archive-confirm-dialog"
 import { SkillRestoreConfirmDialog } from "../components/skill-restore-confirm-dialog"
 import { listSkills } from "../services/skill-api"
+import { useUserSkillBindings } from "../hooks/use-user-skill-bindings"
 import { useDataTable } from "@/components/data-table"
 import { useAuth } from "@/contexts/auth-context"
 import type { FetchData } from "@/components/data-table"
@@ -54,6 +55,24 @@ export default function SkillAdminPage() {
   const [updateSkill, setUpdateSkill] = useState<Skill | null>(null)
   const [archiveSkillState, setArchiveSkill] = useState<Skill | null>(null)
   const [restoreSkillState, setRestoreSkill] = useState<Skill | null>(null)
+
+  // 用户级 binding — admin 页面每行都显示「我的启用/停用」toggle,
+  // 让 admin 在管理 skill 的同时也能看到自己的收藏状态。
+  const bindings = useUserSkillBindings()
+  const onToggleBinding = useCallback(
+    async (skill: Skill) => {
+      try {
+        if (bindings.enabledMap[skill.id]) {
+          await bindings.disable(skill.id)
+        } else {
+          await bindings.enable(skill.id)
+        }
+      } catch (e) {
+        console.error("toggle binding failed", e)
+      }
+    },
+    [bindings],
+  )
 
   // 用 useDataTable 自带的 server fetch。
   // data 表 schema 形如 { items, total }, 但 DataTable 期待 data + total。
@@ -177,6 +196,9 @@ export default function SkillAdminPage() {
             currentUserId,
               isSuperAdmin,
               isAdmin,
+              enabledMap: bindings.enabledMap,
+              isTogglingBinding: bindings.isToggling,
+              onToggleBinding,
               onDetail: setDetailSkill,
               onUpdate: setUpdateSkill,
               onArchive: setArchiveSkill,
@@ -269,15 +291,7 @@ function DataTableWrapper({
         }),
   ) => void
   statusFilter: string
-  meta: {
-    currentUserId: number | null
-    isSuperAdmin: boolean
-    isAdmin: boolean
-    onDetail: (skill: Skill) => void
-    onUpdate: (skill: Skill) => void
-    onArchive: (skill: Skill) => void
-    onRestore: (skill: Skill) => void
-  }
+  meta: SkillActionsMeta
 }) {
   return (
     <>
