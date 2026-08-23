@@ -10,7 +10,7 @@
  * service 端的 contentApi.getAudioInterpretation 直接转发后端的
  * { data, meta } 包络,hook 里用 extractItems + res.meta 各自消费。
  */
-import { useQuery } from "@tanstack/react-query"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { contentApi } from "@/services/content"
 import type { AudioInterpretationItem } from "@/features/content/types"
 import {
@@ -51,6 +51,10 @@ export function useAudioInterpretation(
       return { items, meta: res.meta }
     },
     staleTime: 30_000,
+    // 翻页时保留上一页数据 — 新 queryKey fetch 期间不闪 skeleton,
+    // 跟其他 7 个迁移过的 hook(useUsers / usePlans / useMenus 等)
+    // 的体感对齐。
+    placeholderData: keepPreviousData,
   })
 
   const items = list.data?.items ?? []
