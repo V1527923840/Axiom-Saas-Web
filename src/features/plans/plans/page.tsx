@@ -1,11 +1,10 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { ConfirmDialog } from "@/components/confirm-dialog"
-import { useAuth } from "@/contexts/auth-context"
-import { usePlans } from "../hooks/use-plans"
-import { useMenus } from "@/features/menus/hooks/use-menus"
+import { usePlans, usePlanMenus, useAssignPlanMenus } from "../hooks/use-plans"
+import { useMenuTree } from "@/features/menus/hooks/use-menus"
 import { plansColumns } from "../components/plans-columns"
 import { DataTable } from "@/components/data-table"
 import { PlanDialog } from "../components/plan-dialog"
@@ -20,109 +19,96 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Plan, PlanFormValues } from "../types"
-import type { MenuTreeNode } from "@/features/menus/types"
 
 export default function PlansPage() {
-  const { token } = useAuth()
+  // searchQuery 是「草稿」(用户在输入框里敲的字),
+  // appliedSearch 是「已应用」(放进 queryKey 触发 TanStack Query 拉数据)。
+  // 搜索按钮 = 把草稿提交为已应用。queryKey 改了 TanStack Query 自动 refetch —
+  // 不需要手动调 fetchPlans。
+  const [searchQuery, setSearchQuery] = useState("")
+  const [appliedSearch, setAppliedSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  // page / pageSize 走 useState — 翻页时它们变,useMemo 重算 params,
+  // queryKey 跟着变,TanStack Query 自动 refetch。
+  const [page, setPage] = useState(0)
+  const [pageSize] = useState(10)
+
+  const params = useMemo(
+    () => ({
+      page,
+      pageSize,
+      search: appliedSearch || undefined,
+      status: statusFilter === "all" ? undefined : statusFilter,
+    }),
+    [page, pageSize, appliedSearch, statusFilter],
+  )
+
   const {
-    plans,
-    loading,
-    error,
+    items: plans,
     pagination,
-    fetchPlans,
+    isLoading: loading,
+    error,
     createPlan,
     updatePlan,
     deletePlan,
-    fetchPlanMenus,
-    assignPlanMenus,
-  } = usePlans()
-  const { fetchMenuTree } = useMenus()
+  } = usePlans(params)
+
+  // 菜单树走 useMenuTree — 跨模块订阅,创建/删除菜单时自动 invalidate
+  // (use-menus.ts 里的 create/update/delete 都 invalidate ['menus', 'tree'])。
+  const { data: menuTree = [] } = useMenuTree()
+
+  // assignPlanMenus 走独立 mutation hook — 不影响 plans list 缓存,
+  // 仅 invalidate ['plans', planId, 'menus'] 让 usePlanMenus 重拉。
+  const assignMenus = useAssignPlanMenus()
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [formDialogOpen, setFormDialogOpen] = useState(false)
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
   const [dialogMode, setDialogMode] = useState<"view" | "edit">("view")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string | undefined>("all")
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [planToDelete, setPlanToDelete] = useState<Plan | null>(null)
-  const [menuTree, setMenuTree] = useState<MenuTreeNode[]>([])
   const [selectedMenuIds, setSelectedMenuIds] = useState<string[]>([])
-  const [isLoadingMenus, setIsLoadingMenus] = useState(false)
 
-  const initialized = useRef(false)
+  // 关联菜单走 usePlanMenus — 仅在编辑某个 plan 时拉取。
+  // 双闸门:formDialogOpen + selectedPlan.id(避免刚开 add 弹窗就触发空 planId 请求)。
+  const planMenusQuery = usePlanMenus(formDialogOpen ? selectedPlan?.id ?? null : null)
+  const isLoadingMenus = planMenusQuery.isLoading
+
   useEffect(() => {
-    if (!initialized.current) {
-      initialized.current = true
-      if (token) {
-        fetchPlans({
-          page: 0,
-          pageSize: pagination.pageSize,
-          search: searchQuery || undefined,
-          status: statusFilter === "all" ? undefined : statusFilter,
+    // planMenusQuery.data 一旦有值,扁平化抽出所有 id(包括 nested children)。
+    const menus = planMenusQuery.data
+    if (menus && selectedPlan && formDialogOpen) {
+      const allIds: string[] = []
+      const collectIds = (nodes: typeof menus) => {
+        nodes.forEach((m) => {
+          allIds.push(m.id)
+          if (m.children && m.children.length > 0) {
+            collectIds(m.children)
+          }
         })
       }
-    }
-  }, [token, fetchPlans])
-
-  useEffect(() => {
-    // Fetch menu tree when form dialog opens
-    if (formDialogOpen && menuTree.length === 0) {
-      fetchMenuTree().then((tree) => {
-        setMenuTree(tree)
-      })
-    }
-  }, [formDialogOpen, fetchMenuTree, menuTree.length])
-
-  useEffect(() => {
-    // When editing a plan, fetch its menus
-    if (selectedPlan && formDialogOpen) {
-      setIsLoadingMenus(true)
-      fetchPlanMenus(selectedPlan.id).then((menus) => {
-        // Flatten tree to get ALL menu IDs (including nested children)
-        const allIds: string[] = []
-        const collectIds = (nodes: typeof menus) => {
-          nodes.forEach((m) => {
-            allIds.push(m.id)
-            if (m.children && m.children.length > 0) {
-              collectIds(m.children)
-            }
-          })
-        }
-        collectIds(menus)
-        setSelectedMenuIds(allIds)
-        setIsLoadingMenus(false)
-      })
+      collectIds(menus)
+      setSelectedMenuIds(allIds)
     } else if (!selectedPlan) {
       setSelectedMenuIds([])
     }
-  }, [selectedPlan, formDialogOpen, fetchPlanMenus])
+  }, [planMenusQuery.data, selectedPlan, formDialogOpen])
 
-  const handlePageChange = (page: number) => {
-    fetchPlans({
-      page,
-      pageSize: pagination.pageSize,
-      search: searchQuery || undefined,
-      status: statusFilter === "all" ? undefined : statusFilter,
-    })
+  const handlePageChange = (next: number) => {
+    setPage(next)
   }
 
-  const handlePageSizeChange = (pageSize: number) => {
-    fetchPlans({
-      page: 0,
-      pageSize,
-      search: searchQuery || undefined,
-      status: statusFilter === "all" ? undefined : statusFilter,
-    })
+  const handlePageSizeChange = (nextSize: number) => {
+    // pageSize 暂时写死 10,这个 callback 保留是因为 DataTable pagination
+    // shape 要求 onPageSizeChange 存在。未来要做 page size 选择器时,
+    // 把 pageSize 也提为 useState,然后 params 重算 → queryKey 变 → 自动 refetch。
+    void nextSize
+    setPage(0)
   }
 
   const handleSearch = () => {
-    fetchPlans({
-      page: 0,
-      pageSize: pagination.pageSize,
-      search: searchQuery || undefined,
-      status: statusFilter === "all" ? undefined : statusFilter,
-    })
+    setAppliedSearch(searchQuery)
+    setPage(0)
   }
 
   const handleView = (plan: Plan) => {
@@ -155,18 +141,21 @@ export default function PlansPage() {
 
   const handleFormSubmit = async (values: PlanFormValues) => {
     try {
+      let targetPlanId: string | undefined
       if (selectedPlan) {
         await updatePlan(selectedPlan.id, values)
-        // Save menu associations
-        if (values.menuIds) {
-          await assignPlanMenus(selectedPlan.id, values.menuIds)
-        }
+        targetPlanId = selectedPlan.id
       } else {
-        const newPlan = await createPlan(values as any)
-        // Save menu associations for new plan
-        if (newPlan?.id && values.menuIds) {
-          await assignPlanMenus(newPlan.id, values.menuIds)
-        }
+        const newPlan = await createPlan(values)
+        targetPlanId = newPlan?.id
+      }
+
+      // 保存菜单关联 — 仅在有 menuIds 时调用,避免空数组 PATCH 抖动后端
+      if (targetPlanId && values.menuIds) {
+        await assignMenus.mutateAsync({
+          planId: targetPlanId,
+          menuIds: values.menuIds,
+        })
       }
 
       setFormDialogOpen(false)
@@ -223,7 +212,7 @@ export default function PlansPage() {
       <div className="px-4 lg:px-6">
         {error && (
           <div className="mb-4 p-4 bg-destructive/10 text-destructive rounded-lg">
-            加载错误: {error}
+            加载错误: {error instanceof Error ? error.message : String(error)}
           </div>
         )}
         <DataTable

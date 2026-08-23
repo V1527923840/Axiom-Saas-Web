@@ -1,121 +1,173 @@
-"use client"
-
-import { useState, useCallback } from "react"
+/**
+ * useSubscription — paginated subscription list + current-subscription +
+ * subscribe / cancel / upgrade mutations.
+ *
+ * Migrated to TanStack Query (mirroring use-users.ts pattern).
+ * 列表 + current 都用 useQuery 缓存;mutators 在 onSuccess 里
+ * invalidate 列表和 current。
+ *
+ * 分页元数据走 src/lib/paginated-response.ts 的 readRootPagination —
+ * 处理 1-based API → 0-based 内部的转换 + 后端字段在响应根级别的事实
+ * (admin-server CLAUDE.md 「格式 A」)。
+ *
+ * 老的 useState+useCallback 版本里 cancelSubscription 会在前端把 row 的
+ * status 强行置成 'cancelled',然后不 refetch — 这种本地合成会让 cache
+ * 跟 backend 状态慢慢错位(尤其是订阅还有异步关单、自动续费等流程)。
+ * 现在改成 invalidate 让 backend 当单一事实源。
+ */
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query"
 import { get, post, del } from "@/lib/api"
-import type { Subscription, SubscriptionQueryParams, CurrentSubscriptionInfo } from "../types"
-import { useAuth } from "@/contexts/auth-context"
+import type {
+  Subscription,
+  SubscriptionQueryParams,
+  CurrentSubscriptionInfo,
+} from "../types"
+import {
+  readRootPagination,
+  toApiPageParams,
+  extractItems,
+  type InternalPagination,
+} from "@/lib/paginated-response"
 
-export function useSubscription() {
-  const { token } = useAuth()
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
-  const [currentSubscription, setCurrentSubscription] = useState<CurrentSubscriptionInfo | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [pagination, setPagination] = useState({
-    page: 0,
-    pageSize: 10,
-    total: 0,
+const PAGE_SIZE_DEFAULT = 10
+
+export interface UseSubscriptionResult {
+  items: Subscription[]
+  pagination: InternalPagination
+  currentSubscription: CurrentSubscriptionInfo | null
+  isLoading: boolean
+  isLoadingCurrent: boolean
+  isMutating: boolean
+  error: Error | null
+  refetch: () => void
+  refetchCurrent: () => void
+  subscribe: (planId: string, autoRenew?: boolean) => Promise<Subscription>
+  cancelSubscription: (subscriptionId: string) => Promise<void>
+  upgradeSubscription: (newPlanId: string) => Promise<{
+    success: boolean
+    subscription: Subscription
+  }>
+}
+
+// 后端响应形状 — 列表端点返回 { data: Subscription[], total, page, pageSize }
+// (infinityPagination, admin-server CLAUDE.md 格式 A)
+interface SubscriptionsApiResponse {
+  data: Subscription[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export function useSubscription(
+  params: SubscriptionQueryParams = {},
+): UseSubscriptionResult {
+  const qc = useQueryClient()
+
+  const list = useQuery({
+    queryKey: ["subscriptions", params] as const,
+    queryFn: async (): Promise<SubscriptionsApiResponse> => {
+      const { page, pageSize } = toApiPageParams(params, {
+        pageSize: PAGE_SIZE_DEFAULT,
+      })
+      const queryParams: Record<string, string | number> = { page, pageSize }
+      if (params.status) queryParams.status = String(params.status)
+      if (params.userId) queryParams.userId = params.userId
+      if (params.planId) queryParams.planId = params.planId
+      if (params.startDate) queryParams.startDate = params.startDate
+      if (params.endDate) queryParams.endDate = params.endDate
+      const res = await get<SubscriptionsApiResponse>("/v1/subscriptions", {
+        params: queryParams,
+      })
+      // 处理两种 response 形状(res.data 可能是数组本身,也可能包在 { data } 里)
+      const rawData = res.data as unknown
+      const items = extractItems<Subscription>(rawData)
+      // rawData 可能是数组本身(后端直返),也可能是包络 { data, total, page, pageSize }。
+      // extractItems 已经处理过数组情况;这里再用 extractItems 的结果补一个包络。
+      const wrapped: SubscriptionsApiResponse = Array.isArray(rawData)
+        ? { data: items, total: items.length, page: 1, pageSize: PAGE_SIZE_DEFAULT }
+        : { ...(rawData as SubscriptionsApiResponse), data: items }
+      return wrapped
+    },
+    staleTime: 30_000,
   })
 
-  const fetchSubscriptions = useCallback(async (params: SubscriptionQueryParams = {}) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const page = (params.page ?? 0) + 1
-      const limit = params.pageSize ?? 10
-      const queryParams: Record<string, string | number> = { page, limit }
+  // current subscription 是 auth-scoped (走 Bearer token 自动确定当前用户),
+  // 不需要 userId 注入 queryKey — token 切换时 invalidate 即可。
+  const current = useQuery({
+    queryKey: ["subscriptions", "current"] as const,
+    queryFn: async (): Promise<CurrentSubscriptionInfo | null> => {
+      try {
+        const res = await get<CurrentSubscriptionInfo>("/v1/subscriptions/current")
+        return res.data ?? null
+      } catch {
+        // 当前用户没订阅时后端经常返回 404 — 当作「无活跃订阅」,返回 null
+        return null
+      }
+    },
+    staleTime: 30_000,
+  })
 
-      const response = await get<{ data: Subscription[], total: number, page: number, pageSize: number }>("/v1/subscriptions", { params: queryParams, token: token ?? undefined })
-      // Handle both wrapped and unwrapped response formats
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawData = response.data as any
-      const subsData = Array.isArray(rawData) ? rawData : (rawData?.data || [])
-      setSubscriptions(subsData)
-      setPagination({
-        page: response.meta?.page ?? 1,
-        pageSize: response.meta?.pageSize ?? 10,
-        total: response.meta?.total ?? 0,
-      })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch subscriptions")
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
+  const subscribeMut = useMutation({
+    mutationFn: async (vars: {
+      planId: string
+      autoRenew: boolean
+    }): Promise<Subscription> => {
+      const res = await post<Subscription>("/v1/subscriptions", vars)
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subscriptions"] })
+    },
+  })
 
-  const fetchCurrentSubscription = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await get<CurrentSubscriptionInfo>("/v1/subscriptions/current", { token: token ?? undefined })
-      setCurrentSubscription(response.data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch current subscription")
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
+  const cancelMut = useMutation({
+    mutationFn: async (subscriptionId: string) => {
+      await del(`/v1/subscriptions/${subscriptionId}`)
+    },
+    // ★ 老代码在 onSuccess 把 row 的 status 强行写成本地 'cancelled',但不 refetch —
+    // 这种「本地合成」会让 cache 跟 backend 状态慢慢错位(订阅还有自动续费 /
+    // 异步关单 / 退款等流程)。现在改成 invalidate 让 backend 当事实源,
+    // row 的 cancelled 状态由下一次 fetch 拉回来。
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subscriptions"] })
+    },
+  })
 
-  const subscribe = useCallback(async (planId: string, autoRenew: boolean = false) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await post<Subscription>("/v1/subscriptions", { planId, autoRenew }, { token: token ?? undefined })
-      const newSub = response.data
-      setSubscriptions((prev) => [newSub, ...prev])
-      return newSub
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to subscribe")
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
-
-  const cancelSubscription = useCallback(async (subscriptionId: string) => {
-    setLoading(true)
-    setError(null)
-    try {
-      await del(`/v1/subscriptions/${subscriptionId}`, { token: token ?? undefined })
-      setSubscriptions((prev) =>
-        prev.map((sub) =>
-          sub.id === subscriptionId
-            ? { ...sub, status: "cancelled" as const, updatedAt: new Date().toISOString() }
-            : sub
-        )
+  const upgradeMut = useMutation({
+    mutationFn: async (newPlanId: string) => {
+      const res = await post<{ success: boolean; subscription: Subscription }>(
+        "/v1/subscriptions/upgrade",
+        { newPlanId },
       )
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to cancel subscription")
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
+      return res.data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subscriptions"] })
+    },
+  })
 
-  const upgradeSubscription = useCallback(async (newPlanId: string) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await post<{ success: boolean, subscription: Subscription }>("/v1/subscriptions/upgrade", { newPlanId }, { token: token ?? undefined })
-      return response.data
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upgrade subscription")
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
+  const rawData = list.data
+  const items = rawData?.data ?? []
+  const pagination = readRootPagination(rawData, { pageSize: PAGE_SIZE_DEFAULT })
 
   return {
-    subscriptions,
-    currentSubscription,
-    loading,
-    error,
+    items,
     pagination,
-    fetchSubscriptions,
-    fetchCurrentSubscription,
-    subscribe,
-    cancelSubscription,
-    upgradeSubscription,
+    currentSubscription: current.data ?? null,
+    isLoading: list.isLoading,
+    isLoadingCurrent: current.isLoading,
+    isMutating:
+      subscribeMut.isPending || cancelMut.isPending || upgradeMut.isPending,
+    error: (list.error ?? current.error ?? null) as Error | null,
+    refetch: list.refetch,
+    refetchCurrent: current.refetch,
+    subscribe: (planId, autoRenew = false) =>
+      subscribeMut.mutateAsync({ planId, autoRenew }),
+    cancelSubscription: (id) => cancelMut.mutateAsync(id),
+    upgradeSubscription: (newPlanId) => upgradeMut.mutateAsync(newPlanId),
   }
 }

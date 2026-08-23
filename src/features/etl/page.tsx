@@ -1,6 +1,5 @@
 "use client"
-
-import { useEffect, useState } from "react"
+import { useState, useMemo } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { FileList } from "./components/FileList"
 import { ImportDialog } from "./components/ImportDialog"
@@ -8,29 +7,33 @@ import { JobHistory } from "./components/JobHistory"
 import { useEtlFiles, useEtlImport, useEtlJobs } from "./hooks/use-etl"
 
 export default function EtlManagementPage() {
-  const { files, loading: filesLoading, fetchFiles } = useEtlFiles()
-  const { importFiles, loading: importLoading, error: importError } = useEtlImport()
-  const { jobs, loading: jobsLoading, pagination, fetchJobs } = useEtlJobs()
+  const { files, isLoading: filesLoading, refetch: refetchFiles } = useEtlFiles()
+  // 翻页 state 提到 page 层 — params 变 → queryKey 变 → TanStack Query
+  // 自动 refetch。useEtlJobs 内部不能 capture initialParams by closure,
+  // 否则翻页请求带新参数但 queryFn 用旧参数,翻页静默失效。
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(20)
+  const jobsParams = useMemo(() => ({ page, pageSize }), [page, pageSize])
+  const { jobs, isLoading: jobsLoading, pagination } = useEtlJobs(jobsParams)
+  const {
+    importFiles,
+    isPending: importLoading,
+    error: importError,
+    reset: resetImport,
+  } = useEtlImport()
 
   const [selectedFiles, setSelectedFiles] = useState<string[]>([])
   const [importDialogOpen, setImportDialogOpen] = useState(false)
 
-  // Initial fetch
-  useEffect(() => {
-    fetchFiles()
-    fetchJobs()
-  }, [fetchFiles, fetchJobs])
-
   const handleImport = async (dryRun: boolean) => {
     try {
-      const result = await importFiles(selectedFiles, { dryRun })
-      console.log("Import started:", result)
+      await importFiles(selectedFiles, { dryRun })
+      // import 成功后无需手动 refetch jobs — useEtlImport 的 onSuccess
+      // 已经 invalidate ['etl', 'jobs'],TanStack Query 会自动刷新。
       setImportDialogOpen(false)
       setSelectedFiles([])
-      // Refresh jobs list to see the new job
-      fetchJobs()
     } catch (error) {
-      // Error is already handled in the hook
+      // 错误已经挂在 mutation.error 上,ImportDialog 通过 importError prop 渲染。
       console.error("Import failed:", error)
     }
   }
@@ -44,7 +47,7 @@ export default function EtlManagementPage() {
           loading={filesLoading}
           selectedFiles={selectedFiles}
           onSelectionChange={setSelectedFiles}
-          onRefresh={fetchFiles}
+          onRefresh={refetchFiles}
         />
 
         {/* Action Buttons */}
@@ -71,17 +74,25 @@ export default function EtlManagementPage() {
           jobs={jobs}
           loading={jobsLoading}
           pagination={pagination}
-          onPageChange={(page) => fetchJobs({ page: page - 1, pageSize: pagination.pageSize })}
-          onPageSizeChange={(pageSize) => fetchJobs({ page: 0, pageSize })}
+          // pagination.page 是 1-based(JobHistory 契约),useEtlJobs 内部 0-based,
+          // 这里 -1 转回 0-based 给 state,翻页 state 推进 → params 变 → refetch
+          onPageChange={(next) => setPage(next - 1)}
+          onPageSizeChange={(size) => {
+            setPageSize(size)
+            setPage(0)
+          }}
         />
 
         {/* Import Dialog */}
         <ImportDialog
           open={importDialogOpen}
-          onOpenChange={setImportDialogOpen}
+          onOpenChange={(open) => {
+            setImportDialogOpen(open)
+            if (!open) resetImport()
+          }}
           selectedFiles={selectedFiles}
           importLoading={importLoading}
-          importError={importError}
+          importError={importError?.message ?? null}
           onImport={handleImport}
         />
       </div>

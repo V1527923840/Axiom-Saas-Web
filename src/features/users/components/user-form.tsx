@@ -74,7 +74,10 @@ interface UserFormProps {
 
 export function UserForm({ initialData, onSubmit, onCancel, loading, onResetPassword }: UserFormProps) {
   const { token } = useAuth()
-  const { plans, fetchPlans } = usePlans()
+  // usePlans 现在走 TanStack Query — `items` 是 query.data,
+  // 传 params 自动 fetch,不再需要 useEffect + fetchPlans。
+  // status: 'active' 是为了下拉不显示禁用/废弃套餐。
+  const { items: plans } = usePlans({ page: 0, pageSize: 50, status: "active" })
   // useRoles 现在走 TanStack Query — `roles` 是 query.data
   const rolesQuery = useRoles()
   const roleOptions = rolesQuery.data ?? []
@@ -96,14 +99,6 @@ export function UserForm({ initialData, onSubmit, onCancel, loading, onResetPass
   const [menuTree, setMenuTree] = useState<MenuTreeNode[]>([])
   const [checkedMenuIds, setCheckedMenuIds] = useState<string[]>([])
   const [menuLoading, setMenuLoading] = useState(false)
-
-  useEffect(() => {
-    if (token) {
-      // fetchPlans 还是旧 useState 模式(use-plans 还没迁),TanStack Query 这边不用手动 fetch。
-      fetchPlans({ page: 0, pageSize: 50, status: 'active' })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token])
 
   // Re-sync the form whenever the target user changes (e.g. switching
   // between two users without closing the dialog, or after the parent

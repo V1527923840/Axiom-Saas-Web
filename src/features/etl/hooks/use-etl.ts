@@ -1,140 +1,190 @@
-import { useState, useCallback } from "react"
+/**
+ * useEtl — 待入库文件列表 + 导入 + 任务历史(jobs)。
+ *
+ * 迁移到 TanStack Query(对照 use-users.ts):
+ *  - useEtlFiles/useEtlJobs 走 useQuery 缓存 + 自动 refetch
+ *  - useEtlImport 是 useMutation,onSuccess 自动 invalidate jobs 列表 —
+ *    之前 page.tsx 在 import 成功后手动调 fetchJobs(),现在交给缓存层处理
+ *  - useJobStatus 没有任何 caller(grep 全仓库只剩 hook 自己)—
+ *    它的 `loading` setter 还是 declared-but-never-written 的 dead state,
+ *    干脆删掉整个 hook。需要时再单独写一个 useJobStatus(jobId)。
+ *
+ * 分页元数据走 src/lib/paginated-response.ts 的 readRootPagination —
+ * 处理 1-based API → 0-based 内部的转换 + 后端字段在响应根级别的事实。
+ *
+ * JobHistory 组件契约:它消费 pagination.page 是 1-based(用 page-1 / page+1
+ * 计算翻页,用 page<=1 判断 disabled)。所以 hook 返回前把 internal 0-based
+ * 再 + 1 转回 1-based,保留 JobHistory 不用动 — 跟 useUsers 返回 0-based
+ * (DataTable 用)不同,这里返回 1-based 是组件契约的硬要求。
+ */
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { get, post } from "@/lib/api"
-import type { EtlFileItem, EtlJob, EtlImportOptions, EtlImportResponse, EtlJobsQueryParams } from "../types"
-import { useAuth } from "@/contexts/auth-context"
+import type {
+  EtlFileItem,
+  EtlJob,
+  EtlImportOptions,
+  EtlImportResponse,
+  EtlJobsQueryParams,
+} from "../types"
+import {
+  readRootPagination,
+  toApiPageParams,
+} from "@/lib/paginated-response"
 
-export function useEtlFiles() {
-  const { token } = useAuth()
-  const [files, setFiles] = useState<EtlFileItem[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+const PAGE_SIZE_DEFAULT = 20
 
-  const fetchFiles = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await get<{ data: EtlFileItem[], total: number }>("/v1/etl/files", {
-        token: token ?? undefined,
-      })
-      const data = response.data
-      setFiles(Array.isArray(data) ? data : (data?.data || []))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch files")
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
-
-  return { files, loading, error, fetchFiles }
+// 后端响应形状 — 列表端点返回 { data: EtlJob[], total, page, pageSize }
+// (infinityPagination, admin-server CLAUDE.md 格式 A)
+interface EtlJobsApiResponse {
+  data: EtlJob[]
+  total: number
+  page: number
+  pageSize: number
 }
 
-export function useEtlImport() {
-  const { token } = useAuth()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const importFiles = useCallback(async (
-    files: string[],
-    options: EtlImportOptions = {}
-  ): Promise<EtlImportResponse> => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await post<EtlImportResponse>("/v1/etl/import", {
-        files,
-        options,
-      }, { token: token ?? undefined })
-      return response.data
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to import files"
-      setError(message)
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
-
-  return { importFiles, loading, error }
+// 后端响应形状 — files 端点返回 { data: EtlFileItem[], total }
+// (infinityPagination,admin-server CLAUDE.md 格式 A)
+interface EtlFilesApiResponse {
+  data: EtlFileItem[]
+  total: number
 }
 
-export function useEtlJobs() {
-  const { token } = useAuth()
-  const [jobs, setJobs] = useState<EtlJob[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [pagination, setPagination] = useState({
-    page: 0,
-    pageSize: 20,
-    total: 0,
+export interface UseEtlFilesResult {
+  files: EtlFileItem[]
+  isLoading: boolean
+  error: Error | null
+  refetch: () => void
+}
+
+export function useEtlFiles(): UseEtlFilesResult {
+  const files = useQuery({
+    queryKey: ["etl", "files"] as const,
+    queryFn: async (): Promise<EtlFileItem[]> => {
+      const res = await get<EtlFilesApiResponse>("/v1/etl/files")
+      // 后端包络可能是 { data: [...] } 也可能是裸数组,都兼容
+      const raw = res.data as unknown
+      if (Array.isArray(raw)) return raw as EtlFileItem[]
+      const wrapped = raw as { data?: EtlFileItem[] } | null
+      return Array.isArray(wrapped?.data) ? wrapped!.data : []
+    },
+    staleTime: 30_000,
   })
 
-  const fetchJobs = useCallback(async (params: EtlJobsQueryParams = {}) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const page = (params.page ?? 0) + 1
-      const pageSize = params.pageSize ?? 20
+  return {
+    files: files.data ?? [],
+    isLoading: files.isLoading,
+    error: files.error,
+    refetch: files.refetch,
+  }
+}
+
+export interface UseEtlImportResult {
+  importFiles: (files: string[], options?: EtlImportOptions) => Promise<EtlImportResponse>
+  isPending: boolean
+  error: Error | null
+  reset: () => void
+}
+
+export function useEtlImport(): UseEtlImportResult {
+  const qc = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: async ({
+      files,
+      options,
+    }: {
+      files: string[]
+      options?: EtlImportOptions
+    }): Promise<EtlImportResponse> => {
+      const res = await post<EtlImportResponse>("/v1/etl/import", { files, options })
+      return res.data
+    },
+    // ★ import 成功后刷新任务列表,让新 job 立刻出现。
+    // 之前 page.tsx 在 import 成功后手动调 fetchJobs(),
+    // 现在交给缓存层,所有持有 ['etl', 'jobs'] query 的组件都会自动刷新。
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["etl", "jobs"] })
+    },
+  })
+
+  return {
+    importFiles: (files, options) => mutation.mutateAsync({ files, options }),
+    isPending: mutation.isPending,
+    error: mutation.error,
+    reset: mutation.reset,
+  }
+}
+
+export interface EtlJobsPagination {
+  /** 1-based(JobHistory 组件契约)。 */
+  page: number
+  pageSize: number
+  total: number
+}
+
+export interface UseEtlJobsResult {
+  jobs: EtlJob[]
+  pagination: EtlJobsPagination
+  isLoading: boolean
+  error: Error | null
+  refetch: () => void
+}
+
+/**
+ * params 必须由 caller 传入(从 useState 派生),params 变 → queryKey 变 →
+ * TanStack Query 自动 refetch。不要 capture initialParams by closure —
+ * 那会导致翻页请求带新参数但 queryFn 仍用旧参数,翻页静默失效。
+ */
+export function useEtlJobs(params: EtlJobsQueryParams = {}): UseEtlJobsResult {
+  // JSON.stringify 给 params 做稳定 key;对象引用每次 render 都变,
+  // 直接放 queryKey 会让 TanStack Query 每次 render 都 refetch。
+  const paramsKey = JSON.stringify(params)
+
+  const list = useQuery({
+    queryKey: ["etl", "jobs", paramsKey] as const,
+    queryFn: async (): Promise<EtlJobsApiResponse> => {
+      const { page, pageSize } = toApiPageParams(params, {
+        pageSize: PAGE_SIZE_DEFAULT,
+      })
       const queryParams: Record<string, string | number> = { page, pageSize }
       if (params.status) queryParams.status = params.status
       if (params.dateFrom) queryParams.dateFrom = params.dateFrom
       if (params.dateTo) queryParams.dateTo = params.dateTo
 
-      const response = await get<{ data: EtlJob[], total: number, page: number, pageSize: number }>(
-        "/v1/etl/jobs",
-        { params: queryParams, token: token ?? undefined }
-      )
-      const rawData = response.data as { data?: EtlJob[], total?: number, page?: number, pageSize?: number }
-      const jobsData = Array.isArray(rawData) ? rawData : (rawData?.data || [])
-      setJobs(jobsData)
-      setPagination({
-        page: response.meta?.page ?? 1,
-        pageSize: response.meta?.pageSize ?? 20,
-        total: response.meta?.total ?? 0,
-      })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch jobs")
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
+      const res = await get<EtlJobsApiResponse>("/v1/etl/jobs", { params: queryParams })
+      const rawData = res.data as unknown
+      if (Array.isArray(rawData)) {
+        return {
+          data: rawData as EtlJob[],
+          total: (rawData as EtlJob[]).length,
+          page,
+          pageSize,
+        }
+      }
+      const wrapped = rawData as EtlJobsApiResponse
+      return {
+        data: Array.isArray(wrapped.data) ? wrapped.data : [],
+        total: wrapped.total ?? 0,
+        page: wrapped.page ?? page,
+        pageSize: wrapped.pageSize ?? pageSize,
+      }
+    },
+    staleTime: 30_000,
+  })
 
-  const getJob = useCallback(async (jobId: string): Promise<EtlJob | null> => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await get<EtlJob>(`/v1/etl/jobs/${jobId}`, {
-        token: token ?? undefined,
-      })
-      return response.data
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to get job")
-      return null
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
+  const rawData = list.data
+  // internal 0-based → 外部 1-based(JobHistory 契约)
+  const internal = readRootPagination(rawData, { pageSize: PAGE_SIZE_DEFAULT })
+  const pagination: EtlJobsPagination = {
+    page: internal.page + 1,
+    pageSize: internal.pageSize,
+    total: internal.total,
+  }
 
-  return { jobs, loading, error, pagination, fetchJobs, getJob }
-}
-
-export function useJobStatus() {
-  const { token } = useAuth()
-  const [job, setJob] = useState<EtlJob | null>(null)
-  const [loading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const pollJobStatus = useCallback(async (jobId: string): Promise<EtlJob | null> => {
-    try {
-      const response = await get<EtlJob>(`/v1/etl/jobs/${jobId}`, {
-        token: token ?? undefined,
-      })
-      setJob(response.data)
-      return response.data
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to poll job status")
-      return null
-    }
-  }, [token])
-
-  return { job, loading, error, pollJobStatus }
+  return {
+    jobs: rawData?.data ?? [],
+    pagination,
+    isLoading: list.isLoading,
+    error: list.error,
+    refetch: list.refetch,
+  }
 }

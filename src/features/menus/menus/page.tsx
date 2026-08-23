@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { Plus } from "lucide-react"
-import { useMenus } from "../hooks/use-menus"
+import { useMenus, useMenuTree } from "../hooks/use-menus"
 import { MenuDialog } from "../components/menu-dialog"
 import { MenuTreeTable } from "../components/menu-tree-table"
 import { BaseLayout } from "@/components/layouts/base-layout"
@@ -12,14 +12,15 @@ import type { Menu, MenuFormValues } from "../types"
 
 export default function MenusPage() {
   const {
-    menuTree,
-    loading,
-    fetchMenus,
-    fetchMenuTree,
     createMenu,
     updateMenu,
     deleteMenu,
   } = useMenus()
+
+  // useMenuTree 自动 cache + 自动 refetch:
+  // mutators 的 onSettled 已经 invalidate `['menus', 'tree']`,
+  // 增删改后这里不需要手动 refetch。
+  const { data: menuTree = [], isLoading: treeLoading } = useMenuTree()
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
@@ -28,17 +29,9 @@ export default function MenusPage() {
   const [menuToDelete, setMenuToDelete] = useState<Menu | null>(null)
   const [topLevelMenus, setTopLevelMenus] = useState<Menu[]>([])
 
+  // 树就是顶级菜单(后端 /v1/menus/tree 返回的 root 节点 = parentId: null)
   useEffect(() => {
-    fetchMenuTree()
-    fetchMenus({ pageSize: 100 }) // Fetch all menus for parent selection
-  }, [fetchMenuTree, fetchMenus])
-
-  // Extract top-level menus from tree for parent selection dropdown
-  useEffect(() => {
-    if (menuTree.length > 0) {
-      // menuTree already contains only top-level menus (parentId: null) with nested children
-      setTopLevelMenus(menuTree)
-    }
+    setTopLevelMenus(menuTree)
   }, [menuTree])
 
   const handleView = useCallback((menu: Menu) => {
@@ -61,15 +54,15 @@ export default function MenusPage() {
   const confirmDelete = useCallback(async () => {
     if (menuToDelete) {
       try {
+        // mutator 的 onSettled 会自动 invalidate tree query
         await deleteMenu(menuToDelete.id)
         setDeleteConfirmOpen(false)
         setMenuToDelete(null)
-        fetchMenuTree()
       } catch (err) {
         console.error("Failed to delete menu:", err)
       }
     }
-  }, [menuToDelete, deleteMenu, fetchMenuTree])
+  }, [menuToDelete, deleteMenu])
 
   const handleAdd = useCallback(() => {
     setSelectedMenu(null)
@@ -86,11 +79,11 @@ export default function MenusPage() {
       }
       setDialogOpen(false)
       setSelectedMenu(null)
-      fetchMenuTree()
+      // 不再手动 fetchMenuTree() — mutator 内部已 invalidate
     } catch (err) {
       console.error("Failed to save menu:", err)
     }
-  }, [dialogMode, selectedMenu, createMenu, updateMenu, fetchMenuTree])
+  }, [dialogMode, selectedMenu, createMenu, updateMenu])
 
   return (
     <BaseLayout title="菜单管理" description="管理系统的菜单结构和权限配置">
@@ -107,7 +100,7 @@ export default function MenusPage() {
         <div className="px-4 lg:px-6">
           <MenuTreeTable
             data={menuTree}
-            loading={loading}
+            loading={treeLoading}
             onView={handleView}
             onEdit={handleEdit}
             onDelete={handleDelete}
@@ -123,7 +116,7 @@ export default function MenusPage() {
         menu={selectedMenu}
         parentMenus={topLevelMenus}
         onSubmit={handleSubmit}
-        loading={loading}
+        loading={false}
       />
 
       {/* Delete Confirm Dialog */}
