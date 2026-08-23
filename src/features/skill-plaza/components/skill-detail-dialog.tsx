@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { Wrench, Calendar, Hash } from "lucide-react"
+import { Wrench, Calendar } from "lucide-react"
 import type { Skill } from "@/types/skill"
 import { SkillTag } from "./skill-tag"
 import { EnableSkillButton } from "./enable-skill-button"
@@ -55,10 +55,11 @@ export function SkillDetailDialog({
             )}
           </div>
           <DialogDescription>
-            <span className="font-mono text-xs">{skill.code}</span>
-            <span className="mx-2 text-muted-foreground">·</span>
+            {/* skill.code 是后端生成的系统标识(UUID 形态),对终端用户没意义 ——
+                只在 URL / API 调用里用作 handle。DialogDescription 只展示
+                发布时间,代码本身不渲染。 */}
             <span className="text-xs text-muted-foreground">
-              {formatDate(skill.publishedAt)}
+              发布于 {formatDate(skill.publishedAt)}
             </span>
           </DialogDescription>
         </DialogHeader>
@@ -122,11 +123,10 @@ export function SkillDetailDialog({
           <Separator />
 
           <section className="flex items-center justify-between text-xs text-muted-foreground">
+            {/* contentHash 是内容寻址键,跟"版本号"语义不同 —— 之前带 v 前缀
+                会让用户误以为是 v1 / v2 那种 semver 版本。直接展示更新
+                时间就够了,内部 hash 跟用户无关。 */}
             <div className="flex items-center gap-3">
-              <span className="flex items-center gap-1">
-                <Hash className="size-3" />
-                v{skill.contentHash?.slice(0, 8) ?? "—"}
-              </span>
               <span className="flex items-center gap-1">
                 <Calendar className="size-3" />
                 更新于 {formatDate(skill.updatedAt)}
