@@ -1,266 +1,266 @@
-"use client"
-
-import { useState, useCallback } from "react"
+/**
+ * useUsers — paginated user list + create/update/delete mutations.
+ *
+ * Migrated to TanStack Query (mirroring skill-plaza's use-skills pattern).
+ * 列表通过 useQuery 缓存,mutators 在 onSuccess 里 invalidate 列表。
+ * 分页元数据走 src/lib/paginated-response.ts 的 readRootPagination —
+ * 处理 1-based API → 0-based 内部的转换 + 后端字段在响应根级别的事实
+ * (admin-server CLAUDE.md 「格式 A」)。
+ *
+ * 旧的 useState+useCallback 版本里 fetchUserMenus / assignMenusToUser
+ * 是 dead code(从来没被调用过)— 这次顺手删掉。RoleOption 由 useRoles
+ * 单独提供(也走 TanStack Query),useUsers 不再 re-export。
+ */
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { get, post, patch, del } from "@/lib/api"
-import type { User, UserQueryParams } from "../types"
+import type { User, UserQueryParams, UserFormValues } from "../types"
 import { DEFAULT_USER_PASSWORD } from "../types"
-import { useAuth } from "@/contexts/auth-context"
-import { useRoles } from "./use-roles"
+import {
+  readRootPagination,
+  toApiPageParams,
+  extractItems,
+  type InternalPagination,
+} from "@/lib/paginated-response"
 
-export function useUsers() {
-  const { token } = useAuth()
-  const { fetchRoles } = useRoles()
-  const [users, setUsers] = useState<User[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [pagination, setPagination] = useState({
-    page: 0,
-    pageSize: 10,
-    total: 0,
-  })
+const PAGE_SIZE_DEFAULT = 10
 
-  const fetchUsers = useCallback(async (params: UserQueryParams = {}) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const page = (params.page ?? 0) + 1 // Backend expects page starting from 1
-      const limit = params.pageSize ?? 10
-      const queryParams: Record<string, string | number> = { page, limit }
+export interface UseUsersResult {
+  items: User[]
+  pagination: InternalPagination
+  isLoading: boolean
+  error: Error | null
+  refetch: () => void
+  createUser: (data: UserFormValues) => Promise<User>
+  updateUser: (id: string, data: Partial<UserFormValues>) => Promise<void>
+  deleteUser: (id: string) => Promise<void>
+}
+
+// 后端响应形状 — 列表端点返回 { data: User[], total, page, pageSize }
+// (infinityPagination, admin-server CLAUDE.md 格式 A)
+interface UsersApiResponse {
+  data: User[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+// 19 字段的 raw→User 转换。封出来方便 queryFn 用,
+// 也方便 createUser / updateUser 共用同一个 mapping。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function transformUser(raw: any): User {
+  return {
+    id: String(raw.id),
+    name: `${raw.firstName || ""}${raw.lastName || ""}`.trim() || raw.email || "Unknown",
+    email: raw.email || "",
+    avatar: raw.avatar,
+    role: (typeof raw.role === "string"
+      ? raw.role
+      : raw.role?.name ?? null) as User["role"] ?? null,
+    roles: Array.isArray(raw.roles) ? raw.roles : [],
+    tier: raw.tier || "Lv0",
+    currentPlanId: raw.currentPlanId,
+    pointsBalance: raw.pointsBalance || 0,
+    chatQuotaUsed: raw.chatQuotaUsed || 0,
+    chatQuotaTotal: raw.chatQuotaTotal || 0,
+    subscriptionExpiredAt: raw.subscriptionExpiredAt,
+    registeredAt: raw.registeredAt || "",
+    lastLoginAt: raw.lastLoginAt,
+    status: (typeof raw.status === "string"
+      ? raw.status
+      : raw.status?.name?.toLowerCase()) as User["status"] || "active",
+  }
+}
+
+// 把表单的 name 拆成 firstName/lastName,跟单空格分词的英文名兼容,
+// 单 token(如中文名)整体塞进 firstName,避免 lastName 空字符串。
+function splitName(fullName: string): { firstName: string; lastName: string } {
+  const parts = (fullName ?? "").trim().split(/\s+/).filter(Boolean)
+  return {
+    firstName: parts[0] ?? fullName,
+    lastName: parts.slice(1).join(" "),
+  }
+}
+
+// 前端 UserFormValues → 后端 UserDto
+function formToApi(data: Partial<UserFormValues>): Record<string, unknown> {
+  const apiData: Record<string, unknown> = {}
+  if (data.name) {
+    const { firstName, lastName } = splitName(data.name)
+    apiData.firstName = firstName
+    apiData.lastName = lastName
+  }
+  if (data.email !== undefined) {
+    apiData.email = data.email
+  }
+  if (data.roleIds !== undefined) {
+    apiData.roleIds = data.roleIds
+  }
+  if (data.status) {
+    apiData.status = {
+      id: data.status === "active" ? 1 : data.status === "inactive" ? 2 : 3,
+    }
+  }
+  if (data.tier) {
+    apiData.tier = data.tier
+  }
+  if (data.currentPlanId !== undefined) {
+    apiData.currentPlanId = data.currentPlanId || null
+  }
+  // 密码留空 = 重置成默认密码,跟 create 行为一致
+  if (data.password !== undefined) {
+    apiData.password = data.password.trim() || DEFAULT_USER_PASSWORD
+  }
+  return apiData
+}
+
+export function useUsers(params: UserQueryParams = {}): UseUsersResult {
+  const qc = useQueryClient()
+
+  const list = useQuery({
+    queryKey: ["users", params] as const,
+    queryFn: async (): Promise<UsersApiResponse> => {
+      const { page, pageSize } = toApiPageParams(params, {
+        pageSize: PAGE_SIZE_DEFAULT,
+      })
+      const queryParams: Record<string, string | number> = { page, pageSize }
       if (params.role) queryParams.role = String(params.role)
       if (params.status) queryParams.status = String(params.status)
       if (params.tier) queryParams.tier = String(params.tier)
       if (params.search) queryParams.search = params.search
+      const res = await get<UsersApiResponse>("/v1/users", { params: queryParams })
+      // 处理两种 response 形状(res.data 可能是数组本身,也可能包在 { data } 里)
+      const rawData = res.data as unknown
+      const items = extractItems<User>(rawData).map(transformUser)
+      // rawData 可能是数组本身(后端直返),也可能是包络 { data, total, page, pageSize }。
+      // extractItems 已经处理过数组情况;这里再用 extractItems 的结果补一个包络。
+      const wrapped: UsersApiResponse = Array.isArray(rawData)
+        ? { data: items, total: items.length, page: 1, pageSize: PAGE_SIZE_DEFAULT }
+        : { ...(rawData as UsersApiResponse), data: items }
+      return wrapped
+    },
+    staleTime: 30_000,
+  })
 
-      const response = await get<{ data: User[], total: number, page: number, pageSize: number }>("/v1/users", { params: queryParams, token: token ?? undefined })
-      // Transform API data to match frontend User type
-      // API returns { data: [...], total, page, pageSize } but ApiResponse wraps it as { data: { data: [...], total, page, pageSize }, ... }
-      // So we need to check if response.data.data exists (wrapped) or response.data is the array itself
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawData = response.data as any
-      const usersData = Array.isArray(rawData) ? rawData : (rawData?.data || [])
-      // Fully transform to ensure no TypeORM entity objects remain
-      const transformedUsers: User[] = usersData.map((user: any) => ({
-        id: String(user.id),
-        name: `${user.firstName || ''}${user.lastName || ''}`.trim() || user.email || 'Unknown',
-        email: user.email || '',
-        avatar: user.avatar,
-        role: (typeof user.role === 'string'
-          ? user.role
-          : user.role?.name ?? null) as User['role'] ?? null,
-        roles: Array.isArray(user.roles) ? user.roles : [],
-        tier: user.tier || 'Lv0',
-        currentPlanId: user.currentPlanId,
-        pointsBalance: user.pointsBalance || 0,
-        chatQuotaUsed: user.chatQuotaUsed || 0,
-        chatQuotaTotal: user.chatQuotaTotal || 0,
-        subscriptionExpiredAt: user.subscriptionExpiredAt,
-        registeredAt: user.registeredAt || '',
-        lastLoginAt: user.lastLoginAt,
-        status: (typeof user.status === 'string' ? user.status : user.status?.name?.toLowerCase()) as User['status'] || 'active',
-      }))
-      setUsers(transformedUsers)
-      /*
-       * 分页元数据的位置 + 0/1-based 转换,两个 bug 叠加在一起导致
-       * 「进入就是第二页 / 翻页对不上」的症状:
-       *
-       *   1. 后端用 infinityPagination 返回 { data, total, page, pageSize }
-       *      (admin-server CLAUDE.md 「格式 A」),分页字段在根级别,不在
-       *      response.meta 里。读 response.meta?.page 永远是 undefined,
-       *      ?? 1 兜底 → 每次 fetch 后 pagination.page 都被重置成 1。
-       *
-       *   2. 即便 meta 里有 page,后端是 1-based,前端 internal pagination.page
-       *      必须是 0-based(DataTable 把 externalPagination.page 当作
-       *      pageIndex:0-based,显示时 +1)。1-based 直接塞回去 → DataTable
-       *      显示 pageIndex+1 = 2。
-       *
-       * 修法:从 rawData 根级别读,并把 1-based API page 转回 0-based。
-       */
-      setPagination({
-        page: Math.max(0, (rawData?.page ?? 1) - 1),
-        pageSize: rawData?.pageSize ?? 10,
-        total: rawData?.total ?? 0,
-      })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch users")
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
-
-  const createUser = useCallback(async (data: Omit<User, "id"> & { password?: string; roleIds?: number[] }) => {
-    setLoading(true)
-    setError(null)
-    try {
-      // Split a single "name" (nickname/display name) into firstName / lastName.
-      // - Multiple whitespace-separated words: first word → firstName, remainder → lastName.
-      // - Single word (e.g. Chinese names like "公开测试", or single tokens):
-      //   whole name → firstName, lastName stays empty.
-      // This avoids sending an empty lastName for names without spaces.
-      const nameParts = (data.name ?? "").trim().split(/\s+/).filter(Boolean)
+  const create = useMutation({
+    mutationFn: async (data: UserFormValues): Promise<User> => {
       const apiData = {
-        email: data.email,
-        firstName: nameParts[0] ?? data.name,
-        lastName: nameParts.slice(1).join(" "),
-        // If the operator left the password field blank, fall back to the
-        // shared default so the user can actually log in. The backend
-        // hashes whatever string it receives.
+        ...formToApi(data),
+        // 补 create 独有字段:password 默认值 + roleIds
         password: data.password?.trim() || DEFAULT_USER_PASSWORD,
         roleIds: data.roleIds ?? [],
-        status: { id: data.status === "active" ? 1 : data.status === "inactive" ? 2 : 3 },
-        tier: data.tier,
-        currentPlanId: data.currentPlanId || null,
       }
-      const response = await post<User>("/v1/users", apiData, { token: token ?? undefined })
-      // Transform response to frontend format
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawData = response.data as any
-      const newUser: User = {
-        id: String(rawData.id),
-        name: `${rawData.firstName || ''}${rawData.lastName || ''}`.trim() || rawData.email || 'Unknown',
-        email: rawData.email || '',
-        role: rawData.role ?? null,
-        roles: Array.isArray(rawData.roles) ? rawData.roles : [],
-        tier: rawData.tier || 'Lv0',
-        currentPlanId: rawData.currentPlanId,
-        status: (typeof rawData.status === 'string' ? rawData.status : rawData.status?.name?.toLowerCase()) as User['status'] || 'active',
-        pointsBalance: rawData.pointsBalance || 0,
-        chatQuotaUsed: rawData.chatQuotaUsed || 0,
-        chatQuotaTotal: rawData.chatQuotaTotal || 0,
-        registeredAt: rawData.registeredAt || '',
-        lastLoginAt: rawData.lastLoginAt,
-      }
-      setUsers((prev) => [newUser, ...prev])
-      return newUser
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create user")
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
-
-  const updateUser = useCallback(async (id: string, data: Partial<User> & { password?: string; roleIds?: number[] }) => {
-    setLoading(true)
-    setError(null)
-    try {
-      // Transform frontend data to API format
-      const apiData: Record<string, unknown> = {}
-      if (data.name) {
-        // Mirror the splitting logic used in createUser so update + create stay consistent.
-        const nameParts = data.name.trim().split(/\s+/).filter(Boolean)
-        apiData.firstName = nameParts[0] ?? data.name
-        apiData.lastName = nameParts.slice(1).join(" ")
-      }
-      // Forward email edits — without this branch the operator can change
-      // the email input in the form but the change is silently dropped
-      // before the PATCH leaves the browser, making the field appear
-      // "un-editable".
-      if (data.email !== undefined) {
-        apiData.email = data.email
-      }
-      if (data.roleIds !== undefined) {
-        apiData.roleIds = data.roleIds
-      }
-      if (data.status) {
-        apiData.status = { id: data.status === 'active' ? 1 : data.status === 'inactive' ? 2 : 3 }
-      }
-      if (data.tier) {
-        apiData.tier = data.tier
-      }
-      if (data.currentPlanId !== undefined) {
-        apiData.currentPlanId = data.currentPlanId || null
-      }
-      // Forward a password reset if the caller supplied one. Empty string
-      // is treated as "reset to default password" — same fallback rule
-      // createUser uses, so admins can hand the account back to the user
-      // without having to type the literal default.
-      if (data.password !== undefined) {
-        apiData.password = data.password.trim() || DEFAULT_USER_PASSWORD
-      }
-      const response = await patch<User>(`/v1/users/${id}`, apiData, { token: token ?? undefined })
-      // Transform response to frontend format
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rawData = response.data as any
-      const updatedUser: User = {
-        id: String(rawData.id),
-        name: `${rawData.firstName || ''}${rawData.lastName || ''}`.trim() || rawData.email || 'Unknown',
-        email: rawData.email || '',
-        role: rawData.role ?? null,
-        roles: Array.isArray(rawData.roles) ? rawData.roles : [],
-        tier: rawData.tier || 'Lv0',
-        currentPlanId: rawData.currentPlanId,
-        status: (typeof rawData.status === 'string' ? rawData.status : rawData.status?.name?.toLowerCase()) as User['status'] || 'active',
-        pointsBalance: rawData.pointsBalance || 0,
-        chatQuotaUsed: rawData.chatQuotaUsed || 0,
-        chatQuotaTotal: rawData.chatQuotaTotal || 0,
-        registeredAt: rawData.registeredAt || '',
-        lastLoginAt: rawData.lastLoginAt,
-      }
-      setUsers((prev) =>
-        prev.map((user) => (user.id === id ? updatedUser : user))
-      )
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update user")
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
-
-  const deleteUser = useCallback(async (id: string) => {
-    setLoading(true)
-    setError(null)
-    try {
-      // API expects number id
-      await del(`/v1/users/${id}`, { token: token ?? undefined })
-      setUsers((prev) => prev.filter((user) => user.id !== id))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete user")
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
-
-  const fetchUserMenus = useCallback(async (userId: string): Promise<string[]> => {
-    try {
-      const response = await get<{ id: string }[]>(`/v1/users/${userId}/extra-menus`, {
-        token: token || undefined,
+      const res = await post<unknown>("/v1/users", apiData)
+      return transformUser(res.data)
+    },
+    // ★ 乐观更新:把新 user 塞进列表第一条,避免用户看着表格跳一下。
+    // 后端 invalidate 之后这条会被真实数据覆盖。
+    onMutate: async (data) => {
+      await qc.cancelQueries({ queryKey: ["users"] })
+      const snapshots = qc.getQueriesData<UsersApiResponse>({ queryKey: ["users"] })
+      qc.setQueriesData<UsersApiResponse>({ queryKey: ["users"] }, (old) => {
+        if (!old) return old
+        const optimistic: User = {
+          id: `temp-${Date.now()}`,
+          name: data.name || data.email || "Unknown",
+          email: data.email || "",
+          role: null,
+          roles: [],
+          tier: data.tier || "Lv0",
+          currentPlanId: data.currentPlanId,
+          pointsBalance: 0,
+          chatQuotaUsed: 0,
+          chatQuotaTotal: 0,
+          registeredAt: new Date().toISOString(),
+          status: data.status || "active",
+        }
+        return { ...old, data: [optimistic, ...old.data], total: old.total + 1 }
       })
-      const menusData = Array.isArray(response.data) ? response.data : []
-      return menusData.map((m: { id: string }) => m.id)
-    } catch (err) {
-      console.error("Failed to fetch user menus:", err)
-      return []
-    }
-  }, [token])
+      return { snapshots }
+    },
+    onError: (_err, _vars, ctx) => {
+      // 失败回滚到乐观前的快照
+      ctx?.snapshots.forEach(([key, snap]) => qc.setQueryData(key, snap))
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["users"] })
+    },
+  })
 
-  const assignMenusToUser = useCallback(async (userId: string, menuIds: string[]): Promise<void> => {
-    setLoading(true)
-    setError(null)
-    try {
-      await post(`/v1/users/${userId}/extra-menus`, { menuIds }, {
-        token: token || undefined,
+  const update = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<UserFormValues> }) => {
+      await patch(`/v1/users/${id}`, formToApi(data))
+    },
+    onMutate: async ({ id, data }) => {
+      await qc.cancelQueries({ queryKey: ["users"] })
+      const snapshots = qc.getQueriesData<UsersApiResponse>({ queryKey: ["users"] })
+      qc.setQueriesData<UsersApiResponse>({ queryKey: ["users"] }, (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          data: old.data.map((u) =>
+            u.id === id
+              ? {
+                  ...u,
+                  name: data.name ?? u.name,
+                  email: data.email ?? u.email,
+                  status: data.status ?? u.status,
+                  tier: data.tier ?? u.tier,
+                  currentPlanId:
+                    data.currentPlanId !== undefined
+                      ? (data.currentPlanId ?? null)
+                      : u.currentPlanId,
+                }
+              : u,
+          ),
+        }
       })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to assign menus")
-      throw err
-    } finally {
-      setLoading(false)
-    }
-  }, [token])
+      return { snapshots }
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.snapshots.forEach(([key, snap]) => qc.setQueryData(key, snap))
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["users"] })
+    },
+  })
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      await del(`/v1/users/${id}`)
+    },
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["users"] })
+      const snapshots = qc.getQueriesData<UsersApiResponse>({ queryKey: ["users"] })
+      qc.setQueriesData<UsersApiResponse>({ queryKey: ["users"] }, (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          data: old.data.filter((u) => u.id !== id),
+          total: Math.max(0, old.total - 1),
+        }
+      })
+      return { snapshots }
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.snapshots.forEach(([key, snap]) => qc.setQueryData(key, snap))
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["users"] })
+    },
+  })
+
+  const rawData = list.data
+  const items = rawData?.data ?? []
+  const pagination = readRootPagination(rawData, { pageSize: PAGE_SIZE_DEFAULT })
 
   return {
-    users,
-    loading,
-    error,
+    items,
     pagination,
-    fetchUsers,
-    createUser,
-    updateUser,
-    deleteUser,
-    fetchUserMenus,
-    assignMenusToUser,
-    fetchRoles,
+    isLoading: list.isLoading,
+    error: list.error,
+    refetch: list.refetch,
+    createUser: create.mutateAsync,
+    updateUser: (id, data) => update.mutateAsync({ id, data }),
+    deleteUser: remove.mutateAsync,
   }
 }

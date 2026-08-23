@@ -1,10 +1,9 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useState, useMemo } from "react"
 import { toast } from "sonner"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { ConfirmDialog } from "@/components/confirm-dialog"
-import { useAuth } from "@/contexts/auth-context"
 import { useUsers } from "../hooks/use-users"
 import { usersColumns } from "../components/users-columns"
 import { DataTable } from "@/components/data-table"
@@ -21,73 +20,62 @@ import {
 } from "@/components/ui/select"
 import type { User, UserFormValues } from "../types"
 
+const PAGE_SIZE = 10
+
 export default function UsersPage() {
-  const { token } = useAuth()
+  // searchQuery 是「草稿」(用户在输入框里敲的字),
+  // search 是「已应用」(放进 queryKey 触发 TanStack Query 拉数据)。
+  // 搜索按钮 = 把草稿提交为已应用。search 在 useUsers 里走 queryKey,
+  // 改了就自动 refetch — 不需要手动调 fetchUsers。
+  const [searchQuery, setSearchQuery] = useState("")
+  const [appliedSearch, setAppliedSearch] = useState("")
+  const [roleFilter, setRoleFilter] = useState<string>("all")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  // page / pageSize 走 useState — 翻页时它们变,useMemo 重算 params,
+  // queryKey 跟着变,TanStack Query 自动 refetch。
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(PAGE_SIZE)
+
+  const params = useMemo(
+    () => ({
+      page,
+      pageSize,
+      search: appliedSearch || undefined,
+      role: roleFilter === "all" ? undefined : roleFilter,
+      status: statusFilter === "all" ? undefined : statusFilter,
+    }),
+    [page, pageSize, appliedSearch, roleFilter, statusFilter],
+  )
+
   const {
-    users,
-    loading,
-    error,
+    items,
     pagination,
-    fetchUsers,
+    isLoading,
+    error,
     createUser,
     updateUser,
     deleteUser,
-  } = useUsers()
+  } = useUsers(params)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [formDialogOpen, setFormDialogOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [dialogMode, setDialogMode] = useState<"view" | "edit">("view")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [roleFilter, setRoleFilter] = useState<string | undefined>("all")
-  const [statusFilter, setStatusFilter] = useState<string | undefined>("all")
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<User | null>(null)
 
-  const initialized = useRef(false)
-  useEffect(() => {
-    if (!initialized.current) {
-      initialized.current = true
-      if (token) {
-        fetchUsers({
-          page: 0,
-          pageSize: pagination.pageSize,
-          search: searchQuery || undefined,
-          role: roleFilter === "all" ? undefined : roleFilter,
-          status: statusFilter === "all" ? undefined : statusFilter,
-        })
-      }
-    }
-  }, [token, fetchUsers])
-
-  const handlePageChange = (page: number) => {
-    fetchUsers({
-      page,
-      pageSize: pagination.pageSize,
-      search: searchQuery || undefined,
-      role: roleFilter === "all" ? undefined : roleFilter,
-      status: statusFilter === "all" ? undefined : statusFilter,
-    })
+  const handlePageChange = (next: number) => {
+    setPage(next)
   }
 
   const handlePageSizeChange = (pageSize: number) => {
-    fetchUsers({
-      page: 0,
-      pageSize,
-      search: searchQuery || undefined,
-      role: roleFilter === "all" ? undefined : roleFilter,
-      status: statusFilter === "all" ? undefined : statusFilter,
-    })
+    setPageSize(pageSize)
+    setPage(0)
   }
 
   const handleSearch = () => {
-    fetchUsers({
-      page: 0,
-      pageSize: pagination.pageSize,
-      search: searchQuery || undefined,
-      role: roleFilter === "all" ? undefined : roleFilter,
-      status: statusFilter === "all" ? undefined : statusFilter,
-    })
+    setAppliedSearch(searchQuery)
+    setPage(0)
   }
 
   const handleView = (user: User) => {
@@ -113,8 +101,8 @@ export default function UsersPage() {
       try {
         await deleteUser(userToDelete.id)
         toast.success(`已删除用户 ${userToDelete.name}`)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "未知错误"
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "未知错误"
         toast.error(`删除失败: ${message}`)
       }
     }
@@ -126,16 +114,16 @@ export default function UsersPage() {
         await updateUser(selectedUser.id, values)
         toast.success("用户已更新")
       } else {
-        await createUser(values as any)
+        await createUser(values)
         toast.success("用户已创建")
       }
       setFormDialogOpen(false)
       setDialogOpen(false)
       setSelectedUser(null)
-    } catch (error) {
+    } catch (err) {
       // Surface backend errors (e.g. 422 validation, 422 emailAlreadyExists)
       // instead of silently logging to console — the user needs feedback.
-      const message = error instanceof Error ? error.message : "未知错误"
+      const message = err instanceof Error ? err.message : "未知错误"
       toast.error(`${selectedUser ? "更新" : "创建"}失败: ${message}`)
     }
   }
@@ -145,7 +133,7 @@ export default function UsersPage() {
   // don't disturb any unsaved edits the operator may have made in the
   // form before clicking the reset button.
   const handleResetPassword = async (userId: string) => {
-    await updateUser(userId, { password: "" } as any)
+    await updateUser(userId, { password: "" })
   }
 
   const columns = usersColumns({ onView: handleView, onEdit: handleEdit, onDelete: handleDelete })
@@ -163,7 +151,7 @@ export default function UsersPage() {
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
             className="max-w-xs"
           />
-          <Select value={roleFilter} onValueChange={(value) => setRoleFilter(value)}>
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
             <SelectTrigger className="w-[150px] cursor-pointer">
               <SelectValue placeholder="选择角色" />
             </SelectTrigger>
@@ -174,7 +162,7 @@ export default function UsersPage() {
               <SelectItem value="user">普通用户</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={statusFilter} onValueChange={(value) => setStatusFilter(value)}>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[150px] cursor-pointer">
               <SelectValue placeholder="选择状态" />
             </SelectTrigger>
@@ -206,13 +194,13 @@ export default function UsersPage() {
       <div className="px-4 lg:px-6">
         {error && (
           <div className="mb-4 p-4 bg-destructive/10 text-destructive rounded-lg">
-            加载错误: {error}
+            加载错误: {(error as Error).message}
           </div>
         )}
         <DataTable
           columns={columns}
-          data={users}
-          loading={loading}
+          data={items}
+          loading={isLoading}
           showToolbar={false}
           pagination={{
             page: pagination.page,
@@ -250,7 +238,7 @@ export default function UsersPage() {
                 setFormDialogOpen(false)
                 setSelectedUser(null)
               }}
-              loading={loading}
+              loading={isLoading}
               onResetPassword={handleResetPassword}
             />
           </div>

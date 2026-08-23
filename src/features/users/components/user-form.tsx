@@ -75,7 +75,9 @@ interface UserFormProps {
 export function UserForm({ initialData, onSubmit, onCancel, loading, onResetPassword }: UserFormProps) {
   const { token } = useAuth()
   const { plans, fetchPlans } = usePlans()
-  const { roles: roleOptions, fetchRoles } = useRoles()
+  // useRoles 现在走 TanStack Query — `roles` 是 query.data
+  const rolesQuery = useRoles()
+  const roleOptions = rolesQuery.data ?? []
   const form = useForm({
     resolver: zodResolver(userFormSchema),
     defaultValues: {
@@ -97,8 +99,8 @@ export function UserForm({ initialData, onSubmit, onCancel, loading, onResetPass
 
   useEffect(() => {
     if (token) {
+      // fetchPlans 还是旧 useState 模式(use-plans 还没迁),TanStack Query 这边不用手动 fetch。
       fetchPlans({ page: 0, pageSize: 50, status: 'active' })
-      fetchRoles()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
