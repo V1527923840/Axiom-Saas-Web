@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, screen, waitFor } from "@testing-library/react"
+import { renderWithQuery } from "@/test-utils"
 import { ReportDrawer } from "./index"
 import * as hooks from "./hooks/use-daily-summary"
 import * as svc from "@/services/daily-summary"
@@ -66,26 +67,26 @@ beforeEach(() => {
 
 describe("ReportDrawer", () => {
   it("renders Sheet with both tabs", () => {
-    render(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
+    renderWithQuery(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
     expect(screen.getByRole("tab", { name: "报告" })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "来源" })).toBeInTheDocument()
   })
 
   it("passes null to useReportDetail when open is false", () => {
     useReportDetail.mockReturnValue({ report: null, loading: false, error: null })
-    render(<ReportDrawer reportId="r1" open={false} onOpenChange={() => {}} />)
+    renderWithQuery(<ReportDrawer reportId="r1" open={false} onOpenChange={() => {}} />)
     expect(useReportDetail).toHaveBeenCalledWith(null)
     expect(getDailySummarySources).not.toHaveBeenCalled()
   })
 
   it("passes reportId to useReportDetail when open", () => {
-    render(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
+    renderWithQuery(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
     expect(useReportDetail).toHaveBeenCalledWith("r1")
   })
 
   it("shows the report title and date once loaded", () => {
     useReportDetail.mockReturnValue({ report: makeReport(), loading: false, error: null })
-    render(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
+    renderWithQuery(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
     expect(screen.getByText("日报详情")).toBeInTheDocument()
     expect(screen.getByText("2026-08-10")).toBeInTheDocument()
     expect(screen.getByText("宏观海外")).toBeInTheDocument()
@@ -97,7 +98,7 @@ describe("ReportDrawer", () => {
       loading: false,
       error: null,
     })
-    render(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
+    renderWithQuery(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
     expect(screen.getByText("周报详情")).toBeInTheDocument()
   })
 
@@ -114,7 +115,7 @@ describe("ReportDrawer", () => {
         missingIds: [],
       },
     } as any)
-    render(
+    renderWithQuery(
       <ReportDrawer reportId="r1" open onOpenChange={() => {}} initialTab="sources" />,
     )
     expect(screen.getByRole("tab", { name: "来源" })).toHaveAttribute(
@@ -142,7 +143,7 @@ describe("ReportDrawer", () => {
         missingIds: [],
       },
     } as any)
-    render(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
+    renderWithQuery(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
     clickTab("来源")
     // SourcesTab exposes 中文 tab triggers with counts.
     expect(await screen.findByRole("tab", { name: /帖文 \(1\)/ })).toBeInTheDocument()
@@ -160,7 +161,7 @@ describe("ReportDrawer", () => {
         missingIds: [],
       },
     } as any)
-    const { rerender } = render(
+    const { rerender } = renderWithQuery(
       <ReportDrawer reportId="r1" open onOpenChange={() => {}} />,
     )
     clickTab("来源")
@@ -180,7 +181,7 @@ describe("ReportDrawer", () => {
       loading: false,
       error: new Error("boom"),
     })
-    render(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
+    renderWithQuery(<ReportDrawer reportId="r1" open onOpenChange={() => {}} />)
     expect(screen.getByText("加载失败")).toBeInTheDocument()
     expect(screen.getByText("boom")).toBeInTheDocument()
   })

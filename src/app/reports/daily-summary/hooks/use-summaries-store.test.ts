@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { renderHook, act } from "@testing-library/react"
+import { act } from "@testing-library/react"
+import { renderHookWithQuery } from "@/test-utils"
 
 vi.mock("@/services/daily-summary", () => ({
   listDailySummaries: vi.fn(),
@@ -37,7 +38,7 @@ describe("useSummariesPage", () => {
       pageSize: 10,
     } as never)
 
-    const { result } = renderHook(() => useSummariesPage())
+    const { result } = renderHookWithQuery(() => useSummariesPage())
     await act(async () => {
       await result.current.fetchSummaries({ frequency: "daily", page: 0 })
     })
@@ -52,14 +53,14 @@ describe("useSummariesPage", () => {
   })
 
   it("setFrequency updates store state without fetching", () => {
-    const { result } = renderHook(() => useSummariesPage())
+    const { result } = renderHookWithQuery(() => useSummariesPage())
     act(() => result.current.setFrequency("weekly"))
     expect(result.current.frequency).toBe("weekly")
     expect(mockedList).not.toHaveBeenCalled()
   })
 
   it("setDateRange updates store state without fetching", () => {
-    const { result } = renderHook(() => useSummariesPage())
+    const { result } = renderHookWithQuery(() => useSummariesPage())
     const from = new Date(2026, 7, 5)
     const to = new Date(2026, 7, 7)
     act(() => result.current.setDateRange({ from, to }))
@@ -70,7 +71,7 @@ describe("useSummariesPage", () => {
 
   it("fetchSummaries reads back the latest setFrequency + setDateRange state", async () => {
     mockedList.mockResolvedValue({ data: [], total: 0, page: 0, pageSize: 10 } as never)
-    const { result } = renderHook(() => useSummariesPage())
+    const { result } = renderHookWithQuery(() => useSummariesPage())
     act(() => {
       result.current.setFrequency("weekly")
       result.current.setDateRange({
@@ -94,7 +95,7 @@ describe("useSummariesPage", () => {
 
   it("resetFilters clears frequency + dateRange but does not fetch", () => {
     mockedList.mockResolvedValue({ data: [], total: 0, page: 0, pageSize: 10 } as never)
-    const { result } = renderHook(() => useSummariesPage())
+    const { result } = renderHookWithQuery(() => useSummariesPage())
     act(() => {
       result.current.setFrequency("weekly")
       result.current.setDateRange({
@@ -109,7 +110,7 @@ describe("useSummariesPage", () => {
   })
 
   it("openReport + closeReport toggles openReportId", () => {
-    const { result } = renderHook(() => useSummariesPage())
+    const { result } = renderHookWithQuery(() => useSummariesPage())
     act(() => result.current.openReport("r-1"))
     expect(result.current.openReportId).toBe("r-1")
     act(() => result.current.closeReport())

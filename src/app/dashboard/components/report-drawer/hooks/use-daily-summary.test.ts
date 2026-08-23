@@ -1,8 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { waitFor } from '@testing-library/react'
 import { useAuth } from '@/contexts/auth-context'
 import * as svc from '@/services/daily-summary'
 import { useLatestReports, useReportDetail } from './use-daily-summary'
+import { renderHookWithQuery } from '@/test-utils'
 import type { DailySummary } from '@/services/daily-summary'
 
 vi.mock('@/contexts/auth-context', () => ({ useAuth: vi.fn() }))
@@ -25,7 +26,7 @@ describe('useLatestReports', () => {
   it('fetches and returns the report on success', async () => {
     const report = { reportId: 'r1', frequency: 'daily' } as unknown as DailySummary
     vi.mocked(svc.getLatestDailySummary).mockResolvedValue({ data: report } as any)
-    const { result } = renderHook(() => useLatestReports('daily'))
+    const { result } = renderHookWithQuery(() => useLatestReports('daily'))
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.report).toEqual(report)
     expect(result.current.error).toBeNull()
@@ -33,7 +34,7 @@ describe('useLatestReports', () => {
 
   it('captures error on failure', async () => {
     vi.mocked(svc.getLatestDailySummary).mockRejectedValue(new Error('boom'))
-    const { result } = renderHook(() => useLatestReports('daily'))
+    const { result } = renderHookWithQuery(() => useLatestReports('daily'))
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.report).toBeNull()
     expect(result.current.error?.message).toBe('boom')
@@ -42,7 +43,7 @@ describe('useLatestReports', () => {
 
 describe('useReportDetail', () => {
   it('skips fetch when reportId is null', async () => {
-    const { result } = renderHook(() => useReportDetail(null))
+    const { result } = renderHookWithQuery(() => useReportDetail(null))
     expect(svc.getDailySummary).not.toHaveBeenCalled()
     expect(result.current.report).toBeNull()
   })
@@ -50,7 +51,7 @@ describe('useReportDetail', () => {
   it('fetches when reportId is set', async () => {
     const report = { reportId: 'r1' } as unknown as DailySummary
     vi.mocked(svc.getDailySummary).mockResolvedValue({ data: report } as any)
-    const { result } = renderHook(() => useReportDetail('r1'))
+    const { result } = renderHookWithQuery(() => useReportDetail('r1'))
     await waitFor(() => expect(result.current.report).toEqual(report))
   })
 })

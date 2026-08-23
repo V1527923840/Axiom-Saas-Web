@@ -1,75 +1,66 @@
-"use client"
+/**
+ * useAudioInterpretation — paginated audio interpretation list.
+ *
+ * Migrated to TanStack Query (mirroring use-users.ts).
+ * 分页元数据走 src/lib/paginated-response.ts 的 readRootPagination —
+ * 处理 1-based API → 0-based 内部的转换 + 后端字段在响应根级别的事实
+ * (admin-server CLAUDE.md 「格式 A」)。
+ *
+ * service 端的 contentApi.getAudioInterpretation 已经把后端的 { data, meta }
+ * 包络拍平成了 { data, total, page, pageSize },所以 readRootPagination
+ * 可以直接用。
+ */
+import { useQuery } from "@tanstack/react-query"
+import { contentApi } from "@/services/content"
+import type { AudioInterpretationItem } from "@/features/content/types"
+import {
+  readRootPagination,
+  toApiPageParams,
+  type InternalPagination,
+  type PaginatedApiResponse,
+} from "@/lib/paginated-response"
 
-import { create } from 'zustand'
-import type { AudioInterpretationItem } from '@/features/content/types'
-import { contentApi } from '@/services/content'
+const PAGE_SIZE_DEFAULT = 10
 
-interface AudioInterpretationState {
+export interface UseAudioInterpretationResult {
   items: AudioInterpretationItem[]
-  loading: boolean
-  error: string | null
-  pagination: {
-    page: number
-    pageSize: number
-    total: number
-  }
-  selectedItem: AudioInterpretationItem | null
-  detailDialogOpen: boolean
-
-  fetchItems: () => Promise<void>
-  setPage: (page: number) => void
-  setPageSize: (pageSize: number) => void
-  openDetail: (item: AudioInterpretationItem) => void
-  closeDetail: () => void
+  pagination: InternalPagination
+  isLoading: boolean
+  error: Error | null
+  refetch: () => void
 }
 
-export const useAudioInterpretationStore = create<AudioInterpretationState>((set, get) => ({
-  items: [],
-  loading: false,
-  error: null,
-  pagination: {
-    page: 0,
-    pageSize: 10,
-    total: 0,
-  },
-  selectedItem: null,
-  detailDialogOpen: false,
+export interface AudioInterpretationQueryParams {
+  page?: number
+  pageSize?: number
+}
 
-  fetchItems: async () => {
-    set({ loading: true, error: null })
-    try {
-      const { pagination } = get()
-      const response = await contentApi.getAudioInterpretation(pagination.page + 1, pagination.pageSize)
-      set({
-        items: response.data || [],
-        pagination: {
-          ...pagination,
-          total: response.total || 0,
-        },
-        loading: false,
+export function useAudioInterpretation(
+  params: AudioInterpretationQueryParams = {},
+): UseAudioInterpretationResult {
+  const list = useQuery({
+    queryKey: ["audio-interpretation", params] as const,
+    queryFn: async (): Promise<PaginatedApiResponse> => {
+      const { page, pageSize } = toApiPageParams(params, {
+        pageSize: PAGE_SIZE_DEFAULT,
       })
-    } catch (error) {
-      set({
-        error: error instanceof Error ? error.message : 'Failed to fetch items',
-        loading: false,
-      })
-    }
-  },
+      const res = await contentApi.getAudioInterpretation(page, pageSize)
+      // contentApi.getAudioInterpretation 已经把后端 { data, meta } 拍平成了
+      // { data, total, page, pageSize } —— 直接交给 readRootPagination。
+      return res
+    },
+    staleTime: 30_000,
+  })
 
-  setPage: (page) => {
-    set(state => ({
-      pagination: { ...state.pagination, page }
-    }))
-    get().fetchItems()
-  },
+  const rawData = list.data
+  const items = (rawData?.data as AudioInterpretationItem[] | undefined) ?? []
+  const pagination = readRootPagination(rawData, { pageSize: PAGE_SIZE_DEFAULT })
 
-  setPageSize: (pageSize) => {
-    set(state => ({
-      pagination: { ...state.pagination, pageSize, page: 0 }
-    }))
-    get().fetchItems()
-  },
-
-  openDetail: (item) => set({ selectedItem: item, detailDialogOpen: true }),
-  closeDetail: () => set({ selectedItem: null, detailDialogOpen: false }),
-}))
+  return {
+    items,
+    pagination,
+    isLoading: list.isLoading,
+    error: list.error,
+    refetch: list.refetch,
+  }
+}

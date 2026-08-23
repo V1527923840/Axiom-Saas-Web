@@ -1,175 +1,122 @@
-"use client"
-
-import { useState, useCallback, useRef } from "react"
+/**
+ * useResearchAnalysis — list + detail for the 机构研报 page.
+ *
+ * Migrated to TanStack Query (mirroring use-users.ts). The Zustand store
+ * that used to live here is gone; list + detail are now cached queries.
+ *
+ * What stayed in component state (NOT moved into the hook):
+ *   - Search-bar filters (keyword, dateRange): UI-only, no need to cache.
+ *   - selectedId / selectedItem / detailDialogOpen: component-local, drives
+ *     which row's detail is being viewed. The detail query is keyed by
+ *     `id` so a remount of the same id hits the cache.
+ *
+ * Service-level behavior preserved:
+ *   - getResearchAnalysis: sortOrder uppercased before sending (service
+ *     responsibility — the hook just forwards `params`).
+ *   - getResearchAnalysisDetail: silent-null on error — the hook's
+ *     queryFn wraps the service call in try/catch and returns null
+ *     instead of letting TanStack Query surface the error, so the UI
+ *     stays in its "no detail loaded" branch. Flip the behavior by
+ *     removing the try/catch if the UI ever wants to show an error
+ *     alert.
+ */
+import { useQuery } from "@tanstack/react-query"
+import {
+  readRootPagination,
+  toApiPageParams,
+  type InternalPagination,
+} from "@/lib/paginated-response"
 import { researchApi } from "../services/research"
 import type {
   ResearchAnalysisItem,
   ResearchAnalysisDetail,
+  ListResponse,
   ResearchAnalysisQueryParams,
 } from "../types"
 
-interface ResearchAnalysisFilters {
-  keyword: string;
-  dateRange: { from: Date | undefined; to: Date | undefined } | undefined;
+const PAGE_SIZE_DEFAULT = 10
+
+export interface ResearchAnalysisListParams {
+  page?: number
+  pageSize?: number
+  keyword?: string
+  dateFrom?: string
+  dateTo?: string
+  sortBy?: ResearchAnalysisQueryParams["sortBy"]
+  sortOrder?: ResearchAnalysisQueryParams["sortOrder"]
 }
 
-interface FetchItemsOptions {
-  sortBy?: string;
-  sortOrder?: string;
-  keyword?: string;
-  dateFrom?: string;
-  dateTo?: string;
+export interface UseResearchAnalysisListResult {
+  items: ResearchAnalysisItem[]
+  pagination: InternalPagination
+  isLoading: boolean
+  error: Error | null
+  refetch: () => void
 }
 
-export function useResearchAnalysisStore() {
-  const [items, setItems] = useState<ResearchAnalysisItem[]>([])
-  const [loading, setLoading] = useState(false)
-  const [detailLoading, setDetailLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [pagination, setPagination] = useState({
-    page: 0,
-    pageSize: 10,
-    total: 0,
+export function useResearchAnalysisList(
+  params: ResearchAnalysisListParams = {},
+): UseResearchAnalysisListResult {
+  const query = useQuery({
+    queryKey: ["research-analysis", "list", params] as const,
+    queryFn: async (): Promise<ListResponse<ResearchAnalysisItem>> => {
+      const { page, pageSize } = toApiPageParams(params, {
+        pageSize: PAGE_SIZE_DEFAULT,
+      })
+      return researchApi.getResearchAnalysis(page, pageSize, {
+        keyword: params.keyword,
+        dateFrom: params.dateFrom,
+        dateTo: params.dateTo,
+        sortBy: params.sortBy,
+        sortOrder: params.sortOrder,
+      })
+    },
+    staleTime: 30_000,
   })
-  const [selectedItem, setSelectedItem] = useState<ResearchAnalysisDetail | null>(null)
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
-  const [filters, setFilters] = useState<ResearchAnalysisFilters>({
-    keyword: "",
-    dateRange: undefined,
+
+  const raw = query.data
+  return {
+    items: raw?.data ?? [],
+    pagination: readRootPagination(raw, { pageSize: PAGE_SIZE_DEFAULT }),
+    isLoading: query.isLoading,
+    error: query.error,
+    refetch: query.refetch,
+  }
+}
+
+export interface UseResearchAnalysisDetailResult {
+  detail: ResearchAnalysisDetail | null
+  isLoading: boolean
+  error: Error | null
+  refetch: () => void
+}
+
+/**
+ * Detail query. `enabled: false` until an id is set — the page passes the
+ * selected row's id, so the query only fires after the operator clicks
+ * 查看. The service silently returns null on error; the queryFn mirrors
+ * that to keep the UI's "detail not loaded yet" branch identical.
+ */
+export function useResearchAnalysisDetail(
+  id: number | null | undefined,
+): UseResearchAnalysisDetailResult {
+  const query = useQuery({
+    queryKey: ["research-analysis", "detail", id] as const,
+    queryFn: async (): Promise<ResearchAnalysisDetail | null> => {
+      try {
+        return await researchApi.getResearchAnalysisDetail(Number(id))
+      } catch {
+        return null
+      }
+    },
+    enabled: id !== null && id !== undefined && Number.isFinite(Number(id)),
+    staleTime: 30_000,
   })
-
-  // Use ref to avoid stale closure issues
-  const paginationRef = useRef(pagination)
-  paginationRef.current = pagination
-  const filtersRef = useRef(filters)
-  filtersRef.current = filters
-
-  const fetchItems = useCallback(async (
-    pageOverride?: number,
-    options?: FetchItemsOptions,
-    pageSizeOverride?: number,
-  ) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const currentPage = pageOverride !== undefined ? pageOverride : paginationRef.current.page
-      const page = currentPage + 1
-      const pageSize = pageSizeOverride ?? paginationRef.current.pageSize
-
-      const searchParams: ResearchAnalysisQueryParams = {
-        sortBy: options?.sortBy as 'createdAt' | undefined,
-        sortOrder: options?.sortOrder as 'asc' | 'desc' | undefined,
-      }
-
-      const currentFilters = filtersRef.current
-      searchParams.keyword = options?.keyword ?? currentFilters.keyword ?? undefined
-      searchParams.dateFrom = options?.dateFrom ?? (currentFilters.dateRange?.from ? currentFilters.dateRange.from.toISOString().split('T')[0] : undefined)
-      searchParams.dateTo = options?.dateTo ?? (currentFilters.dateRange?.to ? currentFilters.dateRange.to.toISOString().split('T')[0] : undefined)
-
-      const response = await researchApi.getResearchAnalysis(page, pageSize, searchParams)
-
-      const itemsArray = Array.isArray(response.data) ? response.data : []
-      const total = response.total ?? 0
-      const responsePage = response.page ?? page
-      const responsePageSize = response.pageSize ?? pageSize
-
-      setItems(itemsArray)
-      setPagination((prev) => ({
-        ...prev,
-        total,
-        page: responsePage - 1,
-        pageSize: responsePageSize,
-      }))
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch items")
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  const fetchDetail = useCallback(async (id: number) => {
-    setDetailLoading(true)
-    setError(null)
-    try {
-      const detail = await researchApi.getResearchAnalysisDetail(id)
-      if (detail) {
-        // Mirror `openDetail`: setSelectedItem + setDetailDialogOpen so
-        // any consumer of this store (e.g. the dashboard SourcesDrawer)
-        // sees the dialog open after a fetch without going through
-        // openDetail's list-item wrapper.
-        setSelectedItem(detail)
-        setDetailDialogOpen(true)
-      }
-      return detail
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch detail")
-      return null
-    } finally {
-      setDetailLoading(false)
-    }
-  }, [])
-
-  const setPage = useCallback((page: number) => {
-    setPagination((prev) => ({ ...prev, page }))
-    fetchItems(page)
-  }, [fetchItems])
-
-  const setPageSize = useCallback((pageSize: number) => {
-    setPagination((prev) => ({ ...prev, pageSize, page: 0 }))
-    fetchItems(0, {}, pageSize)
-  }, [fetchItems])
-
-  const openDetail = useCallback(async (item: ResearchAnalysisItem) => {
-    setDetailLoading(true)
-    try {
-      const detail = await fetchDetail(item.id)
-      if (detail) {
-        setSelectedItem(detail)
-        setDetailDialogOpen(true)
-      }
-    } finally {
-      setDetailLoading(false)
-    }
-  }, [fetchDetail])
-
-  const closeDetail = useCallback(() => {
-    setDetailDialogOpen(false)
-  }, [])
-
-  // Filter setters — kept narrow now that categoryL1/categoryL2 have
-  // been removed from the search bar.
-  const setKeyword = useCallback((value: string) => {
-    setFilters(prev => ({ ...prev, keyword: value }))
-  }, [])
-
-  const setDateRange = useCallback((value: { from: Date | undefined; to: Date | undefined } | undefined) => {
-    setFilters(prev => ({ ...prev, dateRange: value }))
-  }, [])
-
-  const resetFilters = useCallback(() => {
-    setFilters({
-      keyword: "",
-      dateRange: undefined,
-    })
-  }, [])
 
   return {
-    items,
-    loading,
-    detailLoading,
-    error,
-    pagination,
-    selectedItem,
-    detailDialogOpen,
-    filters,
-    fetchItems,
-    fetchDetail,
-    setPage,
-    setPageSize,
-    openDetail,
-    closeDetail,
-    setKeyword,
-    setDateRange,
-    resetFilters,
+    detail: query.data ?? null,
+    isLoading: query.isLoading,
+    error: query.error,
+    refetch: query.refetch,
   }
 }

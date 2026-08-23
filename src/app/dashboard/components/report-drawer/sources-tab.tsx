@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { useAuth } from "@/contexts/auth-context"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -22,9 +23,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { IntelligenceDetailDialog } from "@/features/content/intelligence/components/IntelligenceDetailDialog"
 import { useIntelligencePostsStore } from "@/features/content/intelligence/hooks/use-intelligence-posts"
 import { ResearchAnalysisDetailDialog } from "@/features/content/research-analysis/components/ResearchAnalysisDetailDialog"
-import { useResearchAnalysisStore } from "@/features/content/research-analysis/hooks/use-research-analysis"
+import { useResearchAnalysisDetail } from "@/features/content/research-analysis/hooks/use-research-analysis"
 import { getDailySummarySources } from "@/services/daily-summary"
-import type { ContentItemMeta, SourcesResponse } from "@/services/daily-summary"
+import type { ContentItemMeta } from "@/services/daily-summary"
 
 type PageSize = 20 | 50 | 100
 
@@ -151,7 +152,12 @@ export function SourcesTab({
 }) {
   const { token } = useAuth()
   const intelligence = useIntelligencePostsStore()
-  const research = useResearchAnalysisStore()
+
+  // Research detail dialog state — component-local. The detail hook is
+  // keyed by `selectedResearchId`; the dialog opens when `detail` lands.
+  const [selectedResearchId, setSelectedResearchId] = useState<number | null>(null)
+  const [researchDialogOpen, setResearchDialogOpen] = useState(false)
+  const { detail: researchSelectedItem } = useResearchAnalysisDetail(selectedResearchId)
 
   // Server-side pagination per tab. Each tab has independent state.
   // Initial defaults match the agreed plan (default 20 per page).
@@ -170,27 +176,42 @@ export function SourcesTab({
   const limit = activeState.pageSize
   const offset = activeState.page * activeState.pageSize
 
-  const [sources, setSources] = useState<SourcesResponse | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
-
-  // Fetch when reportId OR (limit/offset) change. While reportId is
-  // null (drawer closed), don't fire — mirrors the old guard pattern.
+  // Open the research detail dialog once the detail query lands.
+  // Mirrors the previous `research.fetchDetail → setDetailDialogOpen(true)`
+  // behavior baked into the Zustand store.
   useEffect(() => {
-    if (!reportId) {
-      setSources(null)
-      setLoading(false)
-      return
-    }
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    getDailySummarySources(token, reportId, { limit, offset })
-      .then((r) => { if (!cancelled) setSources(r.data) })
-      .catch((e) => { if (!cancelled) setError(e as Error) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [token, reportId, limit, offset])
+    if (researchSelectedItem) setResearchDialogOpen(true)
+  }, [researchSelectedItem])
+
+  // Sources endpoint is keyed by [reportId, limit, offset]. TanStack Query
+  // cancels stale requests internally (老版的 cancelled-flag 不需要了);
+  // `enabled: !!reportId` 保留老的 guard 行为 — drawer 关闭时不发请求。
+  const sourcesQuery = useQuery({
+    queryKey: [
+      "daily-summary",
+      "sources",
+      reportId,
+      limit,
+      offset,
+    ] as const,
+    enabled: !!reportId,
+    queryFn: async () => {
+      const res = await getDailySummarySources(token, reportId as string, {
+        limit,
+        offset,
+      })
+      return res.data
+    },
+    // 翻页 / 切 tab 时保留上一次的数据,新 key fetch 期间不闪 skeleton。
+    placeholderData: keepPreviousData,
+  })
+
+  const sources = sourcesQuery.data ?? null
+  // Show skeleton only while the very first fetch is pending. Once we
+  // have any data (initial load or previous page), keep showing it during
+  // subsequent pagination / tab switches so the UI doesn't flash blank.
+  const loading = !sources && sourcesQuery.isFetching
+  const error = (sourcesQuery.error as Error | null) ?? null
 
   const handleTabChange = (v: string) => {
     const next = v as "posts" | "research"
@@ -231,7 +252,7 @@ export function SourcesTab({
   const handleViewResearch = (item: ContentItemMeta) => {
     const numericId = Number(item.id)
     if (!Number.isFinite(numericId)) return
-    void research.fetchDetail(numericId)
+    setSelectedResearchId(numericId)
   }
 
   return (
@@ -279,9 +300,9 @@ export function SourcesTab({
         onOpenChange={intelligence.closeDetail}
       />
       <ResearchAnalysisDetailDialog
-        item={research.selectedItem}
-        open={research.detailDialogOpen}
-        onOpenChange={research.closeDetail}
+        item={researchSelectedItem}
+        open={researchDialogOpen}
+        onOpenChange={setResearchDialogOpen}
       />
     </>
   )

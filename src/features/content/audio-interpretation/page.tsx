@@ -1,44 +1,33 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useState } from "react"
 import { BaseLayout } from "@/components/layouts/base-layout"
 import { DataTable } from "@/components/data-table"
 import { columns, AudioInterpretationDetailDialog } from "./components/columns"
-import { useAudioInterpretationStore } from "./hooks/use-audio-interpretation"
+import { useAudioInterpretation } from "./hooks/use-audio-interpretation"
+import type { AudioInterpretationItem } from "@/features/content/types"
 
 export default function AudioInterpretationPage() {
-  const {
-    items,
-    loading,
-    pagination,
-    selectedItem,
-    detailDialogOpen,
-    fetchItems,
-    setPage,
-    setPageSize,
-    openDetail,
-    closeDetail,
-  } = useAudioInterpretationStore()
+  const [page, setPage] = useState(0)
+  const [pageSize, setPageSize] = useState(10)
 
-  const initialized = useRef(false)
-  useEffect(() => {
-    if (!initialized.current) {
-      initialized.current = true
-      fetchItems()
-    }
-  }, [fetchItems])
+  const { items, isLoading, pagination } = useAudioInterpretation({ page, pageSize })
+
+  const [selectedItem, setSelectedItem] = useState<AudioInterpretationItem | null>(null)
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
 
   // Listen for custom event to open detail
   useEffect(() => {
     const handleOpenDetail = (event: CustomEvent) => {
-      openDetail(event.detail)
+      setSelectedItem(event.detail as AudioInterpretationItem)
+      setDetailDialogOpen(true)
     }
 
     window.addEventListener('open-audio-detail', handleOpenDetail as EventListener)
     return () => {
       window.removeEventListener('open-audio-detail', handleOpenDetail as EventListener)
     }
-  }, [openDetail])
+  }, [])
 
   return (
     <BaseLayout title="音频解读" description="管理音频解读内容">
@@ -46,20 +35,26 @@ export default function AudioInterpretationPage() {
         <DataTable
           columns={columns}
           data={items}
-          loading={loading}
+          loading={isLoading}
           pagination={{
             page: pagination.page,
             pageSize: pagination.pageSize,
             total: pagination.total,
             onPageChange: setPage,
-            onPageSizeChange: setPageSize,
+            onPageSizeChange: (size) => {
+              setPageSize(size)
+              setPage(0)
+            },
           }}
         />
 
         <AudioInterpretationDetailDialog
           item={selectedItem}
           open={detailDialogOpen}
-          onOpenChange={closeDetail}
+          onOpenChange={(open) => {
+            setDetailDialogOpen(open)
+            if (!open) setSelectedItem(null)
+          }}
         />
       </div>
     </BaseLayout>

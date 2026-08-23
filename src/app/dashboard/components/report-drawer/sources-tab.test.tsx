@@ -1,29 +1,43 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, screen, waitFor } from "@testing-library/react"
+import { renderWithQuery } from "@/test-utils"
 import { SourcesTab } from "./sources-tab"
 import * as svc from "@/services/daily-summary"
 import type { SourcesResponse } from "@/services/daily-summary"
 
-// Stub the two store hooks the dialogs rely on so SourcesTab can drive
-// them without going through the real list-pagination flow.
-const intelligenceStoreMock = {
-  selectedItem: null,
-  detailDialogOpen: false,
-  fetchDetail: vi.fn().mockResolvedValue(null),
-  closeDetail: vi.fn(),
-}
-const researchStoreMock = {
-  selectedItem: null,
-  detailDialogOpen: false,
-  fetchDetail: vi.fn().mockResolvedValue(null),
-  closeDetail: vi.fn(),
-}
+// vi.mock 工厂会被 hoist 到文件顶端,所以引用 module-scope 变量必须包在
+// vi.hoisted 里,否则 TDZ 报 "Cannot access X before initialization"。
+const {
+  intelligenceStoreMock,
+  useResearchAnalysisDetail,
+} = vi.hoisted(() => ({
+  intelligenceStoreMock: {
+    selectedItem: null as unknown,
+    detailDialogOpen: false,
+    fetchDetail: vi.fn().mockResolvedValue(null),
+    closeDetail: vi.fn(),
+  },
+  // useResearchAnalysisDetail is called with a numeric id. The component
+  // renders a dialog when the returned `detail` is non-null; we resolve
+  // the next call so clicking 查看 flows through the same effect path.
+  useResearchAnalysisDetail: vi.fn(() => ({
+    detail: null,
+    isLoading: false,
+  })),
+}))
 
 vi.mock("@/features/content/intelligence/hooks/use-intelligence-posts", () => ({
   useIntelligencePostsStore: () => intelligenceStoreMock,
 }))
 vi.mock("@/features/content/research-analysis/hooks/use-research-analysis", () => ({
-  useResearchAnalysisStore: () => researchStoreMock,
+  useResearchAnalysisDetail,
+  useResearchAnalysisList: () => ({
+    items: [],
+    pagination: { page: 0, pageSize: 10, total: 0 },
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
 }))
 vi.mock("@/contexts/auth-context", () => ({
   useAuth: () => ({ token: "tok" }),
@@ -57,7 +71,10 @@ function clickTab(name: RegExp) {
 
 beforeEach(() => {
   intelligenceStoreMock.fetchDetail.mockClear()
-  researchStoreMock.fetchDetail.mockClear()
+  useResearchAnalysisDetail.mockClear()
+  // Reset the detail mock back to the empty default so previous tests
+  // that set `detail` to a value don't leak.
+  useResearchAnalysisDetail.mockReturnValue({ detail: null, isLoading: false })
   getDailySummarySources.mockReset()
   // Default: pending forever so loading skeletons don't appear. Tests
   // that need a resolved value override per-test.
@@ -66,13 +83,13 @@ beforeEach(() => {
 
 describe("SourcesTab", () => {
   it("does not call getDailySummarySources when reportId is null", () => {
-    render(<SourcesTab reportId={null} />)
+    renderWithQuery(<SourcesTab reportId={null} />)
     expect(getDailySummarySources).not.toHaveBeenCalled()
   })
 
   it("fetches with limit=20&offset=0 by default", async () => {
     getDailySummarySources.mockResolvedValue({ data: sampleSources } as any)
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     await waitFor(() =>
       expect(getDailySummarySources).toHaveBeenCalledWith(
         "tok",
@@ -84,7 +101,7 @@ describe("SourcesTab", () => {
 
   it("shows the posts tab by default with counts and column headers", async () => {
     getDailySummarySources.mockResolvedValue({ data: sampleSources } as any)
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     const postsTab = await screen.findByRole("tab", { name: /帖文 \(2\)/ })
     expect(postsTab).toHaveAttribute("aria-selected", "true")
     expect(screen.getByRole("tab", { name: /研报 \(1\)/ })).toBeInTheDocument()
@@ -96,7 +113,7 @@ describe("SourcesTab", () => {
 
   it("switches to the research tab on click", async () => {
     getDailySummarySources.mockResolvedValue({ data: sampleSources } as any)
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     await screen.findByRole("tab", { name: /帖文 \(2\)/ })
     clickTab(/研报/)
     expect(await screen.findByText("研报一")).toBeInTheDocument()
@@ -104,7 +121,7 @@ describe("SourcesTab", () => {
 
   it("renders a 查看 button per visible row, no Copy ID column", async () => {
     getDailySummarySources.mockResolvedValue({ data: sampleSources } as any)
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     await screen.findByRole("tab", { name: /帖文 \(2\)/ })
     // posts tab is the default panel — 2 rows, 2 查看 buttons.
     const buttons = screen.getAllByRole("button", { name: "查看" })
@@ -115,23 +132,29 @@ describe("SourcesTab", () => {
 
   it("calls fetchDetail with the post id when 查看 is clicked on the posts tab", async () => {
     getDailySummarySources.mockResolvedValue({ data: sampleSources } as any)
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     await screen.findByRole("tab", { name: /帖文 \(2\)/ })
     fireEvent.click(screen.getAllByRole("button", { name: "查看" })[0])
     expect(intelligenceStoreMock.fetchDetail).toHaveBeenCalledWith("p1")
-    expect(researchStoreMock.fetchDetail).not.toHaveBeenCalled()
+    // Research detail hook is called on mount with null id; clicking a
+    // posts row must NOT arm a research fetch.
+    expect(useResearchAnalysisDetail).toHaveBeenLastCalledWith(null)
+    // Reset the call record so we can detect the row-click effect cleanly.
+    useResearchAnalysisDetail.mockClear()
+    expect(useResearchAnalysisDetail).not.toHaveBeenCalled()
   })
 
   it("calls fetchDetail with a numeric id when 查看 is clicked on the research tab", async () => {
     getDailySummarySources.mockResolvedValue({ data: sampleSources } as any)
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     await screen.findByRole("tab", { name: /帖文 \(2\)/ })
     clickTab(/研报/)
     await screen.findByText("研报一")
+    useResearchAnalysisDetail.mockClear()
     fireEvent.click(screen.getByRole("button", { name: "查看" }))
     // "42" → 42 — ContentItemMeta.id is a string but
     // ResearchAnalysisDetail expects a number.
-    expect(researchStoreMock.fetchDetail).toHaveBeenCalledWith(42)
+    expect(useResearchAnalysisDetail).toHaveBeenLastCalledWith(42)
     expect(intelligenceStoreMock.fetchDetail).not.toHaveBeenCalled()
   })
 
@@ -147,11 +170,12 @@ describe("SourcesTab", () => {
         missingIds: [],
       },
     } as any)
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     await screen.findByRole("tab", { name: /研报 \(1\)/ })
     clickTab(/研报/)
+    useResearchAnalysisDetail.mockClear()
     fireEvent.click(screen.getByRole("button", { name: "查看" }))
-    expect(researchStoreMock.fetchDetail).not.toHaveBeenCalled()
+    expect(useResearchAnalysisDetail).not.toHaveBeenCalled()
   })
 
   it("shows an aggregate empty state when both groups are empty", async () => {
@@ -164,7 +188,7 @@ describe("SourcesTab", () => {
         missingIds: [],
       },
     } as any)
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     expect(await screen.findByText("该报告没有关联的来源数据")).toBeInTheDocument()
     expect(screen.queryByRole("tab", { name: /帖文/ })).not.toBeInTheDocument()
   })
@@ -179,7 +203,7 @@ describe("SourcesTab", () => {
         missingIds: [],
       },
     } as any)
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     // Tabs render because at least one side has rows.
     expect(await screen.findByRole("tab", { name: /帖文 \(1\)/ })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: /研报 \(0\)/ })).toBeInTheDocument()
@@ -192,13 +216,13 @@ describe("SourcesTab", () => {
 
   it("renders a loading skeleton while sources are pending", () => {
     // getDailySummarySources default is pending forever (see beforeEach).
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     expect(document.querySelector('[data-slot="skeleton"]')).toBeTruthy()
   })
 
   it("renders an error alert when the fetch rejects", async () => {
     getDailySummarySources.mockRejectedValue(new Error("网络挂了"))
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     expect(await screen.findByText("加载来源失败")).toBeInTheDocument()
     expect(screen.getByText("网络挂了")).toBeInTheDocument()
   })
@@ -219,7 +243,7 @@ describe("SourcesTab", () => {
         missingIds: [],
       },
     } as any)
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     await screen.findByRole("tab", { name: /帖文 \(50\)/ })
     getDailySummarySources.mockClear()
     const nextBtn = screen.getByRole("button", { name: "下一页" })
@@ -243,7 +267,7 @@ describe("SourcesTab", () => {
         missingIds: [],
       },
     } as any)
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     await screen.findByRole("tab", { name: /帖文 \(100\)/ })
     getDailySummarySources.mockClear()
     // Move to page 1 first so we can prove the page-size change resets
@@ -294,7 +318,7 @@ describe("SourcesTab", () => {
         missingIds: [],
       },
     } as any)
-    render(<SourcesTab reportId="r1" />)
+    renderWithQuery(<SourcesTab reportId="r1" />)
     await screen.findByRole("tab", { name: /帖文 \(50\)/ })
     // Click 下一页 in posts tab → offset=20.
     fireEvent.click(screen.getByRole("button", { name: "下一页" }))

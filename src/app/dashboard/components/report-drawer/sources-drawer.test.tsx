@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest"
-import { render, screen, waitFor } from "@testing-library/react"
+import { screen, waitFor } from "@testing-library/react"
+import { renderWithQuery } from "@/test-utils"
 import * as svc from "@/services/daily-summary"
 import type { SourcesResponse } from "@/services/daily-summary"
 import { SourcesDrawer } from "./sources-drawer"
@@ -34,7 +35,7 @@ beforeEach(() => {
 
 describe("SourcesDrawer", () => {
   it("does not call getDailySummarySources when closed (no fetch)", () => {
-    render(
+    renderWithQuery(
       <SourcesDrawer reportId="r1" open={false} onOpenChange={() => {}} />,
     )
     expect(getDailySummarySources).not.toHaveBeenCalled()
@@ -42,7 +43,7 @@ describe("SourcesDrawer", () => {
 
   it("passes reportId to getDailySummarySources when open", async () => {
     getDailySummarySources.mockResolvedValue({ data: SAMPLE_SOURCES } as any)
-    render(
+    renderWithQuery(
       <SourcesDrawer
         reportId="r1"
         open
@@ -61,7 +62,7 @@ describe("SourcesDrawer", () => {
 
   it("uses '日报详情' header for daily reports", async () => {
     getDailySummarySources.mockResolvedValue({ data: SAMPLE_SOURCES } as any)
-    render(
+    renderWithQuery(
       <SourcesDrawer
         reportId="r1"
         open
@@ -75,7 +76,7 @@ describe("SourcesDrawer", () => {
 
   it("uses '周报详情' header for weekly reports", async () => {
     getDailySummarySources.mockResolvedValue({ data: SAMPLE_SOURCES } as any)
-    render(
+    renderWithQuery(
       <SourcesDrawer
         reportId="r1"
         open
@@ -88,14 +89,14 @@ describe("SourcesDrawer", () => {
   })
 
   it("falls back to a generic header when no header metadata is provided", () => {
-    render(<SourcesDrawer reportId="r1" open onOpenChange={() => {}} />)
+    renderWithQuery(<SourcesDrawer reportId="r1" open onOpenChange={() => {}} />)
     expect(screen.getByText("来源详情")).toBeInTheDocument()
     expect(screen.getByText("加载中…")).toBeInTheDocument()
   })
 
   it("renders SourcesTab with the loaded sources — only posts tab visible by default", async () => {
     getDailySummarySources.mockResolvedValue({ data: SAMPLE_SOURCES } as any)
-    render(
+    renderWithQuery(
       <SourcesDrawer
         reportId="r1"
         open
@@ -118,7 +119,7 @@ describe("SourcesDrawer", () => {
 
   it("does not surface the ReportDrawer-level 报告/来源 tabs regardless of reportId", () => {
     getDailySummarySources.mockReturnValue(new Promise(() => {}))
-    const { rerender } = render(
+    const { rerender } = renderWithQuery(
       <SourcesDrawer reportId="r1" open onOpenChange={() => {}} />,
     )
     rerender(<SourcesDrawer reportId="r2" open onOpenChange={() => {}} />)

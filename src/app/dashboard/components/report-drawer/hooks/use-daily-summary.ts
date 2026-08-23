@@ -1,55 +1,64 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useAuth } from '@/contexts/auth-context'
+import { useCallback } from "react"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useAuth } from "@/contexts/auth-context"
 import {
   getDailySummary,
   getLatestDailySummary,
   type DailySummary,
   type Frequency,
-} from '@/services/daily-summary'
+} from "@/services/daily-summary"
 
+/**
+ * useLatestReports / useReportDetail — 迁到 TanStack Query 后保留原来的
+ * `{ report, loading, error, refresh }` 返回形状,LatestDailyCard /
+ * LatestWeeklyCard / ReportDrawer 这些老消费者一行都不用改。TanStack
+ * Query 自动处理 race condition(之前的 cancelled-flag 不需要了)。
+ *
+ * queryKey 设计:
+ *   - `['daily-summary', 'latest', frequency]` — latest 一份频率一档
+ *   - `['daily-summary', reportId]` — detail 一份报告一档,drawer 切换时
+ *     自动按 reportId 切缓存,不需要手动 invalidate
+ */
 export function useLatestReports(frequency: Frequency) {
   const { token } = useAuth()
-  const [report, setReport] = useState<DailySummary | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-  const [tick, setTick] = useState(0)
-  const refresh = useCallback(() => setTick((n) => n + 1), [])
+  const queryClient = useQueryClient()
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    getLatestDailySummary(token, frequency)
-      .then((r) => { if (!cancelled) setReport(r.data ?? null) })
-      .catch((e) => { if (!cancelled) setError(e as Error) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [token, frequency, tick])
+  const query = useQuery({
+    queryKey: ["daily-summary", "latest", frequency] as const,
+    queryFn: async () => {
+      const res = await getLatestDailySummary(token, frequency)
+      return res.data ?? null
+    },
+  })
 
-  return { report, loading, error, refresh }
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: ["daily-summary", "latest", frequency],
+    })
+  }, [queryClient, frequency])
+
+  return {
+    report: (query.data ?? null) as DailySummary | null,
+    loading: query.isLoading,
+    error: (query.error as Error | null) ?? null,
+    refresh,
+  }
 }
 
 export function useReportDetail(reportId: string | null) {
   const { token } = useAuth()
-  const [report, setReport] = useState<DailySummary | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
+  const query = useQuery({
+    queryKey: ["daily-summary", reportId] as const,
+    queryFn: async () => {
+      const res = await getDailySummary(token, reportId as string)
+      return res.data
+    },
+    enabled: !!reportId,
+  })
 
-  useEffect(() => {
-    if (!reportId) {
-      setReport(null)
-      setLoading(false)
-      return
-    }
-    let cancelled = false
-    setLoading(true)
-    setError(null)
-    getDailySummary(token, reportId)
-      .then((r) => { if (!cancelled) setReport(r.data) })
-      .catch((e) => { if (!cancelled) setError(e as Error) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [token, reportId])
-
-  return { report, loading, error }
+  return {
+    report: (query.data ?? null) as DailySummary | null,
+    loading: query.isLoading,
+    error: (query.error as Error | null) ?? null,
+  }
 }

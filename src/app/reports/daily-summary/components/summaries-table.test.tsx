@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { fireEvent, screen, waitFor } from "@testing-library/react"
+import { renderWithQuery } from "@/test-utils"
 
 vi.mock("@/services/daily-summary", () => ({
   listDailySummaries: vi.fn(),
@@ -60,7 +61,7 @@ describe("SummariesTable", () => {
   it("renders rows from listDailySummaries response", async () => {
     mockedList.mockResolvedValue({ data: SAMPLE, total: 1, page: 0, pageSize: 10 } as never)
 
-    render(<SummariesTable />)
+    renderWithQuery(<SummariesTable />)
 
     await waitFor(() => {
       expect(screen.getByTestId("summaries-view-button").getAttribute("data-report-id")).toBe("r-1")
@@ -74,7 +75,7 @@ describe("SummariesTable", () => {
 
   it("renders the empty state when zero rows", async () => {
     mockedList.mockResolvedValue({ data: [], total: 0, page: 0, pageSize: 10 } as never)
-    render(<SummariesTable />)
+    renderWithQuery(<SummariesTable />)
     await waitFor(() => {
       expect(screen.getByText("暂无数据")).toBeInTheDocument()
     })
@@ -82,7 +83,7 @@ describe("SummariesTable", () => {
 
   it("triggers a fetch from page 0 when the 搜索 button is clicked", async () => {
     mockedList.mockResolvedValue({ data: SAMPLE, total: 1, page: 0, pageSize: 10 } as never)
-    render(<SummariesTable />)
+    renderWithQuery(<SummariesTable />)
 
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(1))
 
@@ -103,7 +104,7 @@ describe("SummariesTable", () => {
 
   it("resets filters and re-fetches when 重置 is clicked", async () => {
     mockedList.mockResolvedValue({ data: SAMPLE, total: 1, page: 0, pageSize: 10 } as never)
-    render(<SummariesTable />)
+    renderWithQuery(<SummariesTable />)
 
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(1))
 
