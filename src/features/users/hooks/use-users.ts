@@ -59,11 +59,26 @@ export function useUsers() {
         status: (typeof user.status === 'string' ? user.status : user.status?.name?.toLowerCase()) as User['status'] || 'active',
       }))
       setUsers(transformedUsers)
-      // Pagination info is at response root level, not response.data
+      /*
+       * 分页元数据的位置 + 0/1-based 转换,两个 bug 叠加在一起导致
+       * 「进入就是第二页 / 翻页对不上」的症状:
+       *
+       *   1. 后端用 infinityPagination 返回 { data, total, page, pageSize }
+       *      (admin-server CLAUDE.md 「格式 A」),分页字段在根级别,不在
+       *      response.meta 里。读 response.meta?.page 永远是 undefined,
+       *      ?? 1 兜底 → 每次 fetch 后 pagination.page 都被重置成 1。
+       *
+       *   2. 即便 meta 里有 page,后端是 1-based,前端 internal pagination.page
+       *      必须是 0-based(DataTable 把 externalPagination.page 当作
+       *      pageIndex:0-based,显示时 +1)。1-based 直接塞回去 → DataTable
+       *      显示 pageIndex+1 = 2。
+       *
+       * 修法:从 rawData 根级别读,并把 1-based API page 转回 0-based。
+       */
       setPagination({
-        page: response.meta?.page ?? 1,
-        pageSize: response.meta?.pageSize ?? 10,
-        total: response.meta?.total ?? 0,
+        page: Math.max(0, (rawData?.page ?? 1) - 1),
+        pageSize: rawData?.pageSize ?? 10,
+        total: rawData?.total ?? 0,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch users")
