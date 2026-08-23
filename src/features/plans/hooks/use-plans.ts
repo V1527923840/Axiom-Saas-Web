@@ -6,8 +6,9 @@
  * 和 use-users.ts)。
  *  - 列表通过 useQuery 缓存,mutators 在 onSettled 里 invalidate。
  *  - 分页元数据走 src/lib/paginated-response.ts 的 readRootPagination —
- *    处理 1-based API → 0-based 内部的转换 + 后端字段在响应根级别的事实
- *    (admin-server CLAUDE.md 「格式 A」)。
+ *    处理 1-based API → 0-based 内部的转换。后端的 TransformResponseInterceptor
+ *    把分页响应包成 { data: items[], meta: { total, page, pageSize } },
+ *    readRootPagination 从 res.meta 读元数据,extractItems 从 res.data 读 items。
  *  - 套餐关联菜单走独立 queryKey `['plans', planId, 'menus']`,仅在
  *    planId 非空时启用 — 编辑套餐时由 planId 触发自动 fetch,assign 后
  *    自动 invalidate 重拉。
@@ -26,6 +27,7 @@ import {
   toApiPageParams,
   extractItems,
   type InternalPagination,
+  type PaginationMeta,
 } from "@/lib/paginated-response"
 
 const PAGE_SIZE_DEFAULT = 10
@@ -48,14 +50,9 @@ export interface UsePlanMenusResult {
   refetch: () => void
 }
 
-// 后端响应形状 — 列表端点返回 { data: Plan[], total, page, pageSize }
-// (infinityPagination, admin-server CLAUDE.md 格式 A)
-interface PlansApiResponse {
-  data: Plan[]
-  total: number
-  page: number
-  pageSize: number
-}
+// 后端响应形状 — TransformResponseInterceptor 包络:
+// { data: Plan[], meta: { total, page, pageSize } }
+// items 走 res.data,分页元数据走 res.meta。
 
 // 14 字段的 raw→Plan 转换。封出来方便 queryFn 用,
 // 也方便 createPlan / updatePlan 共用同一个 mapping。
@@ -86,7 +83,7 @@ export function usePlans(params: PlanQueryParams = {}): UsePlansResult {
 
   const list = useQuery({
     queryKey: ["plans", params] as const,
-    queryFn: async (): Promise<PlansApiResponse> => {
+    queryFn: async () => {
       const { page, pageSize } = toApiPageParams(params, {
         pageSize: PAGE_SIZE_DEFAULT,
       })
@@ -97,14 +94,10 @@ export function usePlans(params: PlanQueryParams = {}): UsePlansResult {
       if (params.status) queryParams.status = String(params.status)
       if (params.tier) queryParams.tier = String(params.tier)
       if (params.search) queryParams.search = params.search
-      const res = await get<PlansApiResponse>("/v1/plans", { params: queryParams })
-      // 处理两种 response 形状(res.data 可能是数组本身,也可能包在 { data } 里)
-      const rawData = res.data as unknown
-      const items = extractItems<Plan>(rawData).map(transformPlan)
-      const wrapped: PlansApiResponse = Array.isArray(rawData)
-        ? { data: items, total: items.length, page: 1, pageSize: PAGE_SIZE_DEFAULT }
-        : { ...(rawData as PlansApiResponse), data: items }
-      return wrapped
+      const res = await get<Plan[]>("/v1/plans", { params: queryParams })
+      // res.data 是 items 数组(res.meta 是分页元数据,见 readRootPagination 调用)
+      const items = (extractItems<Plan>(res.data) as Plan[]).map(transformPlan)
+      return { items, meta: res.meta }
     },
     staleTime: 30_000,
   })
@@ -118,27 +111,37 @@ export function usePlans(params: PlanQueryParams = {}): UsePlansResult {
     // 后端 invalidate 之后这条会被真实数据覆盖。
     onMutate: async (data) => {
       await qc.cancelQueries({ queryKey: ["plans"] })
-      const snapshots = qc.getQueriesData<PlansApiResponse>({ queryKey: ["plans"] })
-      qc.setQueriesData<PlansApiResponse>({ queryKey: ["plans"] }, (old) => {
-        if (!old) return old
-        const optimistic: Plan = {
-          id: `temp-${Date.now()}`,
-          name: data.name,
-          description: data.description,
-          tier: data.tier,
-          cycle: data.cycle,
-          pointsQuota: data.pointsQuota ?? 0,
-          chatQuota: data.chatQuota ?? 0,
-          price: data.price ?? 0,
-          currency: data.currency || "CNY",
-          status: data.status,
-          features: data.features || [],
-          menuIds: data.menuIds || [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }
-        return { ...old, data: [optimistic, ...old.data], total: old.total + 1 }
+      const snapshots = qc.getQueriesData<{ items: Plan[]; meta: PaginationMeta | undefined }>({
+        queryKey: ["plans"],
       })
+      qc.setQueriesData<{ items: Plan[]; meta: PaginationMeta | undefined }>(
+        { queryKey: ["plans"] },
+        (old) => {
+          if (!old) return old
+          const optimistic: Plan = {
+            id: `temp-${Date.now()}`,
+            name: data.name,
+            description: data.description,
+            tier: data.tier,
+            cycle: data.cycle,
+            pointsQuota: data.pointsQuota ?? 0,
+            chatQuota: data.chatQuota ?? 0,
+            price: data.price ?? 0,
+            currency: data.currency || "CNY",
+            status: data.status,
+            features: data.features || [],
+            menuIds: data.menuIds || [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+          const meta = old.meta ?? { total: 0, page: 1, pageSize: PAGE_SIZE_DEFAULT }
+          return {
+            ...old,
+            items: [optimistic, ...old.items],
+            meta: { ...meta, total: (meta.total ?? 0) + 1 },
+          }
+        },
+      )
       return { snapshots }
     },
     onError: (_err, _vars, ctx) => {
@@ -156,29 +159,34 @@ export function usePlans(params: PlanQueryParams = {}): UsePlansResult {
     },
     onMutate: async ({ id, data }) => {
       await qc.cancelQueries({ queryKey: ["plans"] })
-      const snapshots = qc.getQueriesData<PlansApiResponse>({ queryKey: ["plans"] })
-      qc.setQueriesData<PlansApiResponse>({ queryKey: ["plans"] }, (old) => {
-        if (!old) return old
-        return {
-          ...old,
-          data: old.data.map((p) =>
-            p.id === id
-              ? {
-                  ...p,
-                  name: data.name ?? p.name,
-                  description: data.description ?? p.description,
-                  tier: data.tier ?? p.tier,
-                  cycle: data.cycle ?? p.cycle,
-                  pointsQuota: data.pointsQuota ?? p.pointsQuota,
-                  chatQuota: data.chatQuota ?? p.chatQuota,
-                  price: data.price ?? p.price,
-                  currency: data.currency ?? p.currency,
-                  status: data.status ?? p.status,
-                }
-              : p,
-          ),
-        }
+      const snapshots = qc.getQueriesData<{ items: Plan[]; meta: PaginationMeta | undefined }>({
+        queryKey: ["plans"],
       })
+      qc.setQueriesData<{ items: Plan[]; meta: PaginationMeta | undefined }>(
+        { queryKey: ["plans"] },
+        (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            items: old.items.map((p) =>
+              p.id === id
+                ? {
+                    ...p,
+                    name: data.name ?? p.name,
+                    description: data.description ?? p.description,
+                    tier: data.tier ?? p.tier,
+                    cycle: data.cycle ?? p.cycle,
+                    pointsQuota: data.pointsQuota ?? p.pointsQuota,
+                    chatQuota: data.chatQuota ?? p.chatQuota,
+                    price: data.price ?? p.price,
+                    currency: data.currency ?? p.currency,
+                    status: data.status ?? p.status,
+                  }
+                : p,
+            ),
+          }
+        },
+      )
       return { snapshots }
     },
     onError: (_err, _vars, ctx) => {
@@ -195,15 +203,21 @@ export function usePlans(params: PlanQueryParams = {}): UsePlansResult {
     },
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ["plans"] })
-      const snapshots = qc.getQueriesData<PlansApiResponse>({ queryKey: ["plans"] })
-      qc.setQueriesData<PlansApiResponse>({ queryKey: ["plans"] }, (old) => {
-        if (!old) return old
-        return {
-          ...old,
-          data: old.data.filter((p) => p.id !== id),
-          total: Math.max(0, old.total - 1),
-        }
+      const snapshots = qc.getQueriesData<{ items: Plan[]; meta: PaginationMeta | undefined }>({
+        queryKey: ["plans"],
       })
+      qc.setQueriesData<{ items: Plan[]; meta: PaginationMeta | undefined }>(
+        { queryKey: ["plans"] },
+        (old) => {
+          if (!old) return old
+          const meta = old.meta ?? { total: 0, page: 1, pageSize: PAGE_SIZE_DEFAULT }
+          return {
+            ...old,
+            items: old.items.filter((p) => p.id !== id),
+            meta: { ...meta, total: Math.max(0, (meta.total ?? 0) - 1) },
+          }
+        },
+      )
       return { snapshots }
     },
     onError: (_err, _vars, ctx) => {
@@ -214,9 +228,8 @@ export function usePlans(params: PlanQueryParams = {}): UsePlansResult {
     },
   })
 
-  const rawData = list.data
-  const items = rawData?.data ?? []
-  const pagination = readRootPagination(rawData, { pageSize: PAGE_SIZE_DEFAULT })
+  const items = list.data?.items ?? []
+  const pagination = readRootPagination(list.data?.meta, { pageSize: PAGE_SIZE_DEFAULT })
 
   return {
     items,

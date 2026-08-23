@@ -2,8 +2,13 @@ import { get } from "@/lib/api"
 import type {
   ResearchAnalysisItem,
   ResearchAnalysisDetail,
-  ListResponse,
 } from "@/features/content/research-analysis/types"
+import type { PaginationMeta } from "@/lib/paginated-response"
+
+export interface ResearchListEnvelope {
+  data: ResearchAnalysisItem[]
+  meta: PaginationMeta | undefined
+}
 
 export const researchApi = {
   /**
@@ -20,7 +25,7 @@ export const researchApi = {
       sortBy?: string;
       sortOrder?: string;
     }
-  ): Promise<ListResponse<ResearchAnalysisItem>> => {
+  ): Promise<ResearchListEnvelope> => {
     const searchParams = new URLSearchParams()
     searchParams.set("page", String(page))
     searchParams.set("pageSize", String(pageSize))
@@ -35,17 +40,15 @@ export const researchApi = {
       })
     }
 
+    // 直接转发后端的 { data: items[], meta: { total, page, pageSize } } 包络。
+    // 调用方各自消费 res.data (items) 和 res.meta (分页元数据) —
+    // 见 @/lib/paginated-response 的 extractItems / readRootPagination。
     return get<ResearchAnalysisItem[]>(
       `/v1/research-analysis?${searchParams.toString()}`,
-    ).then(response => {
-      const data = Array.isArray(response.data) ? response.data : []
-      return {
-        data,
-        total: response.meta?.total ?? 0,
-        page: response.meta?.page ?? page,
-        pageSize: response.meta?.pageSize ?? pageSize,
-      }
-    })
+    ).then((response) => ({
+      data: Array.isArray(response.data) ? response.data : [],
+      meta: response.meta,
+    }))
   },
 
   /**

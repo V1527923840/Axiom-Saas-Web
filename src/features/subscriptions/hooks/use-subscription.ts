@@ -7,8 +7,9 @@
  * invalidate 列表和 current。
  *
  * 分页元数据走 src/lib/paginated-response.ts 的 readRootPagination —
- * 处理 1-based API → 0-based 内部的转换 + 后端字段在响应根级别的事实
- * (admin-server CLAUDE.md 「格式 A」)。
+ * 处理 1-based API → 0-based 内部的转换。后端的 TransformResponseInterceptor
+ * 把分页响应包成 { data: items[], meta: { total, page, pageSize } },
+ * readRootPagination 从 res.meta 读元数据,extractItems 从 res.data 读 items。
  *
  * 老的 useState+useCallback 版本里 cancelSubscription 会在前端把 row 的
  * status 强行置成 'cancelled',然后不 refetch — 这种本地合成会让 cache
@@ -53,15 +54,6 @@ export interface UseSubscriptionResult {
   }>
 }
 
-// 后端响应形状 — 列表端点返回 { data: Subscription[], total, page, pageSize }
-// (infinityPagination, admin-server CLAUDE.md 格式 A)
-interface SubscriptionsApiResponse {
-  data: Subscription[]
-  total: number
-  page: number
-  pageSize: number
-}
-
 export function useSubscription(
   params: SubscriptionQueryParams = {},
 ): UseSubscriptionResult {
@@ -69,7 +61,7 @@ export function useSubscription(
 
   const list = useQuery({
     queryKey: ["subscriptions", params] as const,
-    queryFn: async (): Promise<SubscriptionsApiResponse> => {
+    queryFn: async () => {
       const { page, pageSize } = toApiPageParams(params, {
         pageSize: PAGE_SIZE_DEFAULT,
       })
@@ -79,18 +71,12 @@ export function useSubscription(
       if (params.planId) queryParams.planId = params.planId
       if (params.startDate) queryParams.startDate = params.startDate
       if (params.endDate) queryParams.endDate = params.endDate
-      const res = await get<SubscriptionsApiResponse>("/v1/subscriptions", {
+      const res = await get<Subscription[]>("/v1/subscriptions", {
         params: queryParams,
       })
-      // 处理两种 response 形状(res.data 可能是数组本身,也可能包在 { data } 里)
-      const rawData = res.data as unknown
-      const items = extractItems<Subscription>(rawData)
-      // rawData 可能是数组本身(后端直返),也可能是包络 { data, total, page, pageSize }。
-      // extractItems 已经处理过数组情况;这里再用 extractItems 的结果补一个包络。
-      const wrapped: SubscriptionsApiResponse = Array.isArray(rawData)
-        ? { data: items, total: items.length, page: 1, pageSize: PAGE_SIZE_DEFAULT }
-        : { ...(rawData as SubscriptionsApiResponse), data: items }
-      return wrapped
+      // res.data 是 items 数组(res.meta 是分页元数据,见 readRootPagination 调用)
+      const items = extractItems<Subscription>(res.data)
+      return { items, meta: res.meta }
     },
     staleTime: 30_000,
   })
@@ -150,9 +136,8 @@ export function useSubscription(
     },
   })
 
-  const rawData = list.data
-  const items = rawData?.data ?? []
-  const pagination = readRootPagination(rawData, { pageSize: PAGE_SIZE_DEFAULT })
+  const items = list.data?.items ?? []
+  const pagination = readRootPagination(list.data?.meta, { pageSize: PAGE_SIZE_DEFAULT })
 
   return {
     items,

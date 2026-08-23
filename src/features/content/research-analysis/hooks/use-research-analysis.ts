@@ -10,6 +10,11 @@
  *     which row's detail is being viewed. The detail query is keyed by
  *     `id` so a remount of the same id hits the cache.
  *
+ * 分页元数据走 src/lib/paginated-response.ts 的 readRootPagination —
+ * 处理 1-based API → 0-based 内部的转换。后端的 TransformResponseInterceptor
+ * 把分页响应包成 { data: items[], meta: { total, page, pageSize } },
+ * readRootPagination 从 res.meta 读元数据,extractItems 从 res.data 读 items。
+ *
  * Service-level behavior preserved:
  *   - getResearchAnalysis: sortOrder uppercased before sending (service
  *     responsibility — the hook just forwards `params`).
@@ -25,12 +30,12 @@ import {
   readRootPagination,
   toApiPageParams,
   type InternalPagination,
+  type PaginationMeta,
 } from "@/lib/paginated-response"
 import { researchApi } from "../services/research"
 import type {
   ResearchAnalysisItem,
   ResearchAnalysisDetail,
-  ListResponse,
   ResearchAnalysisQueryParams,
 } from "../types"
 
@@ -59,25 +64,27 @@ export function useResearchAnalysisList(
 ): UseResearchAnalysisListResult {
   const query = useQuery({
     queryKey: ["research-analysis", "list", params] as const,
-    queryFn: async (): Promise<ListResponse<ResearchAnalysisItem>> => {
+    queryFn: async (): Promise<{ items: ResearchAnalysisItem[]; meta: PaginationMeta | undefined }> => {
       const { page, pageSize } = toApiPageParams(params, {
         pageSize: PAGE_SIZE_DEFAULT,
       })
-      return researchApi.getResearchAnalysis(page, pageSize, {
+      const res = await researchApi.getResearchAnalysis(page, pageSize, {
         keyword: params.keyword,
         dateFrom: params.dateFrom,
         dateTo: params.dateTo,
         sortBy: params.sortBy,
         sortOrder: params.sortOrder,
       })
+      return { items: res.data, meta: res.meta }
     },
     staleTime: 30_000,
   })
 
-  const raw = query.data
+  const items = query.data?.items ?? []
+  const pagination = readRootPagination(query.data?.meta, { pageSize: PAGE_SIZE_DEFAULT })
   return {
-    items: raw?.data ?? [],
-    pagination: readRootPagination(raw, { pageSize: PAGE_SIZE_DEFAULT }),
+    items,
+    pagination,
     isLoading: query.isLoading,
     error: query.error,
     refetch: query.refetch,

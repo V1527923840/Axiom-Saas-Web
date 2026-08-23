@@ -4,8 +4,9 @@
  * Migrated to TanStack Query (mirroring skill-plaza's use-skills pattern).
  * 列表通过 useQuery 缓存,mutators 在 onSuccess 里 invalidate 列表。
  * 分页元数据走 src/lib/paginated-response.ts 的 readRootPagination —
- * 处理 1-based API → 0-based 内部的转换 + 后端字段在响应根级别的事实
- * (admin-server CLAUDE.md 「格式 A」)。
+ * 处理 1-based API → 0-based 内部的转换。后端的 TransformResponseInterceptor
+ * 把分页响应包成 { data: items[], meta: { total, page, pageSize } },
+ * readRootPagination 从 res.meta 读元数据,extractItems 从 res.data 读 items。
  *
  * 旧的 useState+useCallback 版本里 fetchUserMenus / assignMenusToUser
  * 是 dead code(从来没被调用过)— 这次顺手删掉。RoleOption 由 useRoles
@@ -20,6 +21,7 @@ import {
   toApiPageParams,
   extractItems,
   type InternalPagination,
+  type PaginationMeta,
 } from "@/lib/paginated-response"
 
 const PAGE_SIZE_DEFAULT = 10
@@ -35,14 +37,9 @@ export interface UseUsersResult {
   deleteUser: (id: string) => Promise<void>
 }
 
-// 后端响应形状 — 列表端点返回 { data: User[], total, page, pageSize }
-// (infinityPagination, admin-server CLAUDE.md 格式 A)
-interface UsersApiResponse {
-  data: User[]
-  total: number
-  page: number
-  pageSize: number
-}
+// 后端响应形状 — TransformResponseInterceptor 包络:
+// { data: User[], meta: { total, page, pageSize } }
+// items 走 res.data,分页元数据走 res.meta。
 
 // 19 字段的 raw→User 转换。封出来方便 queryFn 用,
 // 也方便 createUser / updateUser 共用同一个 mapping。
@@ -118,7 +115,7 @@ export function useUsers(params: UserQueryParams = {}): UseUsersResult {
 
   const list = useQuery({
     queryKey: ["users", params] as const,
-    queryFn: async (): Promise<UsersApiResponse> => {
+    queryFn: async () => {
       const { page, pageSize } = toApiPageParams(params, {
         pageSize: PAGE_SIZE_DEFAULT,
       })
@@ -127,16 +124,10 @@ export function useUsers(params: UserQueryParams = {}): UseUsersResult {
       if (params.status) queryParams.status = String(params.status)
       if (params.tier) queryParams.tier = String(params.tier)
       if (params.search) queryParams.search = params.search
-      const res = await get<UsersApiResponse>("/v1/users", { params: queryParams })
-      // 处理两种 response 形状(res.data 可能是数组本身,也可能包在 { data } 里)
-      const rawData = res.data as unknown
-      const items = extractItems<User>(rawData).map(transformUser)
-      // rawData 可能是数组本身(后端直返),也可能是包络 { data, total, page, pageSize }。
-      // extractItems 已经处理过数组情况;这里再用 extractItems 的结果补一个包络。
-      const wrapped: UsersApiResponse = Array.isArray(rawData)
-        ? { data: items, total: items.length, page: 1, pageSize: PAGE_SIZE_DEFAULT }
-        : { ...(rawData as UsersApiResponse), data: items }
-      return wrapped
+      const res = await get<User[]>("/v1/users", { params: queryParams })
+      // res.data 是 items 数组(res.meta 是分页元数据,见 readRootPagination 调用)
+      const items = (extractItems<User>(res.data) as User[]).map(transformUser)
+      return { items, meta: res.meta }
     },
     staleTime: 30_000,
   })
@@ -156,25 +147,35 @@ export function useUsers(params: UserQueryParams = {}): UseUsersResult {
     // 后端 invalidate 之后这条会被真实数据覆盖。
     onMutate: async (data) => {
       await qc.cancelQueries({ queryKey: ["users"] })
-      const snapshots = qc.getQueriesData<UsersApiResponse>({ queryKey: ["users"] })
-      qc.setQueriesData<UsersApiResponse>({ queryKey: ["users"] }, (old) => {
-        if (!old) return old
-        const optimistic: User = {
-          id: `temp-${Date.now()}`,
-          name: data.name || data.email || "Unknown",
-          email: data.email || "",
-          role: null,
-          roles: [],
-          tier: data.tier || "Lv0",
-          currentPlanId: data.currentPlanId,
-          pointsBalance: 0,
-          chatQuotaUsed: 0,
-          chatQuotaTotal: 0,
-          registeredAt: new Date().toISOString(),
-          status: data.status || "active",
-        }
-        return { ...old, data: [optimistic, ...old.data], total: old.total + 1 }
+      const snapshots = qc.getQueriesData<{ items: User[]; meta: PaginationMeta | undefined }>({
+        queryKey: ["users"],
       })
+      qc.setQueriesData<{ items: User[]; meta: PaginationMeta | undefined }>(
+        { queryKey: ["users"] },
+        (old) => {
+          if (!old) return old
+          const optimistic: User = {
+            id: `temp-${Date.now()}`,
+            name: data.name || data.email || "Unknown",
+            email: data.email || "",
+            role: null,
+            roles: [],
+            tier: data.tier || "Lv0",
+            currentPlanId: data.currentPlanId,
+            pointsBalance: 0,
+            chatQuotaUsed: 0,
+            chatQuotaTotal: 0,
+            registeredAt: new Date().toISOString(),
+            status: data.status || "active",
+          }
+          const meta = old.meta ?? { total: 0, page: 1, pageSize: 10 }
+          return {
+            ...old,
+            items: [optimistic, ...old.items],
+            meta: { ...meta, total: (meta.total ?? 0) + 1 },
+          }
+        },
+      )
       return { snapshots }
     },
     onError: (_err, _vars, ctx) => {
@@ -192,28 +193,33 @@ export function useUsers(params: UserQueryParams = {}): UseUsersResult {
     },
     onMutate: async ({ id, data }) => {
       await qc.cancelQueries({ queryKey: ["users"] })
-      const snapshots = qc.getQueriesData<UsersApiResponse>({ queryKey: ["users"] })
-      qc.setQueriesData<UsersApiResponse>({ queryKey: ["users"] }, (old) => {
-        if (!old) return old
-        return {
-          ...old,
-          data: old.data.map((u) =>
-            u.id === id
-              ? {
-                  ...u,
-                  name: data.name ?? u.name,
-                  email: data.email ?? u.email,
-                  status: data.status ?? u.status,
-                  tier: data.tier ?? u.tier,
-                  currentPlanId:
-                    data.currentPlanId !== undefined
-                      ? (data.currentPlanId ?? null)
-                      : u.currentPlanId,
-                }
-              : u,
-          ),
-        }
+      const snapshots = qc.getQueriesData<{ items: User[]; meta: PaginationMeta | undefined }>({
+        queryKey: ["users"],
       })
+      qc.setQueriesData<{ items: User[]; meta: PaginationMeta | undefined }>(
+        { queryKey: ["users"] },
+        (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            items: old.items.map((u) =>
+              u.id === id
+                ? {
+                    ...u,
+                    name: data.name ?? u.name,
+                    email: data.email ?? u.email,
+                    status: data.status ?? u.status,
+                    tier: data.tier ?? u.tier,
+                    currentPlanId:
+                      data.currentPlanId !== undefined
+                        ? (data.currentPlanId ?? null)
+                        : u.currentPlanId,
+                  }
+                : u,
+            ),
+          }
+        },
+      )
       return { snapshots }
     },
     onError: (_err, _vars, ctx) => {
@@ -230,15 +236,21 @@ export function useUsers(params: UserQueryParams = {}): UseUsersResult {
     },
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ["users"] })
-      const snapshots = qc.getQueriesData<UsersApiResponse>({ queryKey: ["users"] })
-      qc.setQueriesData<UsersApiResponse>({ queryKey: ["users"] }, (old) => {
-        if (!old) return old
-        return {
-          ...old,
-          data: old.data.filter((u) => u.id !== id),
-          total: Math.max(0, old.total - 1),
-        }
+      const snapshots = qc.getQueriesData<{ items: User[]; meta: PaginationMeta | undefined }>({
+        queryKey: ["users"],
       })
+      qc.setQueriesData<{ items: User[]; meta: PaginationMeta | undefined }>(
+        { queryKey: ["users"] },
+        (old) => {
+          if (!old) return old
+          const meta = old.meta ?? { total: 0, page: 1, pageSize: 10 }
+          return {
+            ...old,
+            items: old.items.filter((u) => u.id !== id),
+            meta: { ...meta, total: Math.max(0, (meta.total ?? 0) - 1) },
+          }
+        },
+      )
       return { snapshots }
     },
     onError: (_err, _vars, ctx) => {
@@ -249,9 +261,8 @@ export function useUsers(params: UserQueryParams = {}): UseUsersResult {
     },
   })
 
-  const rawData = list.data
-  const items = rawData?.data ?? []
-  const pagination = readRootPagination(rawData, { pageSize: PAGE_SIZE_DEFAULT })
+  const items = list.data?.items ?? []
+  const pagination = readRootPagination(list.data?.meta, { pageSize: PAGE_SIZE_DEFAULT })
 
   return {
     items,

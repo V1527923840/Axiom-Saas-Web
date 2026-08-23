@@ -3,12 +3,12 @@
  *
  * Migrated to TanStack Query (mirroring use-users.ts).
  * 分页元数据走 src/lib/paginated-response.ts 的 readRootPagination —
- * 处理 1-based API → 0-based 内部的转换 + 后端字段在响应根级别的事实
- * (admin-server CLAUDE.md 「格式 A」)。
+ * 处理 1-based API → 0-based 内部的转换。后端的 TransformResponseInterceptor
+ * 把分页响应包成 { data: items[], meta: { total, page, pageSize } },
+ * readRootPagination 从 res.meta 读元数据,extractItems 从 res.data 读 items。
  *
- * service 端的 contentApi.getAudioInterpretation 已经把后端的 { data, meta }
- * 包络拍平成了 { data, total, page, pageSize },所以 readRootPagination
- * 可以直接用。
+ * service 端的 contentApi.getAudioInterpretation 直接转发后端的
+ * { data, meta } 包络,hook 里用 extractItems + res.meta 各自消费。
  */
 import { useQuery } from "@tanstack/react-query"
 import { contentApi } from "@/services/content"
@@ -16,8 +16,9 @@ import type { AudioInterpretationItem } from "@/features/content/types"
 import {
   readRootPagination,
   toApiPageParams,
+  extractItems,
   type InternalPagination,
-  type PaginatedApiResponse,
+  type PaginationMeta,
 } from "@/lib/paginated-response"
 
 const PAGE_SIZE_DEFAULT = 10
@@ -40,21 +41,20 @@ export function useAudioInterpretation(
 ): UseAudioInterpretationResult {
   const list = useQuery({
     queryKey: ["audio-interpretation", params] as const,
-    queryFn: async (): Promise<PaginatedApiResponse> => {
+    queryFn: async (): Promise<{ items: AudioInterpretationItem[]; meta: PaginationMeta | undefined }> => {
       const { page, pageSize } = toApiPageParams(params, {
         pageSize: PAGE_SIZE_DEFAULT,
       })
       const res = await contentApi.getAudioInterpretation(page, pageSize)
-      // contentApi.getAudioInterpretation 已经把后端 { data, meta } 拍平成了
-      // { data, total, page, pageSize } —— 直接交给 readRootPagination。
-      return res
+      // res.data 是 items 数组(res.meta 是分页元数据)
+      const items = extractItems<AudioInterpretationItem>(res.data)
+      return { items, meta: res.meta }
     },
     staleTime: 30_000,
   })
 
-  const rawData = list.data
-  const items = (rawData?.data as AudioInterpretationItem[] | undefined) ?? []
-  const pagination = readRootPagination(rawData, { pageSize: PAGE_SIZE_DEFAULT })
+  const items = list.data?.items ?? []
+  const pagination = readRootPagination(list.data?.meta, { pageSize: PAGE_SIZE_DEFAULT })
 
   return {
     items,

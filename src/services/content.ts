@@ -1,5 +1,6 @@
 // src/services/content.ts
 import { get } from "@/lib/api"
+import type { PaginationMeta } from "@/lib/paginated-response"
 
 // Note: The server's content category list schema isn't in api.d.ts yet
 // (Task 7 generated an early snapshot that predates the content module's
@@ -10,31 +11,30 @@ import { get } from "@/lib/api"
 
 type ContentCategoryDto = Record<string, unknown>
 
-export interface ListResponse<T> {
-  data: T[]
-  total: number
-  page: number
-  pageSize: number
-}
-
 type AudioInterpretationItemDto =
   import("@/features/content/types").AudioInterpretationItem
+
+export interface AudioInterpretationListEnvelope {
+  data: AudioInterpretationItemDto[]
+  meta: PaginationMeta | undefined
+}
 
 export const contentApi = {
   getCategories: () =>
     get<ContentCategoryDto[]>("/v1/content/categories"),
 
+  // 直接转发后端的 { data: items[], meta: { total, page, pageSize } } 包络。
+  // 调用方各自消费 res.data (items) 和 res.meta (分页元数据) —
+  // 见 @/lib/paginated-response 的 extractItems / readRootPagination。
   getAudioInterpretation: (
     page: number,
     pageSize: number,
-  ): Promise<ListResponse<AudioInterpretationItemDto>> =>
-    get<ListResponse<AudioInterpretationItemDto>>(
+  ): Promise<AudioInterpretationListEnvelope> =>
+    get<AudioInterpretationItemDto[]>(
       "/v1/content/audio-interpretation",
       { params: { page, pageSize } },
     ).then((response) => ({
       data: Array.isArray(response.data) ? response.data : [],
-      total: response.meta?.total ?? 0,
-      page: response.meta?.page ?? page,
-      pageSize: response.meta?.pageSize ?? pageSize,
+      meta: response.meta,
     })),
 }

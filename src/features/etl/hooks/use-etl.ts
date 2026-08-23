@@ -10,7 +10,9 @@
  *    干脆删掉整个 hook。需要时再单独写一个 useJobStatus(jobId)。
  *
  * 分页元数据走 src/lib/paginated-response.ts 的 readRootPagination —
- * 处理 1-based API → 0-based 内部的转换 + 后端字段在响应根级别的事实。
+ * 处理 1-based API → 0-based 内部的转换。后端的 TransformResponseInterceptor
+ * 把分页响应包成 { data: items[], meta: { total, page, pageSize } },
+ * readRootPagination 从 res.meta 读元数据,extractItems 从 res.data 读 items。
  *
  * JobHistory 组件契约:它消费 pagination.page 是 1-based(用 page-1 / page+1
  * 计算翻页,用 page<=1 判断 disabled)。所以 hook 返回前把 internal 0-based
@@ -29,18 +31,10 @@ import type {
 import {
   readRootPagination,
   toApiPageParams,
+  extractItems,
 } from "@/lib/paginated-response"
 
 const PAGE_SIZE_DEFAULT = 20
-
-// 后端响应形状 — 列表端点返回 { data: EtlJob[], total, page, pageSize }
-// (infinityPagination, admin-server CLAUDE.md 格式 A)
-interface EtlJobsApiResponse {
-  data: EtlJob[]
-  total: number
-  page: number
-  pageSize: number
-}
 
 // 后端响应形状 — files 端点返回 { data: EtlFileItem[], total }
 // (infinityPagination,admin-server CLAUDE.md 格式 A)
@@ -141,7 +135,7 @@ export function useEtlJobs(params: EtlJobsQueryParams = {}): UseEtlJobsResult {
 
   const list = useQuery({
     queryKey: ["etl", "jobs", paramsKey] as const,
-    queryFn: async (): Promise<EtlJobsApiResponse> => {
+    queryFn: async () => {
       const { page, pageSize } = toApiPageParams(params, {
         pageSize: PAGE_SIZE_DEFAULT,
       })
@@ -150,30 +144,17 @@ export function useEtlJobs(params: EtlJobsQueryParams = {}): UseEtlJobsResult {
       if (params.dateFrom) queryParams.dateFrom = params.dateFrom
       if (params.dateTo) queryParams.dateTo = params.dateTo
 
-      const res = await get<EtlJobsApiResponse>("/v1/etl/jobs", { params: queryParams })
-      const rawData = res.data as unknown
-      if (Array.isArray(rawData)) {
-        return {
-          data: rawData as EtlJob[],
-          total: (rawData as EtlJob[]).length,
-          page,
-          pageSize,
-        }
-      }
-      const wrapped = rawData as EtlJobsApiResponse
-      return {
-        data: Array.isArray(wrapped.data) ? wrapped.data : [],
-        total: wrapped.total ?? 0,
-        page: wrapped.page ?? page,
-        pageSize: wrapped.pageSize ?? pageSize,
-      }
+      const res = await get<EtlJob[]>("/v1/etl/jobs", { params: queryParams })
+      // res.data 是 items 数组(res.meta 是分页元数据)
+      const items = extractItems<EtlJob>(res.data)
+      return { items, meta: res.meta }
     },
     staleTime: 30_000,
   })
 
-  const rawData = list.data
+  const items = list.data?.items ?? []
   // internal 0-based → 外部 1-based(JobHistory 契约)
-  const internal = readRootPagination(rawData, { pageSize: PAGE_SIZE_DEFAULT })
+  const internal = readRootPagination(list.data?.meta, { pageSize: PAGE_SIZE_DEFAULT })
   const pagination: EtlJobsPagination = {
     page: internal.page + 1,
     pageSize: internal.pageSize,
@@ -181,7 +162,7 @@ export function useEtlJobs(params: EtlJobsQueryParams = {}): UseEtlJobsResult {
   }
 
   return {
-    jobs: rawData?.data ?? [],
+    jobs: items,
     pagination,
     isLoading: list.isLoading,
     error: list.error,

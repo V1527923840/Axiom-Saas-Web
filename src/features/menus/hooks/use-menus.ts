@@ -29,6 +29,7 @@ import {
   toApiPageParams,
   extractItems,
   type InternalPagination,
+  type PaginationMeta,
 } from "@/lib/paginated-response"
 
 const PAGE_SIZE_DEFAULT = 10
@@ -51,14 +52,9 @@ export interface UseMenuTreeResult {
   refetch: () => void
 }
 
-// 后端响应形状 — 列表端点返回 { data: Menu[], total, page, pageSize }
-// (infinityPagination, admin-server CLAUDE.md 格式 A)
-interface MenusApiResponse {
-  data: Menu[]
-  total: number
-  page: number
-  pageSize: number
-}
+// 后端响应形状 — TransformResponseInterceptor 包络:
+// { data: Menu[], meta: { total, page, pageSize } }
+// items 走 res.data,分页元数据走 res.meta。
 
 // 9 字段的 raw→Menu 转换。封出来方便 queryFn 用,
 // 也方便 createMenu / updateMenu 共用同一个 mapping。
@@ -117,20 +113,17 @@ export function useMenus(params: MenuQueryParams = {}): UseMenusResult {
 
   const list = useQuery({
     queryKey: ["menus", params] as const,
-    queryFn: async (): Promise<MenusApiResponse> => {
+    queryFn: async () => {
       const { page, pageSize } = toApiPageParams(params, {
         pageSize: PAGE_SIZE_DEFAULT,
       })
       const queryParams: Record<string, string | number> = { page, pageSize }
       if (params.status) queryParams.status = String(params.status)
       if (params.search) queryParams.search = params.search
-      const res = await get<MenusApiResponse>("/v1/menus", { params: queryParams })
-      const rawData = res.data as unknown
-      const items = extractItems<Menu>(rawData).map(transformMenu)
-      const wrapped: MenusApiResponse = Array.isArray(rawData)
-        ? { data: items, total: items.length, page: 1, pageSize: PAGE_SIZE_DEFAULT }
-        : { ...(rawData as MenusApiResponse), data: items }
-      return wrapped
+      const res = await get<Menu[]>("/v1/menus", { params: queryParams })
+      // res.data 是 items 数组(res.meta 是分页元数据,见 readRootPagination 调用)
+      const items = (extractItems<Menu>(res.data) as Menu[]).map(transformMenu)
+      return { items, meta: res.meta }
     },
     staleTime: 30_000,
   })
@@ -148,23 +141,33 @@ export function useMenus(params: MenuQueryParams = {}): UseMenusResult {
     // prepend 会顶到第一位造成视觉跳变)。
     onMutate: async (data) => {
       await qc.cancelQueries({ queryKey: ["menus"] })
-      const snapshots = qc.getQueriesData<MenusApiResponse>({ queryKey: ["menus"] })
-      qc.setQueriesData<MenusApiResponse>({ queryKey: ["menus"] }, (old) => {
-        if (!old) return old
-        const optimistic: Menu = {
-          id: `temp-${Date.now()}`,
-          name: data.name,
-          code: data.code,
-          icon: data.icon,
-          path: data.path,
-          parentId: data.parentId ?? null,
-          sortOrder: data.sortOrder ?? 0,
-          status: data.status,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }
-        return { ...old, data: [...old.data, optimistic], total: old.total + 1 }
+      const snapshots = qc.getQueriesData<{ items: Menu[]; meta: PaginationMeta | undefined }>({
+        queryKey: ["menus"],
       })
+      qc.setQueriesData<{ items: Menu[]; meta: PaginationMeta | undefined }>(
+        { queryKey: ["menus"] },
+        (old) => {
+          if (!old) return old
+          const optimistic: Menu = {
+            id: `temp-${Date.now()}`,
+            name: data.name,
+            code: data.code,
+            icon: data.icon,
+            path: data.path,
+            parentId: data.parentId ?? null,
+            sortOrder: data.sortOrder ?? 0,
+            status: data.status,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+          const meta = old.meta ?? { total: 0, page: 1, pageSize: PAGE_SIZE_DEFAULT }
+          return {
+            ...old,
+            items: [...old.items, optimistic],
+            meta: { ...meta, total: (meta.total ?? 0) + 1 },
+          }
+        },
+      )
       return { snapshots }
     },
     onError: (_err, _vars, ctx) => {
@@ -186,27 +189,32 @@ export function useMenus(params: MenuQueryParams = {}): UseMenusResult {
     },
     onMutate: async ({ id, data }) => {
       await qc.cancelQueries({ queryKey: ["menus"] })
-      const snapshots = qc.getQueriesData<MenusApiResponse>({ queryKey: ["menus"] })
-      qc.setQueriesData<MenusApiResponse>({ queryKey: ["menus"] }, (old) => {
-        if (!old) return old
-        return {
-          ...old,
-          data: old.data.map((m) =>
-            m.id === id
-              ? {
-                  ...m,
-                  name: data.name ?? m.name,
-                  code: data.code ?? m.code,
-                  icon: data.icon ?? m.icon,
-                  path: data.path ?? m.path,
-                  parentId: data.parentId !== undefined ? data.parentId : m.parentId,
-                  sortOrder: data.sortOrder ?? m.sortOrder,
-                  status: data.status ?? m.status,
-                }
-              : m,
-          ),
-        }
+      const snapshots = qc.getQueriesData<{ items: Menu[]; meta: PaginationMeta | undefined }>({
+        queryKey: ["menus"],
       })
+      qc.setQueriesData<{ items: Menu[]; meta: PaginationMeta | undefined }>(
+        { queryKey: ["menus"] },
+        (old) => {
+          if (!old) return old
+          return {
+            ...old,
+            items: old.items.map((m) =>
+              m.id === id
+                ? {
+                    ...m,
+                    name: data.name ?? m.name,
+                    code: data.code ?? m.code,
+                    icon: data.icon ?? m.icon,
+                    path: data.path ?? m.path,
+                    parentId: data.parentId !== undefined ? data.parentId : m.parentId,
+                    sortOrder: data.sortOrder ?? m.sortOrder,
+                    status: data.status ?? m.status,
+                  }
+                : m,
+            ),
+          }
+        },
+      )
       return { snapshots }
     },
     onError: (_err, _vars, ctx) => {
@@ -224,15 +232,21 @@ export function useMenus(params: MenuQueryParams = {}): UseMenusResult {
     },
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ["menus"] })
-      const snapshots = qc.getQueriesData<MenusApiResponse>({ queryKey: ["menus"] })
-      qc.setQueriesData<MenusApiResponse>({ queryKey: ["menus"] }, (old) => {
-        if (!old) return old
-        return {
-          ...old,
-          data: old.data.filter((m) => m.id !== id),
-          total: Math.max(0, old.total - 1),
-        }
+      const snapshots = qc.getQueriesData<{ items: Menu[]; meta: PaginationMeta | undefined }>({
+        queryKey: ["menus"],
       })
+      qc.setQueriesData<{ items: Menu[]; meta: PaginationMeta | undefined }>(
+        { queryKey: ["menus"] },
+        (old) => {
+          if (!old) return old
+          const meta = old.meta ?? { total: 0, page: 1, pageSize: PAGE_SIZE_DEFAULT }
+          return {
+            ...old,
+            items: old.items.filter((m) => m.id !== id),
+            meta: { ...meta, total: Math.max(0, (meta.total ?? 0) - 1) },
+          }
+        },
+      )
       return { snapshots }
     },
     onError: (_err, _vars, ctx) => {
@@ -244,9 +258,8 @@ export function useMenus(params: MenuQueryParams = {}): UseMenusResult {
     },
   })
 
-  const rawData = list.data
-  const items = rawData?.data ?? []
-  const pagination = readRootPagination(rawData, { pageSize: PAGE_SIZE_DEFAULT })
+  const items = list.data?.items ?? []
+  const pagination = readRootPagination(list.data?.meta, { pageSize: PAGE_SIZE_DEFAULT })
 
   return {
     items,
