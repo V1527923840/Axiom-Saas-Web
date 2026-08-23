@@ -39,8 +39,9 @@ export function SkillArchiveConfirmDialog({ skill, open, onOpenChange, onSuccess
               <div className="flex items-start gap-2 text-amber-600 bg-amber-50 p-2 rounded">
                 <AlertTriangle className="size-4 mt-0.5 shrink-0" />
                 <div>
-                  停用后:广场不再展示;已启用此 Skill 的用户将无法继续使用。<br />
-                  user_skill_binding 不会被删除,恢复后用户需重新启用。
+                  停用后立即下架 —— 广场不再展示,所有用户(plan / admin / user_self)
+                  已启用此 Skill 的 binding 也会被强制改成 disabled,Vibe 端调用会立刻 403。<br />
+                  binding 行不会删除,恢复后用户可从「我的 Skill」重新启用。
                 </div>
               </div>
             </div>
