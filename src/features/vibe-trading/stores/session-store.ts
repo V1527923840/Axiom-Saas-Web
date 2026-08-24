@@ -4,7 +4,7 @@ import {
   TOOL_CLOSE,
   findTrailingOpenToolCall,
 } from "../lib/parse-message"
-import type { GoalSnapshot, SwarmRunStatus } from "../lib/vibe-types"
+import type { GoalSnapshot, SwarmRunStatus, RagContext } from "../lib/vibe-types"
 
 export type ChatMessage = {
   id: string
@@ -42,6 +42,14 @@ export type ChatMessage = {
    * re-processes historical messages anyway.
    */
   attachment?: { filename: string; file_path: string }
+  /**
+   * SSE rag_context payload from upstream vibe service. Carries the formatted
+   * markdown digest + metadata (chunk_ids / entities_resolved / latency_ms).
+   * Attached to the assistant message that owns the streaming attemptId.
+   * See upsertRagContext for the race-safe write path (early-arrival buffering
+   * via pendingRagContexts when the assistant message doesn't yet exist).
+   */
+  ragContext?: RagContext
 }
 
 export type PerSession = {
@@ -59,6 +67,12 @@ export type PerSession = {
    * 匹配失败会丢。改为把这种 delta 按 attemptId 暂存,等 attemptId 写入占位时一次性回放。
    */
   pendingDeltas?: Record<string, string>
+  /**
+   * 早到的 rag_context 缓冲：与 pendingDeltas 同等地位。SSE rag_context 事件到达时
+   * 如果对应 attemptId 的消息还没在 messages 里（占位消息还没拿到 attemptId），先
+   * 按 attemptId 缓存；stampAttemptIdOnMessages 回放时再写到目标消息上。
+   */
+  pendingRagContexts?: Record<string, RagContext>
   /**
    * Per-session goal state from the goal service. Set by setGoalSnapshot when
    * the snapshot is loaded (initial load + refresh); cleared by clearGoalSnapshot
@@ -164,6 +178,12 @@ type SessionStore = {
   ) => void
   /** Delete the swarm_status message keyed by runId. No-op if not found. */
   removeSwarmStatus: (sessionId: string, runId: string) => void
+  /**
+   * SSE rag_context 事件入口。
+   * 1. 若 messages 里已有 stream-<aid> synthetic → 直接写 ragContext
+   * 2. 否则存入 pendingRagContexts[aid]
+   */
+  upsertRagContext: (sessionId: string, attemptId: string, rag: RagContext) => void
 }
 
 const empty = (): PerSession => ({
@@ -174,6 +194,7 @@ const empty = (): PerSession => ({
   eventsSubscribed: false,
   historyLoaded: false,
   lastEventAt: 0,
+  pendingRagContexts: {},
   goalSnapshot: null,
   goalLoaded: false,
   swarmLoaded: false,
@@ -227,12 +248,37 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const cur = s.byId[sid]
       if (!cur) return s
+      // Drain pendingRagContexts for this attemptId onto whichever message owns it.
+      // Used when rag_context SSE event arrives before the assistant message is
+      // created / before the attemptId is stamped — buffered via upsertRagContext.
+      const pendingRag = cur.pendingRagContexts?.[aid]
+      const drainedRag = (() => {
+        if (!pendingRag) return undefined
+        const next = { ...(cur.pendingRagContexts ?? {}) }
+        delete next[aid]
+        return next
+      })()
+      const attachRag = (m: ChatMessage): ChatMessage =>
+        pendingRag && m.attemptId === aid ? { ...m, ragContext: pendingRag } : m
+      const stripRagEmpty = (buf: Record<string, RagContext> | undefined) =>
+        buf && Object.keys(buf).length > 0 ? buf : undefined
       const hasMatch = cur.messages.some((m) => m.attemptId === aid)
       if (hasMatch) {
         const messages = cur.messages.map((m) =>
-          m.attemptId === aid ? { ...m, content: m.content + delta } : m,
+          m.attemptId === aid
+            ? { ...attachRag(m), content: m.content + delta }
+            : m,
         )
-        return { byId: { ...s.byId, [sid]: touchEvent({ ...cur, messages }) } }
+        return {
+          byId: {
+            ...s.byId,
+            [sid]: touchEvent({
+              ...cur,
+              messages,
+              pendingRagContexts: stripRagEmpty(drainedRag),
+            }),
+          },
+        }
       }
       // 没有匹配:很可能是 POST /messages 还没返回 attemptId,而 /events 已经把
       // 该 attempt 的首批 delta 推过来了。先创建一个 synthetic 消息使 UI 能即时渲染,
@@ -251,8 +297,39 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
           ...s.byId,
           [sid]: touchEvent({
             ...cur,
-            messages: [...cur.messages, synthetic],
+            messages: [...cur.messages, attachRag(synthetic)],
             pendingDeltas,
+            pendingRagContexts: stripRagEmpty(drainedRag),
+          }),
+        },
+      }
+    }),
+  upsertRagContext: (sid, aid, rag) =>
+    set((s) => {
+      const cur = s.byId[sid]
+      if (!cur) return s
+      const existing = cur.messages.find((m) => m.attemptId === aid)
+      if (existing) {
+        return {
+          ...s,
+          byId: {
+            ...s.byId,
+            [sid]: touchEvent({
+              ...cur,
+              messages: cur.messages.map((m) =>
+                m.attemptId === aid ? { ...m, ragContext: rag } : m,
+              ),
+            }),
+          },
+        }
+      }
+      return {
+        ...s,
+        byId: {
+          ...s.byId,
+          [sid]: touchEvent({
+            ...cur,
+            pendingRagContexts: { ...(cur.pendingRagContexts ?? {}), [aid]: rag },
           }),
         },
       }

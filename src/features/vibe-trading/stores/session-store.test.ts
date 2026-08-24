@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { stampAttemptIdOnMessages, useSessionStore } from "./session-store"
 import { TOOL_OPEN, TOOL_CLOSE } from "../lib/parse-message"
-import type { GoalSnapshot, SwarmRunStatus, SwarmAgentStatus } from "../lib/vibe-types"
+import type { GoalSnapshot, SwarmRunStatus, SwarmAgentStatus, RagContext } from "../lib/vibe-types"
 
 const SID = "sess-1"
 const AID = "att-1"
@@ -928,5 +928,55 @@ describe("softReset — preserve goalSnapshot and swarm_status messages", () => 
     expect(cur).toBeDefined()
     expect(cur.messages).toHaveLength(1)
     expect(cur.messages[0].swarmStatus?.runId).toBe("run-1")
+  })
+})
+
+describe("upsertRagContext — early-arrival buffering", () => {
+  it("writes ragContext to existing synthetic stream-<aid> message", () => {
+    // simulate an attempt whose stream message already exists
+    useSessionStore.getState().appendDelta(SID, AID, "draft ")
+    const rag: RagContext = {
+      markdown: "- **知识星球 · 摘要** (相似度 0.50)\n  _《T》_ (2026-08-13)\n  b",
+      chunk_ids: [1, 2],
+      entities_resolved: { 中芯国际: "688981.SH" },
+      latency_ms: 42,
+    }
+    useSessionStore.getState().upsertRagContext(SID, AID, rag)
+    const cur = useSessionStore.getState().byId[SID]
+    const synth = cur.messages.find((m) => m.attemptId === AID)
+    expect(synth?.ragContext).toEqual(rag)
+  })
+
+  it("buffers in pendingRagContexts when no matching message exists", () => {
+    const rag: RagContext = { markdown: "- **x**" }
+    useSessionStore.getState().upsertRagContext(SID, AID, rag)
+    const cur = useSessionStore.getState().byId[SID]
+    expect(cur.pendingRagContexts?.[AID]).toEqual(rag)
+    // no message yet, so messages array is untouched
+    expect(cur.messages.find((m) => m.attemptId === AID)).toBeUndefined()
+  })
+
+  it("replays pendingRagContexts when attemptId is stamped onto a message", () => {
+    // Buffer first (no message yet)
+    const rag: RagContext = { markdown: "- **knowledge · digest**" }
+    useSessionStore.getState().upsertRagContext(SID, AID, rag)
+    // Now simulate use-chat-stream stamping attemptId onto an assistant message
+    // via the existing public API path: appendDelta (which calls stampAttemptIdOnMessages).
+    useSessionStore.getState().appendDelta(SID, AID, "first delta ")
+    const cur = useSessionStore.getState().byId[SID]
+    const msg = cur.messages.find((m) => m.attemptId === AID)
+    expect(msg).toBeDefined()
+    expect(msg?.ragContext).toEqual(rag)
+    // Buffer should be cleared for this attempt
+    expect(cur.pendingRagContexts?.[AID]).toBeUndefined()
+  })
+
+  it("does not mutate ragContext for unrelated attempts", () => {
+    const rag: RagContext = { markdown: "- **x**" }
+    useSessionStore.getState().upsertRagContext(SID, AID, rag)
+    useSessionStore.getState().appendDelta(SID, "other-attempt", "hi")
+    const cur = useSessionStore.getState().byId[SID]
+    const other = cur.messages.find((m) => m.attemptId === "other-attempt")
+    expect(other?.ragContext).toBeUndefined()
   })
 })
