@@ -161,6 +161,28 @@ export function routeEvent(
         )
       }
       break
+    case "rag_context": {
+      // 后端 agent loop 在 pre-loop 阶段 emit,早于首个 text_delta。
+      // store 负责 race-safe 缓冲(写到 stream-<aid> synthetic 或 pendingRagContexts[aid])。
+      const aid = ev.data?.attempt_id as string | undefined;
+      if (!aid) break;
+      const md = typeof ev.data?.markdown === "string" ? ev.data.markdown : "";
+      if (!md) break; // 空 markdown 视为无命中,不渲染面板
+      const chunkIds = Array.isArray(ev.data?.chunk_ids) ? ev.data.chunk_ids : [];
+      const entities =
+        ev.data?.entities_resolved && typeof ev.data.entities_resolved === "object"
+          ? (ev.data.entities_resolved as Record<string, string>)
+          : {};
+      const latency =
+        typeof ev.data?.latency_ms === "number" ? ev.data.latency_ms : 0;
+      store.upsertRagContext(sessionId, aid, {
+        markdown: md,
+        chunk_ids: chunkIds,
+        entities_resolved: entities,
+        latency_ms: latency,
+      });
+      break;
+    }
     case "goal.created":
       // 事件载荷不带 snapshot,需 fetch
       void (async () => {
