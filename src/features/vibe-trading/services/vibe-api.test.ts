@@ -221,3 +221,105 @@ describe("vibeApi.swarm", () => {
     expect(init.method).toBe("GET")
   })
 })
+
+describe("vibeApi.getMessages — camelCase wire format (regression: data-source panel missing in production)", () => {
+  it("extracts ragContext from m.meta.rag_context (camelCase wire)", async () => {
+    // Production wire format uses { id, createdAt, meta: { rag_context } }
+    // (NestJS / class-transformer style) — not the snake_case assumed by
+    // existing tests.
+    const fetchSpy = mockFetchOnce({
+      data: [
+        {
+          id: "m-1",
+          role: "user",
+          content: "中芯国际最近有什么新闻",
+          createdAt: "2026-08-24T00:00:00.000Z",
+        },
+        {
+          id: "m-2",
+          role: "assistant",
+          content: "answer",
+          createdAt: "2026-08-24T00:01:00.000Z",
+          meta: {
+            run_id: "r-1",
+            status: "completed",
+            rag_context: {
+              markdown: "- **知识星球 · 摘要** (相似度 0.67)\n  _《T》_ (2026-08-13)\n  b",
+              chunk_ids: [1, 2],
+              entities_resolved: {},
+              latency_ms: 42,
+            },
+          },
+        },
+      ],
+    })
+
+    const { getMessages } = await import("./vibe-api")
+    const msgs = await getMessages("s-1")
+
+    expect(msgs).toHaveLength(2)
+    expect(msgs[0]?.id).toBe("m-1")
+    expect(msgs[0]?.ragContext ?? null).toBeNull()
+    expect(msgs[1]?.id).toBe("m-2")
+    expect(msgs[1]?.createdAt).toBe("2026-08-24T00:01:00.000Z")
+    expect(msgs[1]?.ragContext).toEqual({
+      markdown: "- **知识星球 · 摘要** (相似度 0.67)\n  _《T》_ (2026-08-13)\n  b",
+      chunk_ids: [1, 2],
+      entities_resolved: {},
+      latency_ms: 42,
+    })
+    // Verify the request was made correctly
+    const [url] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe(U("/v1/ai-agent/sessions/s-1/messages"))
+  })
+
+  it("falls back to m.metadata when m.meta is absent (legacy snake_case)", async () => {
+    // Defensive: keep supporting both wire formats in case backend changes
+    // or different envs use different endpoints.
+    mockFetchOnce({
+      data: [
+        {
+          message_id: "m-1",
+          role: "assistant",
+          content: "x",
+          created_at: "2026-08-24T00:00:00.000Z",
+          metadata: {
+            rag_context: {
+              markdown: "- **x**",
+              chunk_ids: [],
+              entities_resolved: {},
+              latency_ms: 1,
+            },
+          },
+        },
+      ],
+    })
+
+    const { getMessages } = await import("./vibe-api")
+    const msgs = await getMessages("s-1")
+    expect(msgs[0]?.ragContext).toEqual({
+      markdown: "- **x**",
+      chunk_ids: [],
+      entities_resolved: {},
+      latency_ms: 1,
+    })
+  })
+
+  it("preserves null ragContext when both meta and metadata are absent", async () => {
+    mockFetchOnce({
+      data: [
+        {
+          id: "m-1",
+          role: "assistant",
+          content: "x",
+          createdAt: "2026-08-24T00:00:00.000Z",
+          // no meta, no metadata
+        },
+      ],
+    })
+
+    const { getMessages } = await import("./vibe-api")
+    const msgs = await getMessages("s-1")
+    expect(msgs[0]?.ragContext).toBeNull()
+  })
+})
