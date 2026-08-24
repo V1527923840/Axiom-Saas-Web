@@ -147,12 +147,37 @@ export interface AiSession {
   createdAt: string;
 }
 
+/**
+ * RAG 数据来源面板的载荷。
+ *
+ * 由 VibeTrading 后端 `agent/src/agent/loop.py:626-639` 推 SSE `rag_context` 事件
+ * 携带，并由 `agent/src/session/service.py:189-205` 持久化到
+ * `Message.metadata.rag_context`。本类型用于前端把这段 metadata 提到顶层
+ * `AiMessage.ragContext`，便于组件层直接消费。
+ *
+ * `markdown` 是已格式化的多卡片 markdown（卡片之间用 `\n---\n` 分隔），
+ * 由 `lib/parse-sources.ts#parseSources` 解析为结构化卡片。
+ */
+export interface RagContext {
+  /** 已格式化的 markdown 文本，多卡片之间用 `\n---\n` 分隔 */
+  markdown: string;
+  /** 命中的 PG 向量库 chunk id */
+  chunk_ids?: number[];
+  /** 实体解析映射，例如 { "中芯国际": "688981.SH" } */
+  entities_resolved?: Record<string, string>;
+  /** RAG 检索耗时（毫秒） */
+  latency_ms?: number;
+}
+
 export interface AiMessage {
   id: string;
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   createdAt: string;
+  /** 自由字段：保留以兼容未来其他 metadata 写入；本 spec 阶段仅用于向后兼容遗留实现 */
   meta?: Record<string, unknown>;
+  /** RAG 数据来源面板；服务端持久化在 message.metadata.rag_context */
+  ragContext?: RagContext | null;
 }
 
 export interface SessionListResult {
