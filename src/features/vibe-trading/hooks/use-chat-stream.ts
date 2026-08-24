@@ -12,6 +12,7 @@ import {
   useSessionStore,
 } from "../stores/session-store"
 import { subscribeSession } from "../services/events-stream"
+import type { AiMessage } from "../lib/vibe-types"
 
 type Slice = Pick<PerSession, "messages" | "streaming" | "error" | "historyLoaded">
 
@@ -270,11 +271,18 @@ export function useChatStream(
   }
 }
 
-function toChatMessage(m: { id: string; role: string; content: string; createdAt: string | Date }): ChatMessage {
+export function toChatMessage(m: {
+  id: string
+  role: string
+  content: string
+  createdAt: string | Date
+  ragContext?: AiMessage["ragContext"]
+}): ChatMessage {
   return {
     id: m.id,
     role: m.role === "user" ? "user" : "assistant",
     content: m.content,
     createdAt: typeof m.createdAt === "string" ? m.createdAt : m.createdAt.toISOString(),
+    ragContext: m.ragContext,
   }
 }
