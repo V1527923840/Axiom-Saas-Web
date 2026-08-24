@@ -64,6 +64,19 @@ Axiom-Saas-Web 的 `features/vibe-trading/` 已经接入了同一组 SSE 事件�
 - 持久化在 VibeTrading 自己的 session store（SQLite 之类），不在 Saas-Server 的 PostgreSQL
 - 前端只做"接 SSE + 透传 metadata + 渲染"
 
+### RAG 命中判定（无歧义）
+
+"是否命中 RAG"在前端一律以**「`markdown` 非空且 `parseSources()` 返回 ≥1 个 ParsedSource」**为准。后端 `RagContext.skipped=True` 时根本不 emit 事件，前端自然不会收到；若后端某天发了空 markdown，前端也以"没命中"处理，不会出现空状态卡片。`chunk_ids` 是否非空仅作为 `parseSources` 的辅助信息，不作为独立判定条件。
+
+### 多轮 RAG 的 attach 策略
+
+每个 attempt 都有自己的 `attemptId`；`rag_context` 事件携带 `attempt_id`，前端按 attemptId attach：
+
+- 流式期间：`upsertRagContext(sid, aid, rag)` 把 rag 写到对应 stream message 的 `ragContext`
+- 历史加载：服务端已把 `rag_context` 持久化到对应 assistant 消息的 `metadata`；`getMessages()` 解析时直接 attach
+
+新发一条问题会触发新一轮 attempt，产生新 `attemptId` 与新 `rag_context` 事件——只影响新生成的 assistant 消息，**不会污染上一轮**。
+
 ## 类型与 API 客户端
 
 ### `lib/vibe-types.ts`
@@ -85,6 +98,7 @@ export interface AiMessage {
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   createdAt: string;
+  /** 自由字段：保留以兼容未来其他 metadata 写入；本 spec 阶段仅用于向后兼容遗留实现 */
   meta?: Record<string, unknown>;
   /** RAG 数据来源面板；服务端持久化在 message.metadata.rag_context */
   ragContext?: RagContext | null;
