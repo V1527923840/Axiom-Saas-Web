@@ -567,6 +567,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             error: null,
             activeAttemptId: null,
             pendingDeltas: undefined,
+            pendingRagContexts: undefined,
             historyLoaded: false,
           },
         },
