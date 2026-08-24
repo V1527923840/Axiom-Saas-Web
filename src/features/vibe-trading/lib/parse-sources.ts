@@ -32,6 +32,7 @@ export function parseSources(md: string): ParsedSource[] {
     const title = titleMatch ? titleMatch[1].trim() : "";
     const date = titleMatch ? titleMatch[2] : "";
     let body = "";
+    // 标题格式若变更(如 `_..._` 切换为 `**...**`),下面这行要同步修改
     const bodyMatch = trimmed.match(/_《\s*[^》]+?\s*》_\s*\(\d{4}-\d{2}-\d{2}\)\s*\n([\s\S]*)$/);
     if (bodyMatch) {
       body = bodyMatch[1].trim();
