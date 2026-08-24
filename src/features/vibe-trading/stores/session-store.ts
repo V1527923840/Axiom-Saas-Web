@@ -48,8 +48,14 @@ export type ChatMessage = {
    * Attached to the assistant message that owns the streaming attemptId.
    * See upsertRagContext for the race-safe write path (early-arrival buffering
    * via pendingRagContexts when the assistant message doesn't yet exist).
+   *
+   * `| null` 匹配 `AiMessage.ragContext` 与 `vibe-api.getMessages` 里
+   * `metadata?.rag_context ?? null` 的契约 —— getMessages 返回 `null`
+   * 表示服务端没有 rag_context 字段;保留 null 比转成 undefined 更稳,
+   * 因为 chat-dialog.tsx 的守卫 `m.ragContext && m.ragContext.markdown`
+   * 对 null/undefined 都是 false,语义一致。
    */
-  ragContext?: RagContext
+  ragContext?: RagContext | null
 }
 
 export type PerSession = {
