@@ -156,14 +156,14 @@ export interface AiSession {
  * `AiMessage.ragContext`，便于组件层直接消费。
  *
  * `markdown` 是已格式化的多卡片 markdown（卡片之间用 `\n---\n` 分隔），
- * 由 `lib/parse-sources.ts#parseSources` 解析为结构化卡片。
+ * 后续 task 会用 `parseSources(...)` 解析为结构化卡片。
  */
 export interface RagContext {
   /** 已格式化的 markdown 文本，多卡片之间用 `\n---\n` 分隔 */
   markdown: string;
   /** 命中的 PG 向量库 chunk id */
   chunk_ids?: number[];
-  /** 实体解析映射，例如 { "中芯国际": "688981.SH" } */
+  /** 实体解析映射：key = 归一化实体名（如 "中芯国际"），value = 标的代码（目前为 exchange.ticker 格式，如 "688981.SH"） */
   entities_resolved?: Record<string, string>;
   /** RAG 检索耗时（毫秒） */
   latency_ms?: number;
@@ -174,7 +174,6 @@ export interface AiMessage {
   role: "user" | "assistant" | "system" | "tool";
   content: string;
   createdAt: string;
-  /** 自由字段：保留以兼容未来其他 metadata 写入；本 spec 阶段仅用于向后兼容遗留实现 */
   meta?: Record<string, unknown>;
   /** RAG 数据来源面板；服务端持久化在 message.metadata.rag_context */
   ragContext?: RagContext | null;
