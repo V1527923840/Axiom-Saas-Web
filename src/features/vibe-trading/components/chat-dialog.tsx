@@ -15,6 +15,7 @@ import { ChatChipGroup } from "./chat-chip-group";
 import { ChatSender } from "./chat-sender";
 import { FileCard } from "./file-card";
 import { AiMessageContent } from "./ai-message-content";
+import { RagContextPanel } from "./rag-context-panel";
 import { SwarmStatusCard } from "./swarm-status-card";
 
 /**
@@ -369,7 +370,12 @@ export function ChatDialog({
       contentRender:
         m.role === "assistant"
           ? (content: string) => (
-              <AiMessageContent content={content} cancelledAt={m.cancelledAt} />
+              <>
+                <AiMessageContent content={content} cancelledAt={m.cancelledAt} />
+                {m.ragContext && m.ragContext.markdown && (
+                  <RagContextPanel ragContext={m.ragContext} />
+                )}
+              </>
             )
           : m.role === "user"
             ? (content: string) => {
