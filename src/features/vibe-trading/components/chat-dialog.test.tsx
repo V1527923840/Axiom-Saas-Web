@@ -115,7 +115,8 @@ describe("ChatDialog bubbleItems", () => {
     expect(text).toContain("researcher-beta")
     // Column headers are unique to SwarmStatusCard, not to AiMessageContent.
     expect(text).toContain("耗时")
-    expect(container.querySelector("progress")).not.toBeNull()
+    // shadcn/Radix Progress renders <div role="progressbar">, not a native <progress>
+    expect(container.querySelector('[role="progressbar"]')).not.toBeNull()
   })
 
   it("still renders text assistant messages through AiMessageContent", () => {
