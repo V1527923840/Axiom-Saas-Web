@@ -19,6 +19,7 @@ import type {
   AiMessage,
   AiSession,
   GoalSnapshot,
+  RagContext,
   SessionListResult,
   UploadResult,
 } from "../lib/vibe-types"
@@ -220,24 +221,39 @@ export async function getMessages(
 ): Promise<AiMessage[]> {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""
   // 服务端返回两种线缆格式：
-  //   生产 NestJS / class-transformer 风格 — { id, role, content, createdAt, meta: { rag_context: ... } }
-  //   旧 / 不同环境 — { message_id, role, content, created_at, metadata: { rag_context: ... } }
-  // 这里用 ?? 双兜底，把 rag_context 提到顶层 ragContext，便于消费。
+  //   生产 NestJS / class-transformer 风格 — { id, role, content, createdAt, meta: { rag_context / corpus_sources } }
+  //   旧 / 不同环境 — { message_id, role, content, created_at, metadata: { rag_context / corpus_sources } }
+  // 这里用 ?? 双兜底，把 rag_context / corpus_sources 提到顶层 ragContext，便于消费。
+  //
+  // 2026-08-30 后端归一到 corpus_sources（Array<CorpusSourceItem>）；保留 rag_context
+  // 回放兜底以兼容历史会话。优先级：corpus_sources > rag_context。
   const res = await request<{ data: Record<string, unknown>[] }>(
     `${SESSION_BASE}/sessions/${encodeURIComponent(id)}/messages${query}`,
     { method: "GET" },
   )
   if (!Array.isArray(res.data)) return []
-  return res.data.map((m) => ({
-    id: (m.message_id ?? m.id ?? "") as string,
-    role: m.role as AiMessage["role"],
-    content: (m.content as string) ?? "",
-    createdAt: (m.created_at ?? m.createdAt ?? "") as string,
-    meta: (m.meta ?? m.metadata) as Record<string, unknown>,
-    ragContext: ((m.meta ?? m.metadata) as {
-      rag_context?: AiMessage["ragContext"]
-    })?.rag_context ?? null,
-  }))
+  return res.data.map((m) => {
+    const meta = (m.meta ?? m.metadata) as {
+      rag_context?: RagContext
+      corpus_sources?: RagContext["sources"]
+    }
+    // corpus_sources 优先；回退到 legacy rag_context（仅 markdown 字段）。
+    const corpusSources = Array.isArray(meta?.corpus_sources)
+      ? meta.corpus_sources
+      : undefined
+    const legacyRag = meta?.rag_context
+    const ragContext: AiMessage["ragContext"] | null = corpusSources
+      ? { sources: corpusSources }
+      : legacyRag ?? null
+    return {
+      id: (m.message_id ?? m.id ?? "") as string,
+      role: m.role as AiMessage["role"],
+      content: (m.content as string) ?? "",
+      createdAt: (m.created_at ?? m.createdAt ?? "") as string,
+      meta: meta as Record<string, unknown>,
+      ragContext,
+    }
+  })
 }
 
 export async function cancelSession(id: string): Promise<void> {

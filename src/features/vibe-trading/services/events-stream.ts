@@ -162,8 +162,11 @@ export function routeEvent(
       }
       break
     case "rag_context": {
-      // 后端 agent loop 在 pre-loop 阶段 emit,早于首个 text_delta。
-      // store 负责 race-safe 缓冲(写到 stream-<aid> synthetic 或 pendingRagContexts[aid])。
+      // Legacy path (pre-2026-08-30): 后端 agent loop 在 pre-loop 阶段 emit
+      // `rag_context` 事件,载荷是已格式化的 markdown。store 负责 race-safe
+      // 缓冲(写到 stream-<aid> synthetic 或 pendingRagContexts[aid])。
+      // 2026-08-30 起后端归一到 `corpus_sources`,本分支仅作为回放历史会话
+      // 的兜底 —— 新部署后端不再发 rag_context。
       const aid = ev.data?.attempt_id as string | undefined;
       if (!aid) break;
       const md = typeof ev.data?.markdown === "string" ? ev.data.markdown : "";
@@ -180,6 +183,25 @@ export function routeEvent(
         chunk_ids: chunkIds,
         entities_resolved: entities,
         latency_ms: latency,
+      });
+      break;
+    }
+
+    case "corpus_sources": {
+      // 2026-08-30 unified data-source path: 后端把 prefetch chunks 和
+      // corpus_search_* 工具结果合并成 Array<CorpusSourceItem> 一并发出,
+      // 由 attempt.completed 前一次性送完。挂到当前 attempt 对应的
+      // assistant 消息 metadata 上,RagContextPanel 渲染。
+      const aid = ev.data?.attempt_id as string | undefined;
+      if (!aid) break;
+      const sources = Array.isArray(ev.data?.sources)
+        ? (ev.data.sources as unknown[]).filter(
+            (s): s is NonNullable<unknown> => s !== null && typeof s === "object",
+          )
+        : [];
+      if (sources.length === 0) break; // 空数组视为无命中,不渲染面板
+      store.upsertRagContext(sessionId, aid, {
+        sources: sources as never,
       });
       break;
     }
@@ -254,6 +276,15 @@ export function routeEvent(
     case "live.resumed":
       if (import.meta.env.DEV) console.warn(`[SSE] unhandled ${ev.event}:`, ev.data)
       break
+    // 兜底:default 分支本应永远不会命中(parseSseEvent 已把所有已知形状
+    // 分类到具体 case)。命中说明出现了一个新形状,前端没识别,事件被静默
+    // 丢弃 —— 在 dev 环境打 warn,提醒排查是否有未挂载的事件类型
+    // (例如 2026-08-27 的 rag_context 漏分类就靠这条 warning 暴露)。
+    default:
+      if (import.meta.env.DEV && ev.event !== "message") {
+        console.warn(`[SSE] unhandled ${ev.event}:`, ev.data)
+      }
+      break
     // ignored: message.received, attempt.created, attempt.started, thinking_done
   }
 }
@@ -297,6 +328,15 @@ export function parseSseEvent(raw: string): { event: string; data: Record<string
     else if (typeof obj.content === "string" && obj.attempt_id) event = "text_delta"
     else if (obj.status === "completed" && obj.attempt_id) event = "attempt.completed"
     else if (obj.status === "error" && obj.attempt_id) event = "attempt.error"
+    // rag_context 帧:上游 vibe SSE 在 pre-loop 阶段 emit,shape = { markdown, attempt_id, ... }。
+    // 必须从 "message" 兜底分类出来,否则 routeEvent 的 switch 没 case 匹配,
+    // 静默丢弃 → 助手气泡拿不到 ragContext → RagContextPanel 不渲染,只有刷新页面从
+    // getMessages 拉服务端持久化的 metadata.rag_context 才会出现 (2026-08-27 回归)。
+    else if (typeof obj.markdown === "string" && obj.attempt_id) event = "rag_context"
+    // 2026-08-30: corpus_sources 帧 — 后端归一事件,shape = { sources: [...], attempt_id }。
+    // 优先于 rag_context 判断(sources 字段是数组,不会与 markdown 字符串冲突),
+    // 保证新事件路径优先路由到 corpus_sources 分支。
+    else if (Array.isArray(obj.sources) && obj.attempt_id) event = "corpus_sources"
   }
   return { event, data: obj }
 }

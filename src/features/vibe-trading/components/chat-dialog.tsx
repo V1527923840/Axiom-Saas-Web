@@ -372,9 +372,16 @@ export function ChatDialog({
           ? (content: string) => (
               <>
                 <AiMessageContent content={content} cancelledAt={m.cancelledAt} />
-                {m.ragContext && m.ragContext.markdown && (
-                  <RagContextPanel ragContext={m.ragContext} />
-                )}
+                {/* RAG 数据来源面板:两条通路都触发表板。
+                 *   - sources 通路(2026-08-30 起的主路径):后端 corpus_sources
+                 *     SSE / metadata.corpus_sources,组件内 sources 字段渲染。
+                 *   - markdown 通路(legacy 回放):后端 metadata.rag_context,
+                 *     组件内 markdown 解析后渲染。
+                 * 组件本身会过滤空数据,所以这里只要存在任意一个就挂载。 */}
+                {m.ragContext &&
+                  (m.ragContext.sources || m.ragContext.markdown) && (
+                    <RagContextPanel ragContext={m.ragContext} />
+                  )}
               </>
             )
           : m.role === "user"

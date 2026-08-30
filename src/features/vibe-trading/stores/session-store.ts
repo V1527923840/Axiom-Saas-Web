@@ -350,10 +350,24 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
             Object.entries(cur.pendingDeltas).filter(([k]) => k !== aid),
           )
         : undefined
+      // 2026-08-30: 同步排空 pendingRagContexts[aid] —— 与 appendDelta 对齐。
+      // SSE 时序:rag_context 先到(无 matching message)→ buffered;第一条 text
+      // 是 content 快照(走 setAttemptContent,不走 appendDelta)→ 之前不排空
+      // → buffered rag 永远丢,刷新页面才能看到。
+      const pendingRag = cur.pendingRagContexts?.[aid]
+      const drainedRag = pendingRag
+        ? Object.fromEntries(
+            Object.entries(cur.pendingRagContexts ?? {}).filter(
+              ([k]) => k !== aid,
+            ),
+          )
+        : cur.pendingRagContexts
+        const attachRag = (m: ChatMessage): ChatMessage =>
+        pendingRag && m.attemptId === aid ? { ...m, ragContext: pendingRag } : m
       const hasMatch = cur.messages.some((m) => m.attemptId === aid)
       if (hasMatch) {
         const messages = cur.messages.map((m) =>
-          m.attemptId === aid ? { ...m, content: fullText } : m,
+          m.attemptId === aid ? { ...attachRag(m), content: fullText } : m,
         )
         return {
           byId: {
@@ -364,6 +378,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               pendingDeltas:
                 restDeltas && Object.keys(restDeltas).length > 0
                   ? restDeltas
+                  : undefined,
+              pendingRagContexts:
+                drainedRag && Object.keys(drainedRag).length > 0
+                  ? drainedRag
                   : undefined,
             }),
           },
@@ -376,6 +394,7 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
         attemptId: aid,
         content: fullText,
         createdAt: new Date().toISOString(),
+        ...(pendingRag ? { ragContext: pendingRag } : {}),
       }
       return {
         byId: {
@@ -387,6 +406,10 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
               restDeltas && Object.keys(restDeltas).length > 0
                 ? restDeltas
                 : undefined,
+            pendingRagContexts:
+              drainedRag && Object.keys(drainedRag).length > 0
+                ? drainedRag
+                : undefined,
           }),
         },
       }
@@ -395,14 +418,36 @@ export const useSessionStore = create<SessionStore>((set, get) => ({
     set((s) => {
       const cur = s.byId[sid]
       if (!cur) return s
+      // 2026-08-30: 同步排空 pendingRagContexts[aid] —— 与 appendDelta / setAttemptContent 对齐。
+      // markAttemptComplete 是流结束的最后一帧,buffered rag 必须在此之前已
+      // 排到匹配消息;若仍未(异常时序),尝试 attach 到第一条匹配消息。
+      const pendingRag = cur.pendingRagContexts?.[aid]
+      const drainedRag = pendingRag
+        ? Object.fromEntries(
+            Object.entries(cur.pendingRagContexts ?? {}).filter(
+              ([k]) => k !== aid,
+            ),
+          )
+        : cur.pendingRagContexts
       const messages = cur.messages.map((m) =>
-        m.attemptId === aid ? { ...m, content: fullText ?? m.content } : m,
+        m.attemptId === aid
+          ? { ...m, content: fullText ?? m.content, ...(pendingRag && !m.ragContext ? { ragContext: pendingRag } : {}) }
+          : m,
       )
       const stillStreaming = cur.activeAttemptId === aid ? false : cur.streaming
       return {
         byId: {
           ...s.byId,
-          [sid]: touchEvent({ ...cur, messages, streaming: stillStreaming, activeAttemptId: null }),
+          [sid]: touchEvent({
+            ...cur,
+            messages,
+            streaming: stillStreaming,
+            activeAttemptId: null,
+            pendingRagContexts:
+              drainedRag && Object.keys(drainedRag).length > 0
+                ? drainedRag
+                : undefined,
+          }),
         },
       }
     }),

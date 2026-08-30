@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { stampAttemptIdOnMessages, useSessionStore } from "./session-store"
+import type { ChatMessage } from "./session-store"
 import { TOOL_OPEN, TOOL_CLOSE } from "../lib/parse-message"
 import type { GoalSnapshot, SwarmRunStatus, SwarmAgentStatus, RagContext } from "../lib/vibe-types"
 
@@ -978,5 +979,95 @@ describe("upsertRagContext — early-arrival buffering", () => {
     const cur = useSessionStore.getState().byId[SID]
     const other = cur.messages.find((m) => m.attemptId === "other-attempt")
     expect(other?.ragContext).toBeUndefined()
+  })
+
+  // 2026-08-27: setAttemptContent 之前不排空 pendingRagContexts,导致
+  // "首批 text 是 content 快照(非 delta)"的场景下 buffered rag 永远丢。
+  it("replays pendingRagContexts when setAttemptContent updates a matching message", () => {
+    // 真实生产时序:
+    //  1. placeholder 插入(无 attemptId)
+    //  2. SSE rag_context 先到 → buffered (因为此时没有任何 m.attemptId===AID)
+    //  3. POST /messages 返回,use-chat-stream 直接调 stampAttemptIdOnMessages
+    //     写 attemptId 到 placeholder —— 不走 appendDelta,所以不排空
+    //  4. 第一帧 text 是 content 快照 → setAttemptContent —— 之前不排空 → 丢 rag
+    const placeholder: ChatMessage = {
+      id: "a-1",
+      role: "assistant",
+      content: "",
+      createdAt: new Date().toISOString(),
+    }
+    useSessionStore.setState((s) => ({
+      byId: { ...s.byId, [SID]: { ...s.byId[SID]!, messages: [placeholder] } },
+    }))
+    // step 2: buffered
+    const rag: RagContext = { markdown: "- **k**", chunk_ids: [1], latency_ms: 5 }
+    useSessionStore.getState().upsertRagContext(SID, AID, rag)
+    // step 3: stamp attemptId via stampAttemptIdOnMessages(纯函数,模拟 use-chat-stream 里的直接 setState 调用)
+    useSessionStore.setState((s) => {
+      const c = s.byId[SID]!
+      return {
+        byId: {
+          ...s.byId,
+          [SID]: {
+            ...c,
+            messages: stampAttemptIdOnMessages(c.messages, "a-1", AID, ""),
+          },
+        },
+      }
+    })
+    expect(useSessionStore.getState().byId[SID]?.pendingRagContexts?.[AID]).toEqual(rag)
+    // step 4: content snapshot
+    useSessionStore.getState().setAttemptContent(SID, AID, "full snapshot")
+    const cur = useSessionStore.getState().byId[SID]
+    const msg = cur.messages.find((m) => m.attemptId === AID)
+    expect(msg?.content).toBe("full snapshot")
+    expect(msg?.ragContext).toEqual(rag)
+    expect(cur.pendingRagContexts?.[AID]).toBeUndefined()
+  })
+
+  it("replays pendingRagContexts when setAttemptContent creates a synthetic stream-<aid>", () => {
+    // 没有现成的 message(attemptId 尚未 stamp 上任何消息)→ setAttemptContent 创建 synthetic,
+    // 该 synthetic 也必须带上 buffered rag。
+    const rag: RagContext = { markdown: "- **k**", chunk_ids: [1], latency_ms: 5 }
+    useSessionStore.getState().upsertRagContext(SID, AID, rag)
+    useSessionStore.getState().setAttemptContent(SID, AID, "snapshot")
+    const cur = useSessionStore.getState().byId[SID]
+    const synth = cur.messages.find((m) => m.attemptId === AID)
+    expect(synth?.ragContext).toEqual(rag)
+    expect(cur.pendingRagContexts?.[AID]).toBeUndefined()
+  })
+
+  it("replays pendingRagContexts when markAttemptComplete fires", () => {
+    const placeholder: ChatMessage = {
+      id: "a-1",
+      role: "assistant",
+      content: "partial",
+      createdAt: new Date().toISOString(),
+    }
+    useSessionStore.setState((s) => ({
+      byId: { ...s.byId, [SID]: { ...s.byId[SID]!, messages: [placeholder] } },
+    }))
+    // buffered
+    const rag: RagContext = { markdown: "- **k**" }
+    useSessionStore.getState().upsertRagContext(SID, AID, rag)
+    // stamp attemptId
+    useSessionStore.setState((s) => {
+      const c = s.byId[SID]!
+      return {
+        byId: {
+          ...s.byId,
+          [SID]: {
+            ...c,
+            messages: stampAttemptIdOnMessages(c.messages, "a-1", AID, ""),
+          },
+        },
+      }
+    })
+    // attempt 完成(没有中间任何 delta/content)
+    useSessionStore.getState().markAttemptComplete(SID, AID, "final")
+    const cur = useSessionStore.getState().byId[SID]
+    const msg = cur.messages.find((m) => m.attemptId === AID)
+    expect(msg?.ragContext).toEqual(rag)
+    expect(cur.pendingRagContexts?.[AID]).toBeUndefined()
   })
 })

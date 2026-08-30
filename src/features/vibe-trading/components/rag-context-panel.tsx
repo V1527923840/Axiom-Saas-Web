@@ -1,27 +1,62 @@
 import { ChevronDown, ChevronRight, Database } from "lucide-react"
 import { useState } from "react"
 import { parseSources } from "../lib/parse-sources"
-import type { RagContext } from "../lib/vibe-types"
+import type { RagContext, CorpusSourceItem } from "../lib/vibe-types"
 
 /**
  * 「数据来源」折叠面板 —— 嵌入助手气泡下方。
  *
+ * 数据通路 (2026-08-30 起后端归一):
+ * 1. 新通路: SSE `corpus_sources` 事件携带 Array<CorpusSourceItem>,挂到 assistant
+ *    消息的 `ragContext.sources` 字段;服务端持久化 `metadata.corpus_sources`,
+ *    getMessages 拉到后回填。本组件优先消费 `sources`,渲染时把每个
+ *    CorpusSourceItem 规范成卡片。
+ * 2. 老通路: SSE `rag_context` 事件携带 markdown 文本,挂到 `ragContext.markdown`;
+ *    服务端持久化 `metadata.rag_context`。markdown 解析后渲染同一卡片结构。
+ *
  * 设计要点:
  * - 默认收起,点击 header 展开/收起
- * - 仅在 markdown 非空且 parseSources 返回 ≥1 项时渲染
- * - 解析失败时降级为显示原 markdown 片段(不阻塞主流程)
+ * - sources / markdown 都为空时不渲染(null return)
  * - 卡片不可点击跳转(per spec: 仅展示,不点击)
  * - 视觉风格对齐 shadcn/ui(Tailwind 4 CSS 变量主题)
  */
 export function RagContextPanel({ ragContext }: { ragContext: RagContext }) {
   const [expanded, setExpanded] = useState(false)
-  const md = ragContext.markdown ?? ""
-  if (!md) return null
 
-  const sources = parseSources(md)
-  const count = sources.length
+  // 新通路:sources 直接是结构化数据,无需 markdown 解析。
+  const sourceCards: Array<{
+    source: string;
+    view: string;
+    title: string;
+    date: string;
+    similarity?: string;
+    body: string;
+  }> | null = (() => {
+    if (!Array.isArray(ragContext.sources) || ragContext.sources.length === 0) {
+      return null
+    }
+    return ragContext.sources.map((s) => ({
+      source: s.source ?? "未知来源",
+      view: s.view_type ?? "默认视图",
+      title: s.title ?? "",
+      date: s.publish_date ?? "",
+      similarity:
+        typeof s.similarity === "number" ? s.similarity.toFixed(2) : undefined,
+      body: s.content_text ?? "",
+    }))
+  })()
+
+  // 老通路:markdown 解析为卡片。
+  const md = ragContext.markdown ?? ""
+  const legacyCards = sourceCards ? [] : parseSources(md)
+  const cards = sourceCards ?? legacyCards
+  const count = cards.length
   const latency = ragContext.latency_ms ?? 0
-  const showFallback = count === 0
+
+  // 两条通路都没数据 → 不渲染面板。
+  if (count === 0 && !md) return null
+
+  const showFallback = !sourceCards && count === 0
 
   return (
     <div
@@ -48,7 +83,7 @@ export function RagContextPanel({ ragContext }: { ragContext: RagContext }) {
       </button>
       {expanded && (
         <div className="border-border/40 space-y-2 border-t px-3 pb-3">
-          {sources.map((s, i) => (
+          {cards.map((s, i) => (
             <div
               key={i}
               data-testid="rag-source-card"
@@ -91,4 +126,21 @@ export function RagContextPanel({ ragContext }: { ragContext: RagContext }) {
       )}
     </div>
   )
+}
+
+/**
+ * Test-only helper: expose the new-path adapter so unit tests can verify
+ * CorpusSourceItem → card projection without going through the panel's
+ * render cycle. Not exported on the runtime build target.
+ */
+export function corpusSourcesToCards(sources: CorpusSourceItem[]) {
+  return sources.map((s) => ({
+    source: s.source ?? "未知来源",
+    view: s.view_type ?? "默认视图",
+    title: s.title ?? "",
+    date: s.publish_date ?? "",
+    similarity:
+      typeof s.similarity === "number" ? s.similarity.toFixed(2) : undefined,
+    body: s.content_text ?? "",
+  }))
 }

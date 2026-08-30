@@ -62,6 +62,123 @@ describe("inferSseEvent", () => {
     expect(inferSseEvent(frame({ status: "completed" }))).not.toBe("attempt.completed")
     expect(inferSseEvent(frame({ status: "error" }))).not.toBe("attempt.error")
     expect(inferSseEvent(frame({ tool: "x" }))).not.toBe("tool_event")
+    expect(inferSseEvent(frame({ markdown: "x" }))).not.toBe("rag_context")
+  })
+
+  it("classifies a rag_context frame (markdown + attempt_id) as rag_context", () => {
+    // Regression: parseSseEvent must reclassify upstream SSE frames shaped as
+    // { markdown, attempt_id, chunk_ids, latency_ms, ... } to "rag_context",
+    // otherwise routeEvent silently drops them and the assistant bubble never
+    // gets a ragContext during live streaming (panel only appears after refresh).
+    expect(
+      inferSseEvent(
+        frame({
+          markdown: "- **k**",
+          attempt_id: "a",
+          chunk_ids: [1],
+          latency_ms: 10,
+        }),
+      ),
+    ).toBe("rag_context")
+  })
+
+  it("routes a rag_context frame to upsertRagContext (live stream, not silent drop)", () => {
+    // End-to-end: parseSseEvent reclassifies the upstream "message" frame to
+    // "rag_context", and routeEvent then dispatches to upsertRagContext. This
+    // catches the regression where the frame stayed classified as "message"
+    // and was silently dropped (panel only appearing after page refresh).
+    const upsert = vi.spyOn(useSessionStore.getState(), "upsertRagContext")
+    const parsed = parseSseEvent(
+      frame({
+        markdown: "- **k**",
+        attempt_id: "a",
+        chunk_ids: [1, 2],
+        entities_resolved: {},
+        latency_ms: 42,
+      }),
+    )
+    expect(parsed?.event).toBe("rag_context")
+    routeEvent(sid, parsed!)
+    expect(upsert).toHaveBeenCalledWith(
+      sid,
+      "a",
+      expect.objectContaining({ markdown: "- **k**", latency_ms: 42 }),
+    )
+  })
+
+  // ─── corpus_sources (2026-08-30 unified data-source event) ──────────────
+
+  it("classifies a corpus_sources frame (sources array + attempt_id) as corpus_sources", () => {
+    // 2026-08-30: 后端归一事件,shape = { sources: [...], attempt_id }。
+    // 必须从 "message" 兜底分类出来,否则 routeEvent 走不到新 case,
+    // RagContextPanel 永远拿不到数据源面板。
+    const ev = parseSseEvent(
+      frame({
+        sources: [
+          {
+            tool: "prefetch",
+            source: "zsxq_posts",
+            chunk_id: 101,
+            view_type: "summary",
+            title: "中芯国际2Q26业绩快评",
+            publish_date: "2026-08-13",
+            similarity: 0.82,
+            content_text: "中芯国际2Q26业绩与产能双兑现",
+          },
+        ],
+        attempt_id: "a",
+      }),
+    )
+    expect(ev?.event).toBe("corpus_sources")
+  })
+
+  it("routes a corpus_sources frame to upsertRagContext with sources array", () => {
+    const upsert = vi.spyOn(useSessionStore.getState(), "upsertRagContext")
+    const sources = [
+      {
+        tool: "prefetch",
+        source: "zsxq_posts",
+        chunk_id: 101,
+        view_type: "summary",
+        title: "中芯国际2Q26业绩快评",
+        publish_date: "2026-08-13",
+        similarity: 0.82,
+        content_text: "中芯国际2Q26业绩与产能双兑现",
+      },
+      {
+        tool: "corpus_search_zhishi",
+        source: "zsxq_posts",
+        chunk_id: 102,
+        view_type: "summary",
+        title: "另一篇研报",
+        publish_date: "2026-08-14",
+        similarity: 0.66,
+        content_text: "另一段正文",
+      },
+    ]
+    const parsed = parseSseEvent(
+      frame({ sources, attempt_id: "a" }),
+    )
+    expect(parsed?.event).toBe("corpus_sources")
+    routeEvent(sid, parsed!)
+    expect(upsert).toHaveBeenCalledWith(
+      sid,
+      "a",
+      expect.objectContaining({ sources: expect.arrayContaining(sources) }),
+    )
+  })
+
+  it("ignores corpus_sources frames with empty sources array", () => {
+    // 空数组 → 视为无命中,不调用 upsertRagContext。
+    const upsert = vi.spyOn(useSessionStore.getState(), "upsertRagContext")
+    routeEvent(sid, { event: "corpus_sources", data: { sources: [], attempt_id: "a" } })
+    expect(upsert).not.toHaveBeenCalled()
+  })
+
+  it("ignores corpus_sources frames without attempt_id", () => {
+    const upsert = vi.spyOn(useSessionStore.getState(), "upsertRagContext")
+    routeEvent(sid, { event: "corpus_sources", data: { sources: [{ tool: "x" }] } })
+    expect(upsert).not.toHaveBeenCalled()
   })
 
   it("returns null for malformed JSON", () => {

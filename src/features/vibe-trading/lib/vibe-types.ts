@@ -150,18 +150,52 @@ export interface AiSession {
 /**
  * RAG 数据来源面板的载荷。
  *
- * 由 VibeTrading 后端 `agent/src/agent/loop.py:626-639` 推 SSE `rag_context` 事件
- * 携带，并由 `agent/src/session/service.py:189-205` 持久化到
- * `Message.metadata.rag_context`。本类型用于前端把这段 metadata 提到顶层
- * `AiMessage.ragContext`，便于组件层直接消费。
+ * 历史（pre-2026-08-30）由 VibeTrading 后端 `agent/src/agent/loop.py:626-639`
+ * 推 SSE `rag_context` 事件携带，载荷是已格式化的 markdown 文本（多卡片
+ * 用 `\n---\n` 分隔）；同时 `agent/src/session/service.py:189-205` 把它
+ * 持久化到 `Message.metadata.rag_context`。前端把这部分提到顶层
+ * `AiMessage.ragContext` 便于消费。
  *
- * `markdown` 是已格式化的多卡片 markdown（卡片之间用 `\n---\n` 分隔），
- * 后续 task 会用 `parseSources(...)` 解析为结构化卡片。
+ * 2026-08-30 起后端把 prefetch chunks 与 corpus_search_* 工具结果统一收口到
+ * `corpus_sources` SSE 事件 + `metadata.corpus_sources`（Array of
+ * CorpusSourceItem），不再单独发 `rag_context`。前端保留 `markdown` 字段
+ * 作为旧数据回放兜底，新增 `sources` 字段走新数据通路；`parseSources(md)`
+ * 把 markdown 解析成与 `sources[i]` 同构的卡片数据，两条路径渲染同一组件。
  */
+export interface CorpusSourceItem {
+  /** 触发此 source 的工具名：prefetch / corpus_search_zhishi / corpus_search_research */
+  tool: string;
+  /** 语料库表名：zsxq_posts / research_analysis */
+  source: string;
+  /** PG 向量库 chunk id；prefetch 路径为 0（chunks 由 ID 直接定位）。 */
+  chunk_id?: number | null;
+  /** 视图类型：summary / base_view / mid_view / core_view / original_text */
+  view_type?: string | null;
+  /** 发布日期，YYYY-MM-DD */
+  publish_date?: string;
+  /** 文档标题 */
+  title?: string;
+  /** 关联股票名 */
+  stock_names?: string[];
+  /** cosine similarity, 0~1 */
+  similarity?: number;
+  /** 文档正文片段 */
+  content_text?: string;
+}
+
 export interface RagContext {
-  /** 已格式化的 markdown 文本，多卡片之间用 `\n---\n` 分隔 */
-  markdown: string;
-  /** 命中的 PG 向量库 chunk id */
+  /**
+   * 已格式化的 markdown 文本，多卡片之间用 `\n---\n` 分隔。
+   * 仅在 legacy `rag_context` SSE / `metadata.rag_context` 路径下被填充；
+   * 新数据通路 (`corpus_sources`) 走 `sources` 字段，本字段为 undefined。
+   */
+  markdown?: string;
+  /**
+   * 结构化 source 列表（来自 `corpus_sources` SSE / `metadata.corpus_sources`）。
+   * 新数据通路的权威字段。组件优先消费此字段；缺省时回退到 `markdown` 解析。
+   */
+  sources?: CorpusSourceItem[];
+  /** 命中的 PG 向量库 chunk id（legacy 字段，sources 通路下由 sources[i].chunk_id 承载） */
   chunk_ids?: number[];
   /** 实体解析映射：key = 归一化实体名（如 "中芯国际"），value = 标的代码（目前为 exchange.ticker 格式，如 "688981.SH"） */
   entities_resolved?: Record<string, string>;

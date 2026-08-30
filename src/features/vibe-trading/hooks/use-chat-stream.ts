@@ -164,18 +164,36 @@ export function useChatStream(
             attemptId,
             buffered ?? "",
           )
+          // 顺手排空 buffered rag:rag_context 早于 POST 返回是 race-safe 的核心。
+          // 之前只有 appendDelta 会排空,如果首批 text 是 content 快照(走 setAttemptContent)
+          // 或者根本没有中间流(只完成帧走 markAttemptComplete),buffered rag 永远拿不到。
+          // 详见 session-store.drainPendingRag doc (2026-08-27 回归)。
+          const pendingRag = c.pendingRagContexts?.[attemptId]
+          const restRag = pendingRag === undefined
+            ? c.pendingRagContexts
+            : (() => {
+                const next = { ...(c.pendingRagContexts ?? {}) }
+                delete next[attemptId]
+                return Object.keys(next).length > 0 ? next : undefined
+              })()
+          const messagesWithRag = pendingRag
+            ? messages.map((m) =>
+                m.attemptId === attemptId ? { ...m, ragContext: pendingRag } : m,
+              )
+            : messages
           return {
             byId: {
               ...s.byId,
               [sessionId]: {
                 ...c,
-                messages,
+                messages: messagesWithRag,
                 activeAttemptId: attemptId,
                 error: null,
                 pendingDeltas:
                   restDeltas && Object.keys(restDeltas).length > 0
                     ? restDeltas
                     : undefined,
+                pendingRagContexts: restRag,
               },
             },
           }
